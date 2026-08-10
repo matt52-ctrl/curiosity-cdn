@@ -682,6 +682,20 @@ def cmd_build(args: argparse.Namespace) -> int:
     )
     set_fact_status(conn, fact["id"], "rendered")
 
+    # Upload immediato, non al momento della pubblicazione. Il ciclo costruisce
+    # un post in un'esecuzione e lo pubblica in quella successiva: su GitHub
+    # Actions ogni esecuzione parte da un disco vuoto, quindi rimandare
+    # l'upload significherebbe cercare file che non esistono più. Con gli URL
+    # salvati, il post è pubblicabile da qualunque macchina.
+    try:
+        urls = upload(paths, prefix=str(post_id))
+        set_post_urls(conn, post_id, urls)
+        print(f"→ {len(urls)} immagini caricate sul CDN")
+    except Exception as exc:
+        # Non è fatale: se il post viene pubblicato dalla stessa macchina che
+        # l'ha costruito, l'upload può ancora avvenire più tardi.
+        print(f"⚠ upload rimandato ({exc})")
+
     if status == "pending_review" and review.enabled():
         review.send_for_review(post_id, paths, caption)
         print(f"→ post #{post_id} inviato su Telegram per approvazione")
@@ -798,6 +812,10 @@ def _publish_one(conn, post) -> bool:
 
     except Exception as exc:
         set_post_status(conn, post_id, "failed")
+        # Il fatto era passato a "rendered" alla costruzione: senza rimetterlo
+        # in coda resterebbe consumato per sempre, e una curiosità verificata
+        # andrebbe persa a ogni post fallito.
+        set_fact_status(conn, post["fact_id"], "approved")
         print(f"  ✗ post #{post_id} fallito: {exc}")
         review.notify(f"⚠️ Post #{post_id} fallito:\n<code>{exc}</code>")
         if cfg.get("debug", False):
@@ -898,7 +916,15 @@ def cmd_cycle(args: argparse.Namespace) -> int:
         "SELECT COUNT(*) c FROM posts WHERE status='published'"
     ).fetchone()["c"]
 
-    # 5. Aggiorna le metriche.
+    # 5. Commenti: leggerli e preparare le risposte. Rispondere entro la prima
+    #    ora è il segnale più forte dopo i salvataggi, quindi vale la pena
+    #    farlo a ogni giro e non solo su richiesta.
+    try:
+        cmd_comments(argparse.Namespace())
+    except Exception as exc:
+        print(f"commenti saltati: {exc}")
+
+    # 6. Aggiorna le metriche.
     try:
         analytics.collect(conn)
     except Exception as exc:

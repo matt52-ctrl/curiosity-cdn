@@ -78,8 +78,26 @@ jobs:
           git add data/engine.db
           git diff --staged --quiet && exit 0
           git commit -m "stato: $(date -u '+%Y-%m-%d %H:%M UTC')"
+
           # Durante il ciclo le immagini sono state caricate su questo stesso
-          # repo via API, quindi il ramo remoto è avanti: senza rebase il push
-          # verrebbe rifiutato e lo stato andrebbe perso.
-          git pull --rebase --autostash
-          git push
+          # repo via API, quindi il ramo remoto è avanti e un push diretto
+          # verrebbe rifiutato. Si riprova più volte perché un salvataggio
+          # perso significa ripubblicare al giro dopo ciò che è già uscito —
+          # il guasto più costoso che questo sistema possa avere.
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            # Il database è binario: in caso di divergenza vince sempre la
+            # nostra versione, che è l'unica ad aver registrato le pubblicazioni
+            # appena fatte.
+            git rebase origin/main -X ours || {
+              git rebase --abort
+              git reset --soft origin/main
+              git add data/engine.db
+              git commit -m "stato: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            }
+            sleep 5
+          done
+          echo "::error::stato NON salvato dopo 5 tentativi: rischio di ripubblicazione"
+          exit 1
