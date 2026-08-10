@@ -393,7 +393,11 @@ def cmd_reels(args: argparse.Namespace) -> int:
     pronti = reels_by_status(conn, "approved")
     print(f"reel pronti: {len(pronti)}")
 
-    if len(pronti) < int(cfg.get("reel.min_queue", 2)):
+    # La coda si tiene volutamente corta. Un magazzino grande sembra prudente
+    # ma invecchia: ogni volta che il generatore migliora, i reel gia' pronti
+    # restano fermi alla versione precedente e usciranno peggiori di quelli
+    # che sapremmo fare oggi. Meglio produrre poco e spesso.
+    if len(pronti) < int(cfg.get("reel.min_queue", 1)):
         quanti = int(cfg.get("reel.batch", 3))
         print(f"→ genero {quanti} frasi")
         try:
@@ -410,13 +414,24 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 if not sfondo:
                     print("    nessun filmato disponibile, salto")
                     continue
+                # Alterna i due formati: una parte dei reel resta a frase
+                # singola. Un profilo dove ogni video ha lo stesso schema
+                # smette di far aspettare la seconda parte, e la struttura
+                # perde proprio l'effetto per cui esiste.
+                singolo = random.random() < float(cfg.get("reel.single_ratio", 0.4))
+                if singolo:
+                    testo, risposta = l["line"], ""
+                else:
+                    testo, risposta = l.get("hook") or l["line"], l.get("reveal", "")
+
                 video = reel.build_line(
-                    l.get("hook") or l["line"],
+                    testo,
                     sfondo,
                     f"{abs(hash(l['line'])) % 10**8}",
                     mood=l["mood"],
-                    reveal=l.get("reveal", ""),
+                    reveal=risposta,
                 )
+                print(f"    formato: {'frase singola' if singolo else 'due tempi'}")
                 l["video_path"] = video
                 rid = insert_reel(conn, l)
                 # Caricamento immediato, come per i post: il reel costruito

@@ -203,10 +203,14 @@ def build_line(
     # `reveal` vuoto ricade sul comportamento a un tempo solo: serve ai reel
     # vecchi, salvati prima che la struttura esistesse.
     if reveal:
+        # La rivelazione SOSTITUISCE l'aggancio, non gli si aggiunge sotto.
+        # Tenendo entrambi in campo la risposta finisce in corpo piccolo, che
+        # e' esattamente il contrario di cio' che serve: la risposta e' la
+        # parte che la gente ferma e manda a qualcuno.
         overlays = render.render_slides(
             [
                 {"kicker": "", "headline": line, "body": ""},
-                {"kicker": "", "headline": line, "body": reveal},
+                {"kicker": "", "headline": reveal, "body": ""},
             ],
             f"reel-{name}", "line", size=REEL_SIZE, transparent=True,
         )
@@ -251,23 +255,31 @@ def build_line(
 
     # Il testo entra in dissolvenza: comparire di colpo sul primo fotogramma
     # sembra un errore di codifica.
+    # L'ultimo mezzo secondo resta senza testo, come il primo: cosi' quando
+    # Instagram ripete il video l'anello non ha uno scatto visibile e chi
+    # guarda lo rivede senza accorgersene. Le repliche sono uno dei segnali
+    # piu' forti per la distribuzione.
+    coda = 0.55
+
     if reveal:
-        # L'aggancio resta in campo fino a `stacco`, poi entra il fotogramma
-        # completo. Il ritardo è voluto: se la risposta arriva subito, non c'è
-        # nessuna attesa da premiare e il tempo di visione non cresce.
-        stacco = float(cfg.get("reel.reveal_at", 2.6))
+        # L'aggancio resta in campo fino a `stacco`, poi lascia il posto alla
+        # risposta. Il ritardo e' voluto: se la risposta arriva subito non c'e'
+        # nessuna attesa da premiare, e il tempo di visione non cresce.
+        stacco = float(cfg.get("reel.reveal_at", 3.4))
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,fade=t=in:st=0.15:d=0.45:alpha=1,"
-            f"fade=t=out:st={stacco:.2f}:d=0.35:alpha=1[a];"
-            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.25:.2f}:d=0.45:alpha=1[b];"
+            f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.45:alpha=1,"
+            f"fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
+            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
+            f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[b];"
             f"[bg][a]overlay=0:0:format=auto[p];"
             f"[p][b]overlay=0:0:format=auto[v]"
         )
     else:
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,fade=t=in:st=0.15:d=0.5:alpha=1[txt];"
+            f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.5:alpha=1,"
+            f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[txt];"
             f"[bg][txt]overlay=0:0:format=auto[v]"
         )
 
@@ -282,7 +294,12 @@ def build_line(
         ]
     args += [
         "-t", f"{dur}",
-        "-c:v", "libx264", "-preset", "medium", "-crf", "21",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+        # Tetto al bitrate: senza, una ripresa molto mossa (fumo, pioggia,
+        # folla) produce file da decine di megabyte per pochi secondi. Pesano
+        # sul repo, rallentano il caricamento e Instagram li ricomprime
+        # comunque: la qualita' in piu' non arriva mai a chi guarda.
+        "-maxrate", "6M", "-bufsize", "12M",
         "-pix_fmt", "yuv420p", "-r", "30",
         "-movflags", "+faststart",
         str(out),

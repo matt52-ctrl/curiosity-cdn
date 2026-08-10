@@ -270,7 +270,16 @@ caption:
 # Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti
 # diversi. Se i video si rompono, i post continuano a uscire.
 reel:
-  line_seconds: 6.5       # durata del video: sotto i 7s il completion rate è alto
-  batch: 3                # quante frasi generare per volta
-  min_queue: 2            # sotto questa soglia il ciclo ne produce altre
-  reveal_at: 2.6          # secondo in cui compare la rivelazione
+  # 9 secondi: la finestra 7-15s ha i tassi di completamento e di replica piu'
+  # alti. Sotto i 7 il video finisce prima che l'algoritmo registri una
+  # visione piena; sopra i 15 le repliche crollano.
+  line_seconds: 9.0
+  batch: 2                # quante frasi generare per volta
+  # Coda volutamente minima: un magazzino grande invecchia. Ogni miglioria al
+  # generatore rende peggiori i reel gia' in attesa, che usciranno comunque.
+  min_queue: 1
+  reveal_at: 3.4          # secondo in cui l'aggancio lascia il posto alla risposta
+  # Quota di reel a frase singola (senza rivelazione). Alternare i due formati
+  # evita che il profilo diventi prevedibile: chi vede sempre lo stesso schema
+  # smette di aspettare la seconda parte.
+  single_ratio: 0.4
