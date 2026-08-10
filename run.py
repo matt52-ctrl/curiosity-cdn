@@ -857,6 +857,23 @@ def cmd_cycle(args: argparse.Namespace) -> int:
     #    silenziosa tipica di queste pipeline: il token scade, il cron continua
     #    a girare, e te ne accorgi settimane dopo guardando il profilo fermo.
     #    Meglio un messaggio in chat.
+    # Stallo silenzioso: post pronti ma bloccati in revisione senza che esista
+    # un canale per approvarli. Non genera eccezioni, quindi senza questo
+    # controllo il ciclo resterebbe verde all'infinito pubblicando zero.
+    stuck = len(posts_by_status(conn, "pending_review"))
+    if (
+        published_after == published_before
+        and stuck > 0
+        and cfg.get("review.require_approval", True)
+        and not review.enabled()
+    ):
+        problems.append(
+            f"{stuck} post fermi in attesa di approvazione, ma Telegram non è "
+            f"configurato: nessuno può approvarli. Metti "
+            f"review.require_approval a false, oppure configura Telegram."
+        )
+        print(f"\n⚠️  {problems[-1]}")
+
     if published_after == published_before and problems:
         review.notify(
             "⚠️ Ciclo senza pubblicazioni.\n\n"

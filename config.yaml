@@ -188,7 +188,13 @@ pipeline:
 # Consigliato ON per le prime 2-4 settimane: è il modo più economico di
 # scoprire cosa sbaglia il generatore prima che lo veda il pubblico.
 review:
-  require_approval: true
+  # false = pubblicazione piena, nessun intervento umano.
+  # Scelto il 10 agosto per far girare tutto su GitHub Actions senza Telegram:
+  # con `true` e nessun canale di approvazione i post restano bloccati in coda
+  # per sempre, e il ciclo risulta verde perché non è un errore.
+  # Il costo: nessuno legge i post prima che escano. Accettabile ora che il
+  # fact-check è tarato, ma se attivi Telegram conviene rimetterlo a true.
+  require_approval: false
   channel: "telegram"             # telegram | none
 
 # ─── PUBBLICAZIONE ────────────────────────────────────────────────────────────
