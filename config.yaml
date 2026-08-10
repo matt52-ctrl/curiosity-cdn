@@ -273,3 +273,4 @@ reel:
   line_seconds: 6.5       # durata del video: sotto i 7s il completion rate è alto
   batch: 3                # quante frasi generare per volta
   min_queue: 2            # sotto questa soglia il ciclo ne produce altre
+  reveal_at: 2.6          # secondo in cui compare la rivelazione

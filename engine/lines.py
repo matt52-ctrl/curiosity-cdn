@@ -30,12 +30,17 @@ LINES_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "line": {"type": "string"},
+                    # Due tempi invece di una frase sola: una frase statica si
+                    # legge in due secondi e poi non trattiene più nessuno,
+                    # mentre il tempo di visione oltre i 3 secondi è il segnale
+                    # che decide la distribuzione dei reel.
+                    "hook": {"type": "string"},
+                    "reveal": {"type": "string"},
                     "mood": {"type": "string", "enum": list(MOODS)},
                     "caption": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["line", "mood", "caption", "hashtags"],
+                "required": ["hook", "reveal", "mood", "caption", "hashtags"],
                 "additionalProperties": False,
             },
         }
@@ -56,27 +61,47 @@ Each line becomes a six-second video: the sentence sits alone over footage,
 with music. There is no second slide, no source shown, no explanation. The
 line is the entire post.
 
-WHAT MAKES A LINE WORK ALONE
+TWO BEATS, NOT ONE SENTENCE
 
-  It must land without context. The reader arrives mid-scroll knowing nothing
-  and leaves four seconds later. If understanding it requires the study behind
-  it, it belongs in a carousel, not here.
+The single most important number for a reel is how many people are still
+watching after three seconds. A full sentence sitting still on screen is read
+in two, and then there is nothing left to wait for — so people leave exactly
+when it counts.
 
-  It must be about the reader. "You" beats "people" every time — the whole
-  value is the small shock of being described.
+So each reel is built as a withheld answer:
 
-  It must be true. This is the hard part: a line stripped of its evidence
-  drifts easily into a motivational aphorism, and that is the one thing this
-  account is not. Say only what the underlying research supports. If making
-  the line punchy requires overstating it, use a different fact.
+  hook    Appears first, alone. It must open a gap the viewer needs closed.
+          4-9 words. Blunt, specific, a little accusatory.
+          It must NOT contain the answer.
+  reveal  Appears after. It closes the gap and pays off the wait.
+          5-14 words. This is the part people screenshot and send.
 
-  8-16 words. Under 8 it reads as a slogan, over 16 nobody finishes it.
+    hook:   "Nobody can tell you're panicking."
+    reveal: "Observers spot it about half as often as you feel it."
 
-  No question marks — a question invites scrolling past. No commands, no
-  advice, no "remember that...". State the thing.
+    hook:   "You don't remember your holiday."
+    reveal: "You remember its best hour, and its last one. That's all."
 
-  Never open with "The fact that", "Studies show", "Science says", or
-  "Your brain is". Those are the four openings every account uses.
+    hook:   "The thing you're still cringing about?"
+    reveal: "They forgot it the same week."
+
+WHAT MAKES BOTH BEATS WORK
+
+  About the reader, not about people. "You" is the whole value — the small
+  shock of being described. "People tend to…" is a lecture.
+
+  True. This is the hard part: stripped of its evidence a line drifts into a
+  motivational aphorism, which is the one thing this account is not. Say only
+  what the research supports. If making it punchy requires overstating, use a
+  different fact.
+
+  Sendable. The strongest reels are the ones somebody forwards to a friend
+  saying "this is you". Sends per reach now weigh more than likes, so prefer
+  lines that describe a person the viewer knows.
+
+  No advice, no commands, no "remember that…". No question marks in the
+  reveal. Never open with "The fact that", "Studies show", "Science says" or
+  "Your brain is" — the four openings every account already uses.
 
 MOOD — decides the music and the footage, so it must be honest
 
@@ -96,8 +121,12 @@ CAPTION
   a follower. End with the CTA: "{cfg.get('caption.cta')}"
 
 HASHTAGS
-  Exactly 8, lowercase, no "#". Mostly narrow and specific to the mechanism
-  in the line. Broad tags like "psychology" bury a small account instantly."""
+  Exactly 5, lowercase, no "#".
+
+  In 2026 hashtags no longer drive discovery — Instagram uses them to file
+  content by topic, not to distribute it. Thirty tags do nothing that five do
+  not, and a wall of them reads as spam. So: five narrow, specific tags that
+  describe the actual mechanism, not the field."""
 
 
 def generate(conn: sqlite3.Connection, count: int) -> List[Dict[str, Any]]:
@@ -131,7 +160,11 @@ Return JSON matching the schema."""
 
     pinned = cfg.get("caption.pinned_hashtags", []) or []
     for l in linee:
-        l["line"] = l["line"].strip().rstrip("?")
+        l["hook"] = l["hook"].strip()
+        l["reveal"] = l["reveal"].strip().rstrip("?")
+        # `line` resta come testo unico per il database e i controlli
+        # anti-duplicato, che ragionano su una stringa sola.
+        l["line"] = f"{l['hook']} {l['reveal']}"
         if l.get("mood") not in MOODS:
             l["mood"] = "reflective"
         tag: List[str] = []
@@ -139,7 +172,7 @@ Return JSON matching the schema."""
             t = t.lstrip("#").strip().lower().replace(" ", "")
             if t and t not in tag:
                 tag.append(t)
-        l["hashtags"] = tag[:8]
+        l["hashtags"] = tag[:5]
     return linee
 
 

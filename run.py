@@ -411,7 +411,11 @@ def cmd_reels(args: argparse.Namespace) -> int:
                     print("    nessun filmato disponibile, salto")
                     continue
                 video = reel.build_line(
-                    l["line"], sfondo, f"{abs(hash(l['line'])) % 10**8}", mood=l["mood"]
+                    l.get("hook") or l["line"],
+                    sfondo,
+                    f"{abs(hash(l['line'])) % 10**8}",
+                    mood=l["mood"],
+                    reveal=l.get("reveal", ""),
                 )
                 l["video_path"] = video
                 rid = insert_reel(conn, l)
@@ -432,6 +436,15 @@ def cmd_reels(args: argparse.Namespace) -> int:
     # 2. Pubblicazione: uno per giro.
     if not pronti:
         print("nessun reel da pubblicare")
+        return 0
+
+    # In prova si costruisce e basta. Pubblicare un reel di collaudo lo mette
+    # davanti al pubblico prima che qualcuno l'abbia guardato, e su Instagram
+    # non si sostituisce: si puo solo cancellare, lasciando un buco nel profilo.
+    if getattr(args, "no_publish", False):
+        print(f"\n--no-publish: {len(pronti)} reel pronti, nessuno pubblicato")
+        for x in pronti:
+            print(f"  #{x['id']}  {x['video_path']}")
         return 0
 
     r = pronti[0]
@@ -1147,6 +1160,11 @@ def main() -> int:
     p.set_defaults(func=cmd_preview)
 
     p = sub.add_parser("reels", help="ciclo dei reel, indipendente dai post")
+    p.add_argument(
+        "--no-publish",
+        action="store_true",
+        help="costruisce i reel ma non li pubblica — da usare per le prove",
+    )
     p.set_defaults(func=cmd_reels)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")

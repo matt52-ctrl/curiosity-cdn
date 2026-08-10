@@ -183,6 +183,7 @@ def build_line(
     name: str,
     seconds: Optional[float] = None,
     mood: str = "reflective",
+    reveal: str = "",
 ) -> Path:
     """Un reel breve: una frase sola sopra un filmato, con musica.
 
@@ -195,11 +196,26 @@ def build_line(
     w, h = REEL_SIZE
     dur = float(seconds or cfg.get("reel.line_seconds", 6.5))
 
-    # Il testo su fondo trasparente, da sovrapporre.
-    overlay = render.render_slides(
-        [{"kicker": "", "headline": line, "body": ""}],
-        f"reel-{name}", "line", size=REEL_SIZE, transparent=True,
-    )[0]
+    # Due tempi: prima l'aggancio da solo, poi la rivelazione sotto. Il
+    # secondo fotogramma contiene entrambi, così la rivelazione si aggiunge
+    # invece di sostituire — chi legge lentamente non perde l'inizio.
+    #
+    # `reveal` vuoto ricade sul comportamento a un tempo solo: serve ai reel
+    # vecchi, salvati prima che la struttura esistesse.
+    if reveal:
+        overlays = render.render_slides(
+            [
+                {"kicker": "", "headline": line, "body": ""},
+                {"kicker": "", "headline": line, "body": reveal},
+            ],
+            f"reel-{name}", "line", size=REEL_SIZE, transparent=True,
+        )
+    else:
+        overlays = render.render_slides(
+            [{"kicker": "", "headline": line, "body": ""}],
+            f"reel-{name}", "line", size=REEL_SIZE, transparent=True,
+        )
+    overlay = overlays[0]
     out = overlay.parent / "reel.mp4"
 
     musica = _traccia_a_caso(line, mood)
@@ -228,21 +244,39 @@ def build_line(
     # invisibile in fase di montaggio — ffmpeg non segnala nulla — e si scopre
     # solo guardando il video oltre il primo istante.
     args += ["-loop", "1", "-t", f"{dur}", "-i", str(overlay)]
+    if reveal:
+        args += ["-loop", "1", "-t", f"{dur}", "-i", str(overlays[1])]
     if musica:
         args += ["-stream_loop", "-1", "-i", str(musica)]
 
     # Il testo entra in dissolvenza: comparire di colpo sul primo fotogramma
     # sembra un errore di codifica.
-    filtro = (
-        f"{sfondo};"
-        f"[1:v]format=rgba,fade=t=in:st=0.15:d=0.5:alpha=1[txt];"
-        f"[bg][txt]overlay=0:0:format=auto[v]"
-    )
+    if reveal:
+        # L'aggancio resta in campo fino a `stacco`, poi entra il fotogramma
+        # completo. Il ritardo è voluto: se la risposta arriva subito, non c'è
+        # nessuna attesa da premiare e il tempo di visione non cresce.
+        stacco = float(cfg.get("reel.reveal_at", 2.6))
+        filtro = (
+            f"{sfondo};"
+            f"[1:v]format=rgba,fade=t=in:st=0.15:d=0.45:alpha=1,"
+            f"fade=t=out:st={stacco:.2f}:d=0.35:alpha=1[a];"
+            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.25:.2f}:d=0.45:alpha=1[b];"
+            f"[bg][a]overlay=0:0:format=auto[p];"
+            f"[p][b]overlay=0:0:format=auto[v]"
+        )
+    else:
+        filtro = (
+            f"{sfondo};"
+            f"[1:v]format=rgba,fade=t=in:st=0.15:d=0.5:alpha=1[txt];"
+            f"[bg][txt]overlay=0:0:format=auto[v]"
+        )
 
     args += ["-filter_complex", filtro, "-map", "[v]"]
     if musica:
+        # L'indice dell'audio dipende da quanti fotogrammi di testo ci sono.
+        idx_audio = 3 if reveal else 2
         args += [
-            "-map", "2:a" if e_video else "2:a",
+            "-map", f"{idx_audio}:a",
             "-af", f"volume=0.3,afade=t=out:st={max(0, dur-1.0):.2f}:d=1.0",
             "-c:a", "aac", "-b:a", "128k",
         ]
