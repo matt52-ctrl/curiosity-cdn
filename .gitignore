@@ -19,3 +19,7 @@ SEGRETI-GITHUB.txt
 # NON escludere data/footage_usate.json — è la memoria che evita di
 # riutilizzare la stessa clip, e senza il ciclo si ripete.
 data/footage/
+
+# Musica: la riscarica setup_music.py, che il workflow dei reel esegue a ogni
+# giro. Versionarla aggiungerebbe 40 MB al repo senza alcun vantaggio.
+assets/music/
