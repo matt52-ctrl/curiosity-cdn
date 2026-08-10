@@ -663,7 +663,13 @@ def cmd_build(args: argparse.Namespace) -> int:
     paths = render.render_slides(copy["slides"], f"{fact['id']}-{fact['hook']}")
     print(f"→ {len(paths)} immagini in {paths[0].parent}")
 
-    status = "pending_review" if cfg.get("review.require_approval", True) else "approved"
+    # In modalità veto il post nasce già approvato: il controllo umano avviene
+    # al momento della pubblicazione, non della costruzione.
+    mode = cfg.get("review.mode", "auto")
+    needs_approval = mode == "approval" or (
+        mode not in ("auto", "veto") and cfg.get("review.require_approval", True)
+    )
+    status = "pending_review" if needs_approval else "approved"
     post_id = insert_post(
         conn,
         fact["id"],
@@ -714,8 +720,41 @@ def cmd_review(args: argparse.Namespace) -> int:
 
 # ─── publish ──────────────────────────────────────────────────────────────────
 
+def _veto_window(conn, post) -> bool:
+    """Mostra il post su Telegram e attende. True se è stato bloccato.
+
+    Il silenzio vale come consenso: il post esce da solo. L'attesa avviene qui
+    dentro perché con due esecuzioni al giorno rimandare al ciclo successivo
+    significherebbe farlo uscire sette ore dopo.
+    """
+    import time as _time
+
+    minutes = int(cfg.get("review.veto_minutes", 10))
+    if not review.enabled():
+        print("  ⚠ mode veto ma Telegram non configurato: pubblico senza attendere")
+        return False
+
+    paths = [Path(p) for p in json.loads(post["image_paths"])]
+    review.send_for_veto(post["id"], paths, post["caption"], minutes)
+    print(f"  → inviato su Telegram, attendo {minutes} min prima di pubblicare")
+
+    deadline = _time.time() + minutes * 60
+    while _time.time() < deadline:
+        _time.sleep(30)
+        if review.vetoed(conn, post["id"]):
+            print(f"  ✋ post #{post['id']} bloccato da te")
+            review.notify(f"Post #{post['id']} bloccato, non verrà pubblicato.")
+            return True
+    return False
+
+
 def _publish_one(conn, post) -> bool:
     post_id = post["id"]
+
+    mode = cfg.get("review.mode", "auto")
+    if mode == "veto" and _veto_window(conn, post):
+        return False
+
     paths = [Path(p) for p in json.loads(post["image_paths"])]
     urls: List[str] = json.loads(post["image_urls"] or "[]")
 

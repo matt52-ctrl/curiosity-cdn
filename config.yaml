@@ -187,13 +187,22 @@ pipeline:
 # manda il post su Telegram con i bottoni Approva/Scarta.
 # Consigliato ON per le prime 2-4 settimane: è il modo più economico di
 # scoprire cosa sbaglia il generatore prima che lo veda il pubblico.
-review:
-  # false = pubblicazione piena, nessun intervento umano.
-  # Scelto il 10 agosto per far girare tutto su GitHub Actions senza Telegram:
-  # con `true` e nessun canale di approvazione i post restano bloccati in coda
-  # per sempre, e il ciclo risulta verde perché non è un errore.
-  # Il costo: nessuno legge i post prima che escano. Accettabile ora che il
-  # fact-check è tarato, ma se attivi Telegram conviene rimetterlo a true.
+  # Tre modalità:
+  #   auto     pubblica subito, nessun avviso. Massima automazione, zero
+  #            controllo.
+  #   veto     ti manda il post su Telegram e aspetta `veto_minutes`. Se non
+  #            dici niente esce; se rispondi /no viene bloccato. Automatico di
+  #            default, fermabile — nessuna approvazione richiesta.
+  #   approval non pubblica finché non approvi. Se Telegram non è configurato
+  #            i post restano bloccati per sempre: usare solo con Telegram.
+  mode: "auto"
+
+  # Solo per mode: veto. Quanto aspettare prima di pubblicare.
+  # Attenzione al costo su GitHub Actions: il job resta acceso ad aspettare.
+  # 10 minuti × 2 post/giorno × 30 = 600 minuti/mese sui 2000 gratuiti.
+  veto_minutes: 10
+
+  # Compatibilità: se `mode` non è impostato si ricade su questo.
   require_approval: false
   channel: "telegram"             # telegram | none
 

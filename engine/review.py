@@ -52,6 +52,52 @@ def notify(text: str) -> None:
         print(f"[telegram] invio fallito: {exc}")
 
 
+def send_for_veto(post_id: int, image_paths: List[Path], caption: str, minutes: int) -> None:
+    """Mostra il post e annuncia che uscirà da solo salvo veto.
+
+    Differenza sostanziale da `send_for_review`: qui il silenzio significa sì.
+    L'utente non deve fare nulla perché il post esca — deve agire solo per
+    fermarlo. È il modello giusto per chi vuole automazione ma non vuole
+    scoprire i propri post dopo che sono usciti.
+    """
+    if not enabled():
+        return
+    chat_id = env("TELEGRAM_CHAT_ID")
+
+    with httpx.Client(timeout=120) as client:
+        media = [{"type": "photo", "media": f"attach://f{i}"} for i in range(len(image_paths))]
+        files = {
+            f"f{i}": (p.name, p.read_bytes(), "image/png")
+            for i, p in enumerate(image_paths)
+        }
+        client.post(
+            _api("sendMediaGroup"),
+            data={"chat_id": chat_id, "media": json.dumps(media)},
+            files=files,
+        )
+        preview = caption if len(caption) <= 2800 else caption[:2800] + "…"
+        client.post(
+            _api("sendMessage"),
+            data={
+                "chat_id": chat_id,
+                "text": (
+                    f"<b>Post #{post_id}</b> — esce fra {minutes} minuti.\n\n"
+                    f"{preview}\n\n"
+                    f"Non devi fare niente. Per bloccarlo: <code>/no {post_id}</code>"
+                ),
+                "parse_mode": "HTML",
+                "disable_web_page_preview": "true",
+            },
+        )
+
+
+def vetoed(conn: sqlite3.Connection, post_id: int) -> bool:
+    """True se nel frattempo è arrivato un /no per questo post."""
+    poll_decisions(conn)
+    row = conn.execute("SELECT status FROM posts WHERE id=?", (post_id,)).fetchone()
+    return bool(row) and row["status"] == "failed"
+
+
 def send_for_review(post_id: int, image_paths: List[Path], caption: str) -> None:
     """Manda le slide + la caption e chiede una decisione."""
     if not enabled():
