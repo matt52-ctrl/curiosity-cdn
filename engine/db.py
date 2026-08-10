@@ -71,6 +71,9 @@ MIGRATIONS = [
     # Il testo delle slide: senza, un ritocco al CSS obbliga a rigenerare
     # tutto via API. Con questo si ri-renderizza a costo zero.
     "ALTER TABLE posts ADD COLUMN slides TEXT NOT NULL DEFAULT '[]'",
+    # Descrizione della prima immagine. Instagram la indicizza nella ricerca
+    # oltre a usarla per gli screen reader: veniva generata e poi buttata via.
+    "ALTER TABLE posts ADD COLUMN alt_text TEXT NOT NULL DEFAULT ''",
 ]
 
 

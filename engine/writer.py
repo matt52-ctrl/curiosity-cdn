@@ -215,14 +215,35 @@ that are neither, which is why their comments are empty.
   Those inflate the count with comments that carry no meaning, and the reach
   they buy does not convert into anyone who cares about the page.
 
-HASHTAGS
+HASHTAGS — the strategy most accounts get backwards
   Exactly {c['hashtag_count']}, lowercase, no "#" prefix, no spaces.
-  Mix three sizes: 2-3 broad (millions of posts), 5-6 mid (100k-2M),
-  3-4 narrow and specific to this exact topic. Narrow tags are where a new
-  account actually gets discovered.
+
+  A hashtag is only worth using if THIS POST could plausibly rank among its
+  better entries. On a tag with millions of posts, a new account is buried in
+  seconds — the tag is not exposure, it is just characters. On a tag with a
+  few thousand, the same post can sit near the top for hours.
+
+  So weight the set toward the narrow end:
+    7-8  NARROW — the specific effect, study, or phenomenon this post is
+         about, and its close neighbours. "illusorytrutheffect",
+         "zeigarnikeffect", "focusingillusion", "spotlighteffect".
+         These are the ones that actually bring strangers.
+    3-4  MID — the sub-field. "cognitivebias", "socialpsychology",
+         "behaviouraleconomics".
+    1-2  BROAD — for topical relevance only, not for reach.
+
+  Never use a tag whose audience expects something this account does not
+  provide. "mentalhealthawareness", "mindfulness", "selfcare", "therapy",
+  "motivation" attract people looking for support or advice; this account
+  posts research about how minds work, and the mismatch costs you followers
+  who leave and an algorithm that learns to show you to the wrong people.
 
 ALT TEXT
-  One sentence describing the first image for screen readers."""
+  One sentence describing the first image. Instagram indexes it in search on
+  top of using it for screen readers, so name what is literally visible —
+  people, objects, setting — rather than describing the concept behind it.
+
+"""
 
 
 def write_copy(fact_row: sqlite3.Row, slide_count: int) -> Dict[str, Any]:

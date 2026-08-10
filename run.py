@@ -722,6 +722,10 @@ def cmd_build(args: argparse.Namespace) -> int:
         status,
         slides=copy["slides"],
     )
+    conn.execute(
+        "UPDATE posts SET alt_text=? WHERE id=?", (copy.get("alt_text", ""), post_id)
+    )
+    conn.commit()
     set_fact_status(conn, fact["id"], "rendered")
 
     # Upload immediato, non al momento della pubblicazione. Il ciclo costruisce
@@ -834,7 +838,9 @@ def _publish_one(conn, post) -> bool:
 
         ig_media_id = None
         if cfg.get("publish.instagram.enabled", True):
-            ig_media_id = instagram.publish(urls, post["caption"])
+            ig_media_id = instagram.publish(
+                urls, post["caption"], alt_text=post["alt_text"] or ""
+            )
             print(f"  ✓ Instagram: {ig_media_id}")
 
         tiktok_id = None
