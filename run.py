@@ -760,6 +760,18 @@ def _publish_one(conn, post) -> bool:
 
     try:
         if not urls:
+            # Un post costruito su una macchina e pubblicato da un'altra (es.
+            # costruito sul Mac, pubblicato da GitHub Actions) porta con sé
+            # percorsi che altrove non esistono, perché output/ non è
+            # versionata. Meglio dirlo che fallire su un errore di file.
+            missing = [p for p in paths if not p.exists()]
+            if missing:
+                raise FileNotFoundError(
+                    f"{len(missing)} immagini non trovate su questa macchina "
+                    f"(prima mancante: {missing[0]}). Il post è stato costruito "
+                    f"altrove e non ha ancora URL pubblici. Rilancia `build` qui, "
+                    f"oppure carica le immagini dalla macchina che le ha generate."
+                )
             print(f"→ upload immagini post #{post_id}…")
             urls = upload(paths, prefix=str(post_id))
             set_post_urls(conn, post_id, urls)
