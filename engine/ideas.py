@@ -50,13 +50,26 @@ IDEAS_SCHEMA = {
 VERIFY_SCHEMA = {
     "type": "object",
     "properties": {
+        # Questi due campi vengono prima del verdetto di proposito: obbligano a
+        # cercare la prova e a nominare la debolezza PRIMA di poter giudicare.
+        # Chiedere solo il verdetto produce un sì quasi sempre.
+        "evidence_quote": {"type": "string"},
+        "strongest_objection": {"type": "string"},
         "verdict": {"type": "string", "enum": ["supported", "overstated", "false", "unclear"]},
         "confidence": {"type": "number"},
         "note": {"type": "string"},
         "corrected_fact": {"type": "string"},
         "corrected_detail": {"type": "string"},
     },
-    "required": ["verdict", "confidence", "note", "corrected_fact", "corrected_detail"],
+    "required": [
+        "evidence_quote",
+        "strongest_objection",
+        "verdict",
+        "confidence",
+        "note",
+        "corrected_fact",
+        "corrected_detail",
+    ],
     "additionalProperties": False,
 }
 
@@ -255,8 +268,51 @@ Verdicts:
   false      — the claim is wrong, or the source does not exist
   unclear    — you could not find enough to judge either way
 
-confidence is 0.0-1.0 and means: how sure are you that a well-informed reader
-in this field would let this pass without objection.
+FILL THESE TWO FIRST, BEFORE DECIDING ANYTHING
+
+  evidence_quote
+    Copy the exact sentence from the reference material that supports the
+    claim. Not a paraphrase — the words as they appear. If the material does
+    not contain such a sentence, write exactly: NONE.
+    A claim with no quotable support cannot be "supported", however plausible
+    it sounds and however confident you feel about it.
+
+  strongest_objection
+    The single best argument that this claim is wrong, overstated or
+    misattributed. You must produce one for every claim, including ones you
+    believe are true. If the only objection you can find is weak, say so —
+    but never write "no objection". There is always a way a finding can be
+    less solid than it reads: sample size, one lab, no replication, a number
+    that drifted, an effect real but tiny, a population it does not generalise
+    beyond.
+
+CALIBRATING confidence — the scale must discriminate, or it is decoration.
+Most claims are NOT 0.95. Use the whole range:
+
+  0.95-1.0  the quote directly states the claim, including its numbers, and
+            the finding is textbook-level established. Rare.
+  0.80-0.94 the quote supports the substance, but a detail is unverified, or
+            it is a single well-known study without replication evidence.
+  0.60-0.79 the direction is right, the specifics are not confirmed here.
+  0.30-0.59 plausible, no supporting quote found.
+  0.0-0.29  contradicted, or the named source does not appear to exist.
+
+When evidence_quote is NONE, the ceiling depends on what kind of claim it is:
+
+  - A claim that merely RESTATES a well-established effect, with no specific
+    number attached, may still reach 0.85. Encyclopaedic sources describe
+    these effects without quoting figures, so absence of a quote is expected
+    and is not evidence against.
+  - A claim carrying a SPECIFIC FIGURE — a percentage, a sample size, an
+    effect size — must not exceed 0.7 without a quote containing that figure.
+    Numbers are exactly what drifts in retelling, and an unverifiable number
+    is the most common way a true-sounding fact turns out to be wrong.
+  - A claim naming a specific researcher, year or journal that you cannot
+    confirm must not exceed 0.5. A fabricated citation is worse than no
+    citation.
+
+Familiarity is not evidence. The claims that circulate most are the ones
+everyone has heard, which is also how false ones survive.
 
 Set corrected_fact / corrected_detail ONLY when the verdict is "overstated".
 For every other verdict leave both as empty strings — repeating the original
@@ -272,10 +328,27 @@ def verify(idea: Dict[str, Any]) -> Dict[str, Any]:
         # Il modello non può cercare da solo: gli si porta il materiale.
         # Senza questo il fact-check sarebbe una seconda opinione dello stesso
         # modello che ha inventato il fatto, cioè nessuna verifica.
+        # L'ordine conta: la ricerca di Wikipedia è letterale, e interrogarla
+        # con una frase intera restituisce articoli scelti su parole di
+        # contorno ("Yves Saint Laurent" per una tesi sulle magliette).
+        # Prima le fonti dichiarate e le parole chiave, che colpiscono
+        # l'articolo giusto; la frase solo come ripiego, ridotta ai termini
+        # portanti.
+        # Parole intere, NON `_tokens`: quello applica lo stemming per la
+        # deduplica e restituirebbe termini mutilati ("memori", "interrupt")
+        # che su Wikipedia non trovano nulla.
+        import re as _re
+
+        parole = [
+            w
+            for w in _re.findall(r"[A-Za-z]{4,}", idea["fact"])
+            if w.lower() not in _STOP
+        ][:6]
         evidence = research.gather(
-            idea["fact"],
-            " ".join(idea.get("keywords", [])[:4]),
             idea.get("source_hint", ""),
+            " ".join(idea.get("keywords", [])[:4]),
+            " ".join(parole),
+            claim=idea["fact"],
         )
 
     if evidence:

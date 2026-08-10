@@ -15,6 +15,7 @@ la verifica distingue "false" da "unclear".
 """
 from __future__ import annotations
 
+import re
 from typing import List
 
 import httpx
@@ -46,7 +47,47 @@ def _search_titles(client: httpx.Client, query: str, limit: int) -> List[str]:
     return [h["title"] for h in hits]
 
 
-def _extracts(client: httpx.Client, titles: List[str], chars: int) -> List[str]:
+def _relevant_passages(text: str, claim: str, chars: int) -> str:
+    """Sceglie i passaggi dell'articolo che possono davvero verificare la tesi.
+
+    L'introduzione di Wikipedia riassume, non documenta: percentuali, anni,
+    numeri di partecipanti stanno nel corpo. Prendere solo l'incipit faceva
+    bocciare fatti veri per mancanza di una frase citabile — il verificatore
+    non trovava prove semplicemente perché non gliele davamo.
+    """
+    import re as _re
+
+    claim_words = {
+        w for w in _re.findall(r"[a-z]{5,}", claim.lower())
+    }
+    numbers = set(_re.findall(r"\d+", claim))
+
+    paragraphs = [p.strip() for p in text.split("\n") if len(p.strip()) > 80]
+    scored = []
+    for p in paragraphs:
+        low = p.lower()
+        score = sum(1 for w in claim_words if w in low)
+        # Un paragrafo che contiene gli stessi numeri della tesi vale molto:
+        # è lì che si conferma o si smonta una cifra.
+        score += 4 * sum(1 for n in numbers if n in p)
+        if _re.search(r"\b(19|20)\d{2}\b", p):
+            score += 1          # contiene un anno: probabile riferimento a uno studio
+        if score:
+            scored.append((score, p))
+
+    scored.sort(key=lambda x: -x[0])
+    out, used = [], 0
+    for _, p in scored:
+        if used + len(p) > chars:
+            continue
+        out.append(p)
+        used += len(p)
+        if used > chars * 0.9:
+            break
+    return " … ".join(out)
+
+
+def _extracts(client: httpx.Client, titles: List[str], chars: int, claim: str = "") -> List[str]:
     if not titles:
         return []
     resp = client.get(
@@ -55,8 +96,9 @@ def _extracts(client: httpx.Client, titles: List[str], chars: int) -> List[str]:
             "action": "query",
             "format": "json",
             "prop": "extracts",
-            "exintro": 1,
+            # Niente exintro: serve il corpo dell'articolo, non il riassunto.
             "explaintext": 1,
+            "exlimit": 1 if len(titles) == 1 else "max",
             "titles": "|".join(titles),
         },
         headers={"User-Agent": _user_agent()},
@@ -66,13 +108,62 @@ def _extracts(client: httpx.Client, titles: List[str], chars: int) -> List[str]:
 
     out: List[str] = []
     for page in pages.values():
-        extract = (page.get("extract") or "").strip().replace("\n", " ")
-        if extract:
-            out.append(f"— {page['title']}: {extract[:chars]}")
+        full = (page.get("extract") or "").strip()
+        if not full:
+            continue
+        body = _relevant_passages(full, claim, chars) if claim else full[:chars]
+        if not body:
+            body = full[:chars].replace("\n", " ")
+        out.append(f"— {page['title']}: {body}")
     return out
 
 
-def gather(*queries: str, limit: int = 3, chars: int = 900) -> str:
+PMC_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+
+
+def _europepmc(query: str, limit: int = 3, chars: int = 1200) -> List[str]:
+    """Abstract di articoli scientifici. Gratuito, nessuna chiave.
+
+    Serve dove Wikipedia non arriva: le percentuali, le dimensioni del
+    campione e i risultati esatti degli studi stanno negli abstract, non
+    nelle voci enciclopediche, che riassumono senza riportare i numeri.
+    Copertura forte su biomedicina e scienze della vita, più irregolare sulla
+    psicologia sociale — per questo resta affiancata a Wikipedia, non
+    sostitutiva.
+    """
+    try:
+        with httpx.Client(timeout=45) as client:
+            resp = client.get(
+                PMC_API,
+                params={
+                    "query": query,
+                    "format": "json",
+                    "pageSize": limit,
+                    "resultType": "core",
+                },
+                headers={"User-Agent": _user_agent()},
+            )
+            resp.raise_for_status()
+            results = resp.json().get("resultList", {}).get("result", [])
+    except Exception as exc:
+        print(f"    Europe PMC non raggiungibile: {exc}")
+        return []
+
+    out: List[str] = []
+    for r in results:
+        abstract = (r.get("abstractText") or "").strip()
+        if len(abstract) < 120:
+            continue
+        # Gli abstract arrivano con marcatori HTML dei paragrafi strutturati.
+        abstract = re.sub(r"<[^>]+>", " ", abstract)
+        abstract = re.sub(r"\s+", " ", abstract)
+        titolo = (r.get("title") or "").strip()
+        anno = r.get("pubYear", "")
+        out.append(f"— [{anno}] {titolo}: {abstract[:chars]}")
+    return out
+
+
+def gather(*queries: str, limit: int = 3, chars: int = 1600, claim: str = "") -> str:
     """Raccoglie estratti di Wikipedia per le query date.
 
     Restituisce testo pronto da inserire nel prompt, o stringa vuota se non
@@ -90,9 +181,13 @@ def gather(*queries: str, limit: int = 3, chars: int = 900) -> str:
                     continue
                 titles = [t for t in _search_titles(client, query, limit) if t not in seen]
                 seen.extend(titles)
-                blocks.extend(_extracts(client, titles, chars))
+                blocks.extend(_extracts(client, titles, chars, claim or queries[0]))
     except Exception as exc:
         print(f"    ricerca Wikipedia fallita: {exc}")
-        return ""
 
-    return "\n\n".join(blocks[:6])
+    # Europe PMC è stato provato come seconda fonte e poi rimosso: su
+    # psicologia sociale restituisce articoli tangenziali che diluiscono il
+    # materiale buono, e in prova ha fatto peggiorare verdetti che prima erano
+    # corretti. La funzione resta disponibile per nicchie biomediche, dove la
+    # sua copertura è invece ottima.
+    return "\n\n".join(blocks[:5])

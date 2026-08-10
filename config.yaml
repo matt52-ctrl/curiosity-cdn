@@ -179,7 +179,12 @@ pipeline:
   ideas_per_batch: 12
   # Soglia minima di confidenza per pubblicare. 0.85 è severo di proposito:
   # una pagina di curiosità che posta bufale viene distrutta nei commenti.
-  min_confidence: 0.85
+  # Abbassato da 0.85 a 0.75 il 10 agosto, insieme alla revisione del
+  # fact-check. Prima il verificatore rispondeva 0.95-0.99 a tutto e la soglia
+  # non filtrava nulla; ora la scala è calibrata sul serio e un fatto ben
+  # documentato si assesta fra 0.80 e 0.94. Con 0.85 verrebbero scartate anche
+  # curiosità vere e ben sostenute.
+  min_confidence: 0.75
   # Similarità massima con un post già pubblicato (0-1). Sopra → scartato.
   max_similarity: 0.55
   # Post al giorno. IG tollera fino a 25-50 via API ma 1-2 è il ritmo giusto
