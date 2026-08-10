@@ -13,3 +13,4 @@ assets/fonts/*.ttf
 # post. Il workflow lo ripristina all'avvio e lo ricommitta alla fine.
 # Conseguenza: da qui in poi la copia nel repo è la fonte di verità. Se lanci
 # il ciclo anche in locale, fai prima `git pull`, o le due copie divergono.
+SEGRETI-GITHUB.txt

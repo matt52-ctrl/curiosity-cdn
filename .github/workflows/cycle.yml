@@ -1,0 +1,85 @@
+# Ciclo automatico su GitHub Actions.
+#
+# Perché qui e non sul Mac: gira sui server di GitHub, quindi pubblica anche a
+# computer spento. 2000 minuti al mese gratis; questo ne consuma ~180.
+#
+# Lo stato vive in data/engine.db, che viene versionato: il disco del runner è
+# effimero, quindi senza commit il sistema dimenticherebbe cosa ha pubblicato.
+
+name: Curiosity cycle
+
+on:
+  schedule:
+    # ATTENZIONE: gli orari cron di GitHub sono in UTC e non seguono l'ora
+    # legale. 11:05 UTC = 13:05 in Italia d'estate, 12:05 d'inverno.
+    - cron: "5 11 * * *"
+    - cron: "5 18 * * *"
+  # Permette di lanciarlo a mano dalla tab Actions, utile per provare.
+  workflow_dispatch:
+
+# Serve a scrivere il database aggiornato nel repo.
+permissions:
+  contents: write
+
+# Due esecuzioni sovrapposte scriverebbero sullo stesso database.
+concurrency:
+  group: curiosity-cycle
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Clone superficiale: questo repo è anche il CDN delle immagini e
+          # cresce di ~6 MB a post. Senza, fra sei mesi ogni esecuzione
+          # scaricherebbe centinaia di megabyte di storia inutile.
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      # I font non sono versionati: si riscaricano. Senza, Chromium ripiega sui
+      # font di sistema e le slide escono con una tipografia diversa.
+      - name: Scarica i font
+        run: python setup_fonts.py
+
+      - name: Esegui il ciclo
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.CDN_TOKEN }}
+          GITHUB_REPO: ${{ secrets.CDN_REPO }}
+          IMAGE_HOST_BACKEND: github
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py cycle
+
+      - name: Salva lo stato
+        # `always()`: se il ciclo fallisce a metà, quello che ha già fatto va
+        # comunque salvato, o al giro dopo lo rifarebbe da capo.
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db
+          git diff --staged --quiet && exit 0
+          git commit -m "stato: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          # Durante il ciclo le immagini sono state caricate su questo stesso
+          # repo via API, quindi il ramo remoto è avanti: senza rebase il push
+          # verrebbe rifiutato e lo stato andrebbe perso.
+          git pull --rebase --autostash
+          git push
