@@ -1,0 +1,146 @@
+/* Struttura condivisa da tutti i temi. I colori e i font stanno nei temi. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  width: var(--w);
+  background: #000;
+}
+
+.slide {
+  position: relative;
+  width: var(--w);
+  height: var(--h);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 84px 78px 72px;
+  font-kerning: normal;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Livello fotografico ────────────────────────────────────────────────────
+   .canvas contiene tre strati sovrapposti:
+     .photo  l'immagine, desaturata dal tema
+     .tone   una velatura di colore in mix-blend-mode: uniforma sorgenti
+             diverse in un unico duotone — è ciò che tiene insieme il feed
+     .scrim  il gradiente che garantisce leggibilità al testo sopra
+   I temi senza foto lasciano .canvas vuoto e non ne subiscono gli effetti. */
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.photo {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.tone, .scrim { position: absolute; inset: 0; }
+
+.credit {
+  position: absolute;
+  right: 78px;
+  bottom: 34px;
+  z-index: 3;
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 15px;
+  letter-spacing: .06em;
+  opacity: .4;
+  max-width: 46ch;
+  text-align: right;
+}
+
+/* Grana finissima: toglie l'aspetto "gradiente CSS piatto" che rende
+   immediatamente riconoscibile un post generato da un template. */
+.grain {
+  position: absolute;
+  inset: -50%;
+  pointer-events: none;
+  opacity: .05;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>");
+}
+
+.top, .bottom {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stage {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 34px;
+  padding: 40px 0;
+}
+
+.kicker, .index {
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 21px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+
+.headline {
+  font-weight: 400;
+  line-height: 1.03;
+  letter-spacing: -.022em;
+  text-wrap: balance;
+}
+
+/* Quattro gradini di corpo, scelti in render.py in base alla lunghezza. */
+.fit-xl { font-size: 118px; }
+.fit-lg { font-size: 96px; }
+.fit-md { font-size: 80px; }
+.fit-sm { font-size: 66px; line-height: 1.08; }
+
+.body {
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 33px;
+  line-height: 1.5;
+  letter-spacing: -.004em;
+  /* 32ch è la misura giusta: più stretto e il testo diventa una colonna
+     magra che lascia mezzo formato vuoto. */
+  max-width: 32ch;
+  text-wrap: pretty;
+}
+
+.mark {
+  font-family: 'BodyMedium', 'Body', system-ui, sans-serif;
+  font-size: 22px;
+  letter-spacing: .04em;
+}
+
+.nav { display: flex; align-items: center; gap: 16px; }
+
+.dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: 7px;
+  opacity: .28;
+}
+
+.dot.on { opacity: 1; transform: scale(1.15); }
+
+.swipe {
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 19px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  opacity: .5;
+  margin-left: 8px;
+}
+.swipe::after { content: " →"; }

@@ -1,0 +1,105 @@
+/* SPLIT — immagine sopra, testo sotto su fondo pieno.
+   Il più leggibile dei tre: il testo non compete mai con la foto. Adatto a
+   fatti che richiedono una spiegazione lunga, dove il testo sovrapposto
+   diventerebbe illeggibile. */
+
+.slide {
+  background: #14120f;
+  color: #f2ede4;
+  padding: 0;                    /* la spaziatura è gestita dalle due fasce */
+}
+
+/* La foto occupa la fascia superiore, il testo vive sotto. */
+.canvas { bottom: 46%; }
+
+.photo {
+  filter: grayscale(1) contrast(1.12) brightness(.86);
+}
+
+.tone {
+  background: #b8763c;
+  mix-blend-mode: color;
+  opacity: .42;
+}
+
+/* Due sfumature: in alto per garantire che kicker e indice restino leggibili
+   anche quando la foto è chiara proprio lì (succede spesso: cieli, muri,
+   finestre); in basso per innestare la foto nella fascia di testo. */
+.scrim {
+  background:
+    linear-gradient(180deg, rgba(20,18,15,.62) 0%, rgba(20,18,15,.14) 16%,
+                    rgba(20,18,15,0) 30%),
+    linear-gradient(180deg, rgba(20,18,15,0) 72%, rgba(20,18,15,.96) 100%);
+}
+
+.top {
+  position: absolute;
+  top: 52px;
+  left: 72px;
+  right: 72px;
+  z-index: 3;
+}
+
+.kicker { color: #f0d3ae; text-shadow: 0 1px 14px rgba(0,0,0,.7); }
+.index  { color: #f2ede4; opacity: .8; text-shadow: 0 1px 14px rgba(0,0,0,.7); }
+
+.stage {
+  position: absolute;
+  top: 54%;
+  left: 0; right: 0; bottom: 0;
+  padding: 0 72px 108px;
+  justify-content: center;
+  gap: 26px;
+}
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  color: #f7f3ec;
+}
+
+.fit-xl { font-size: 92px; }
+.fit-lg { font-size: 78px; }
+.fit-md { font-size: 66px; }
+.fit-sm { font-size: 56px; line-height: 1.08; }
+
+.body {
+  color: #ded6c9;
+  opacity: .84;
+  font-size: 31px;
+  max-width: 34ch;
+}
+
+.slide.last .headline { color: #e8b878; }
+.slide.solo .headline { color: #f7f3ec; }
+
+.bottom {
+  position: absolute;
+  left: 72px; right: 72px; bottom: 52px;
+  z-index: 3;
+}
+
+.mark { color: #f2ede4; opacity: .5; }
+.dot  { background: #c98a4b; }
+.swipe { color: #f2ede4; }
+
+/* Il credito va sopra la fascia di testo, appoggiato al bordo della foto. */
+.credit { bottom: auto; top: calc(54% - 34px); right: 72px; color: #f2ede4; opacity: .38; }
+
+/* Senza immagine il layout non deve tenere la fascia vuota in alto: si legge
+   come un caricamento fallito. La slide diventa tipografica a piena altezza,
+   che è una variazione di ritmo voluta invece di un buco. */
+.slide:not(.photo-slide) .canvas {
+  background: radial-gradient(130% 100% at 26% 10%, #221f1b 0%, #14120f 100%);
+}
+
+.slide:not(.photo-slide) .stage {
+  top: 0;
+  padding: 150px 72px 130px;
+  justify-content: center;
+}
+
+.slide:not(.photo-slide) .fit-xl { font-size: 108px; }
+.slide:not(.photo-slide) .fit-lg { font-size: 92px; }
+.slide:not(.photo-slide) .fit-md { font-size: 78px; }
+.slide:not(.photo-slide) .fit-sm { font-size: 64px; line-height: 1.07; }
+.slide:not(.photo-slide) .body { font-size: 33px; max-width: 30ch; }

@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/*.log
+data/imgcache/
+output/
+assets/fonts/*.ttf
+
+# data/engine.db NON è escluso di proposito.
+# Su GitHub Actions il disco è effimero: senza il database versionato, a ogni
+# esecuzione la pipeline ripartirebbe da zero e ripubblicherebbe gli stessi
+# post. Il workflow lo ripristina all'avvio e lo ricommitta alla fine.
+# Conseguenza: da qui in poi la copia nel repo è la fonte di verità. Se lanci
+# il ciclo anche in locale, fai prima `git pull`, o le due copie divergono.

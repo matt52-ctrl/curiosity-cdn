@@ -1,0 +1,73 @@
+/* PHOTO — immagine a tutto campo, duotone caldo, testo in basso.
+   Il template fotografico principale. Funziona con qualunque soggetto perché
+   il trattamento appiattisce le differenze fra le sorgenti. */
+
+.slide {
+  background: #100f0e;
+  color: #f4efe6;
+}
+
+/* Desaturazione totale + contrasto: la foto diventa materia grezza su cui
+   applicare il colore del brand, non un'immagine con una sua palette. */
+.photo {
+  filter: grayscale(1) contrast(1.16) brightness(.62);
+  transform: scale(1.04);       /* evita i bordi chiari dopo il blur/scale */
+}
+
+/* La velatura d'ambra è la firma cromatica della pagina. */
+.tone {
+  background: #c98a4b;
+  mix-blend-mode: color;
+  opacity: .5;
+}
+
+/* Scrim verticale: garantisce contrasto sul testo qualunque cosa ci sia
+   sotto, senza spegnere del tutto la parte alta dell'immagine. */
+.scrim {
+  background:
+    linear-gradient(180deg,
+      rgba(12,11,10,.72) 0%,
+      rgba(12,11,10,.30) 26%,
+      rgba(12,11,10,.62) 62%,
+      rgba(12,11,10,.94) 100%);
+}
+
+.kicker { color: #e8b878; }
+.index  { color: #f4efe6; opacity: .5; }
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  color: #fbf7f0;
+  text-shadow: 0 2px 30px rgba(0,0,0,.5);
+}
+
+/* Il testo si appoggia in basso: è dove lo scrim è più denso e dove l'occhio
+   arriva dopo aver letto l'immagine. */
+.stage { justify-content: flex-end; padding-bottom: 26px; }
+
+.slide.first .stage { padding-bottom: 26px; }
+.slide.first .fit-xl { font-size: 120px; }
+.slide.first .fit-lg { font-size: 102px; }
+
+.body {
+  color: #ece3d5;
+  opacity: .92;
+  text-shadow: 0 1px 18px rgba(0,0,0,.6);
+  max-width: 30ch;
+}
+
+.slide.last .headline { color: #f0c88f; }
+
+/* Post a immagine singola: prima e ultima slide insieme, ma non deve
+   ereditare l'oro della chiusura o si legge come un'altra pagina. */
+.slide.solo .headline { color: #fbf7f0; }
+
+.mark { color: #f4efe6; opacity: .62; }
+.dot  { background: #e8b878; }
+.swipe { color: #f4efe6; }
+.credit { color: #f4efe6; opacity: .34; }
+
+/* Senza foto il template non si rompe: resta un fondo scuro coerente. */
+.slide:not(.photo-slide) .canvas {
+  background: radial-gradient(120% 90% at 25% 12%, #1e1c19, #0d0c0b);
+}

@@ -1,0 +1,95 @@
+/* PUNCH — massima leggibilità a dimensione miniatura.
+   Progettato per una sola cosa: essere leggibile quando il post è un
+   quadratino nel feed o nell'esplora. Testo nero pesantissimo su carta chiara,
+   foto relegata a una fascia. Meno elegante di `split`, molto più difficile
+   da scorrere via. */
+
+.slide {
+  background: #f0ece1;
+  color: #12100d;
+  padding: 0;
+}
+
+/* La foto occupa solo il terzo superiore: il testo domina la composizione. */
+.canvas { bottom: 62%; }
+
+.photo { filter: grayscale(1) contrast(1.2) brightness(.9); }
+
+.tone { background: #b5471f; mix-blend-mode: color; opacity: .38; }
+
+.scrim {
+  background: linear-gradient(180deg, rgba(18,16,13,.45) 0%, rgba(18,16,13,0) 34%,
+                              rgba(18,16,13,0) 76%, rgba(240,236,225,.9) 100%);
+}
+
+.top {
+  position: absolute;
+  top: 46px; left: 64px; right: 64px;
+  z-index: 3;
+}
+
+.kicker {
+  color: #f0ece1;
+  background: #b5471f;
+  padding: 7px 15px 6px;
+  font-size: 19px;
+  text-shadow: none;
+}
+
+.index { color: #f0ece1; opacity: .9; }
+
+.stage {
+  position: absolute;
+  top: 34%; left: 0; right: 0; bottom: 0;
+  padding: 0 64px 104px;
+  /* Centrato nello spazio sotto la foto: allineato in alto lasciava vuoti
+     due quinti di pagina quando la headline è corta. */
+  justify-content: center;
+  gap: 24px;
+}
+
+.headline {
+  font-family: 'Heavy', 'Arial Black', system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -.038em;
+  line-height: .9;
+  color: #12100d;
+}
+
+/* Corpi molto più grandi di split: è tutto il punto del template. */
+.fit-xl { font-size: 124px; }
+.fit-lg { font-size: 104px; }
+.fit-md { font-size: 88px; }
+.fit-sm { font-size: 72px; line-height: .95; }
+
+.body {
+  font-family: 'Body', system-ui, sans-serif;
+  color: #3a332b;
+  font-size: 32px;
+  line-height: 1.42;
+  max-width: 30ch;
+  border-left: 5px solid #b5471f;
+  padding-left: 24px;
+}
+
+.slide.last .headline { color: #b5471f; }
+.slide.solo .headline { color: #12100d; }
+
+.bottom {
+  position: absolute;
+  left: 64px; right: 64px; bottom: 46px;
+  z-index: 3;
+}
+
+.mark { color: #12100d; opacity: .55; }
+.dot { background: #12100d; }
+.swipe { color: #b5471f; opacity: .9; }
+.credit { display: none; }      /* il credito starebbe sopra la foto, illeggibile */
+
+.grain { opacity: .07; mix-blend-mode: multiply; }
+
+/* Senza foto: tipografia a piena pagina, nessuna fascia vuota. */
+.slide:not(.photo-slide) .canvas { background: #e7e1d3; bottom: 0; }
+.slide:not(.photo-slide) .stage { top: 0; padding: 150px 64px 120px; justify-content: center; }
+.slide:not(.photo-slide) .top .kicker { background: #b5471f; }
+.slide:not(.photo-slide) .index { color: #12100d; opacity: .4; }

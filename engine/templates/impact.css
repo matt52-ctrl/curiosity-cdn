@@ -1,0 +1,80 @@
+/* IMPACT — la frase riempie il fotogramma, la foto è solo atmosfera.
+   Trattamento immagini tarato il 10 agosto 2026: desaturazione parziale (.55)
+   invece che totale, e luminosità .6 invece di .42. Il grigio pieno rendeva le
+   foto piatte; questa via di mezzo restituisce i volti senza perdere l'ambra
+   che tiene insieme il feed. Alzare ancora il colore romperebbe la coerenza
+   della griglia e metterebbe a rischio la leggibilità su scene chiare. */
+.slide {
+  background: #0d0c0b;
+  color: #fdfbf7;
+}
+
+.photo {
+  filter: grayscale(.55) contrast(1.3) brightness(.6);
+  transform: scale(1.06);
+}
+
+/* Stessa ambra degli altri template: un template che cambia famiglia
+   cromatica spezza la riconoscibilità del feed, che è metà del valore di
+   avere un'identità visiva. */
+.tone { background: #c98a4b; mix-blend-mode: color; opacity: .32; }
+
+/* Scrim molto denso: il testo deve vincere sempre, qualunque foto ci sia. */
+.scrim {
+  background:
+    linear-gradient(180deg, rgba(8,8,9,.62) 0%, rgba(8,8,9,.30) 38%,
+                    rgba(8,8,9,.78) 72%, rgba(8,8,9,.96) 100%);
+}
+
+.kicker {
+  color: #0d0c0b;
+  background: #e8c07a;
+  padding: 8px 16px 7px;
+  font-size: 20px;
+}
+
+.index { color: #fdfbf7; opacity: .55; }
+
+.stage { justify-content: center; gap: 30px; padding: 30px 0; }
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  color: #fdfbf7;
+  line-height: .98;
+  letter-spacing: -.028em;
+  text-shadow: 0 4px 40px rgba(0,0,0,.65);
+  max-width: 15ch;
+}
+
+/* Il testo riempie: corpi molto sopra la media degli altri template. */
+.fit-xl { font-size: 152px; }
+.fit-lg { font-size: 128px; }
+.fit-md { font-size: 108px; }
+.fit-sm { font-size: 86px; line-height: 1.02; }
+
+.body {
+  color: #ded6c9;
+  opacity: .9;
+  font-size: 33px;
+  max-width: 28ch;
+  text-shadow: 0 1px 20px rgba(0,0,0,.8);
+}
+
+/* Sulla copertina il corpo non serve: l'hook deve reggere da solo, e il testo
+   in più ruba spazio proprio dove conta. */
+.slide.first .body { display: none; }
+
+.slide.last .headline { color: #e8c07a; }
+.slide.solo .headline { color: #fdfbf7; }
+
+.mark { color: #fdfbf7; opacity: .55; }
+.dot { background: #e8c07a; }
+.swipe { color: #fdfbf7; }
+.credit { color: #fdfbf7; opacity: .3; }
+
+/* Il fondo di riserva deve stare nella stessa famiglia cromatica delle slide
+   con foto: in griglia una cella di un altro colore salta all'occhio e spezza
+   l'insieme, che è proprio ciò che il profilo deve trasmettere. */
+.slide:not(.photo-slide) .canvas {
+  background: radial-gradient(125% 95% at 30% 15%, #221d17 0%, #0d0b09 100%);
+}

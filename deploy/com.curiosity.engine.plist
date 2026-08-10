@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Curiosity Engine — launchd (macOS)
+
+    cp deploy/com.curiosity.engine.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.curiosity.engine.plist
+
+  Per fermarlo:
+    launchctl unload ~/Library/LaunchAgents/com.curiosity.engine.plist
+
+  Nota: gira solo a Mac acceso e connesso. Un job saltato per Mac spento non
+  viene recuperato (RunAtLoad lo fa ripartire al login, non alle ore perse).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.curiosity.engine</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/mattiafava/Desktop/curiosity_engine/.venv/bin/python</string>
+        <string>/Users/mattiafava/Desktop/curiosity_engine/run.py</string>
+        <string>cycle</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/mattiafava/Desktop/curiosity_engine</string>
+
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict>
+            <key>Hour</key><integer>13</integer>
+            <key>Minute</key><integer>5</integer>
+        </dict>
+        <dict>
+            <key>Hour</key><integer>20</integer>
+            <key>Minute</key><integer>5</integer>
+        </dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/mattiafava/Desktop/curiosity_engine/data/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/mattiafava/Desktop/curiosity_engine/data/launchd.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

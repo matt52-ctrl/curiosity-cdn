@@ -1,0 +1,50 @@
+/* EDITORIAL — inchiostro su carta scura, serif da rivista.
+   Il default. Legge come una pagina di magazine, non come una card. */
+
+.slide {
+  background:
+    radial-gradient(120% 90% at 22% 8%, #1d1c1a 0%, #121110 46%, #0b0b0a 100%);
+  color: #f2ede4;
+}
+
+.kicker { color: #c98a4b; }
+.index  { color: #f2ede4; opacity: .34; }
+
+.headline {
+  font-family: 'Display', Georgia, 'Times New Roman', serif;
+  color: #f7f3ec;
+}
+
+/* Prima slide: l'hook regge da solo. Corpo più grande, e il blocco scende
+   sotto il centro ottico — ma non fino in fondo, o il terzo superiore resta
+   un buco. */
+.slide.first .stage { justify-content: center; padding-top: 130px; }
+.slide.first .fit-xl { font-size: 126px; }
+.slide.first .fit-lg { font-size: 108px; }
+.slide.first .fit-md { font-size: 92px; }
+.slide.first .fit-sm { font-size: 76px; line-height: 1.06; }
+
+/* Ultima slide: il close. Accento caldo, testo più stretto. */
+.slide.last .headline { color: #e8b878; }
+.slide.last .body { opacity: .74; }
+
+/* Post a immagine singola: è insieme prima e ultima slide, ma non deve
+   ereditare l'oro della chiusura — nel feed deve leggersi come la copertina
+   di un carosello, o la pagina sembra due pagine diverse. */
+.slide.solo .headline { color: #f7f3ec; }
+.slide.solo .stage { justify-content: center; padding-top: 0; gap: 40px; }
+
+.body { color: #ded6c9; opacity: .86; }
+
+.mark { color: #f2ede4; opacity: .46; }
+.dot  { background: #c98a4b; }
+.swipe { color: #f2ede4; }
+
+/* Filetto sottile sotto l'header: ancora la composizione senza rumore. */
+.top::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 26px);
+  height: 1px;
+  background: linear-gradient(90deg, rgba(201,138,75,.55), rgba(242,237,228,.06));
+}

@@ -1,0 +1,240 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  CURIOSITY ENGINE — configurazione
+#  Tutto quello che definisce la personalità della pagina sta qui dentro.
+#  Cambia questo file, non il codice.
+# ══════════════════════════════════════════════════════════════════════════════
+
+brand:
+  handle: "@oddlywireddaily"
+  name: "Oddly Wired"
+  # Firma in basso a destra su ogni slide. Tenere corta.
+  watermark: "@oddlywireddaily"
+  # Contatto inserito nello User-Agent verso Wikimedia Commons: la loro policy
+  # lo richiede e senza throttlano le richieste. Una email o un URL vanno bene.
+  contact: "https://instagram.com/oddlywireddaily"
+
+# ─── NICCHIA ──────────────────────────────────────────────────────────────────
+# Determina il prompt di generazione. Più è stretta, più l'algoritmo profila
+# bene il pubblico e più cresci. "Mix generalista" = crescita lenta.
+niche:
+  slug: "psychology_and_human_behavior"
+  label: "Psychology & human behaviour"
+  brief: |
+    Counter-intuitive facts about how the human mind and human behaviour
+    actually work: cognitive biases, memory, perception, social dynamics,
+    decision-making, sleep, attention, emotion.
+    The reader should finish the post thinking "wait, that explains something
+    about me". Prefer facts with a personal hook over abstract lab trivia.
+  # Argomenti da evitare: rumore, contenuti già saturi, o rischiosi.
+  avoid:
+    - "generic motivational advice"
+    - "astrology, MBTI, or other unfalsifiable typologies"
+    - "medical advice or anything a reader might act on health-wise"
+    - "the marshmallow test, the Stanford prison experiment, the Dunning-Kruger
+       effect stated as 'stupid people think they're smart' (all overused
+       and/or misreported)"
+
+# ─── VOCE EDITORIALE ──────────────────────────────────────────────────────────
+voice:
+  language: "en-US"
+  # Come suona la pagina. Questo va nel system prompt.
+  guide: |
+    Calm, precise, quietly confident. You are the friend who reads the actual
+    study, not the account that shouts.
+    - No hype words: "mind-blowing", "insane", "you won't believe", "shocking".
+    - No emoji in the image text. Sparingly (0-1) in the caption.
+    - Short declarative sentences. Concrete nouns. Active voice.
+    - Numbers are specific: "in a 2019 study of 1,300 adults", not "studies show".
+    - Never claim more than the evidence supports. "Suggests" beats "proves".
+    - The hook is a statement or a question, never a command.
+
+# ─── FORMATO ──────────────────────────────────────────────────────────────────
+format:
+  # "carousel" (5 slide, più salvataggi/condivisioni) | "single" (1 immagine)
+  # In modalità mix, la pipeline alterna secondo il rapporto qui sotto.
+  mode: "carousel"
+  mix_ratio_carousel: 0.6         # usato solo se mode: "mix"
+  carousel_slides: 5
+  width: 1080
+  height: 1350                    # 4:5 — occupa più schermo nel feed IG
+
+  # Template — vedi engine/templates/. I primi tre sono solo tipografia,
+  # gli ultimi tre usano una foto pertinente al fatto.
+  #   editorial  serif su fondo scuro, da rivista
+  #   bold       carta avorio, grottesco pesante, massima leggibilità
+  #   mono       scheda tecnica, griglia, monospace
+  #   photo      foto a tutto campo in duotone, testo in basso
+  #   split      foto sopra, testo sotto su fondo pieno — il più leggibile
+  #   frame      stampa incorniciata su carta chiara, didascalia da museo
+  # split è il più adatto alle immagini generate gratuitamente: la foto occupa
+  # metà slide, quindi l'ingrandimento dei 686×858 di Pollinations non si vede.
+  template: "impact"
+
+  # Con `true` ogni slide ottiene un'immagine pertinente. Richiesto dai template
+  # photo/split/frame; ignorato dagli altri tre, che non hanno dove metterla.
+  use_images: true
+
+# ─── IMMAGINI ─────────────────────────────────────────────────────────────────
+visuals:
+  # Generazione AI. Claude NON genera immagini: serve un provider dedicato.
+  #
+  # GRATUITI
+  #   pollinations  nessuna chiave, nessun account. Esce a 686×858 qualunque
+  #                 dimensione chiedi, quindi c'è un ingrandimento sulle slide;
+  #                 su sfondo desaturato si nota poco. Servizio pubblico: da
+  #                 considerare "spesso disponibile", non garantito.
+  #   cloudflare    FLUX.1-schnell sul free tier di Workers AI (10.000 neuroni
+  #                 al giorno, a questi volumi inesauribili). Qualità e
+  #                 risoluzione migliori. Serve un account gratuito:
+  #                 CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN.
+  #
+  # A PAGAMENTO
+  #   gemini  gemini-3.1-flash-lite-image — richiede fatturazione attiva sul
+  #           progetto Google: i modelli immagine hanno free tier ZERO.
+  #   openai  gpt-image-2 — ~$0.005-0.02/immagine a qualità "low"
+  #   imagen  ⚠️ tutti gli imagen-4.* sono dismessi per i nuovi progetti (404)
+  #
+  #   none    nessuna generazione: le immagini arrivano solo da Wikimedia/Pexels
+  ai_provider: "cloudflare"
+
+  # true  → genera sempre, anche per i soggetti "reali". Giusto per nicchie di
+  #         comportamento quotidiano: l'archivio su questi temi restituisce
+  #         materiale storico fuori contesto.
+  # false → cerca prima in archivio per i soggetti reali. Giusto per storia,
+  #         scienza, eventi: lì la foto autentica vale più di una generata.
+  prefer_generated: true
+  ai_model: ""            # vuoto = default del provider
+  ai_quality: "low"       # solo openai: low | medium | high
+
+  # Lo stile viene accodato a ogni prompt. È la ragione per cui venti immagini
+  # generate in giorni diversi sembrano la stessa pagina invece di venti post
+  # scollegati. Cambialo per cambiare il carattere visivo dell'account.
+  # Le istruzioni negative pesano di più all'inizio del prompt: FLUX tende a
+  # inventare insegne e scritte illeggibili, e metterle in fondo non basta.
+  # Anche così qualche artefatto passa — è un limite del modello, non del
+  # prompt: nel dubbio preferire soggetti senza cartelli (interni, primi piani).
+  ai_style: >
+    Absolutely no text, no letters, no signage, no shop signs, no posters, no
+    numbers, no watermarks anywhere in the frame.
+    Editorial documentary photograph, natural available light, muted desaturated
+    palette, shallow depth of field, 50mm lens, subtle film grain, quiet and
+    restrained composition with generous negative space.
+    No people looking at the camera.
+
+  # Tetto di immagini GENERATE per post — vale solo per quelle a pagamento.
+  # Le immagini cercate (Wikimedia, Pexels) sono gratuite e non sono contate,
+  # quindi con ai_provider: "none" questo valore non limita nulla.
+  # 5 slide × 2 post/giorno = 300 immagini/mese: a $0.02 sono ~6 $/mese.
+  # Esaurito il tetto, le slide concettuali ripiegano sulla ricerca.
+  # Con un provider gratuito non c'è motivo di limitarla: ogni slide che non
+  # ottiene un'immagine è un buco nel carosello. Alzalo solo se passi a un
+  # provider a pagamento.
+  max_ai_images_per_post: 5
+
+  # ⚠️ Le immagini reperite sono filtrate per licenza (solo pubblico dominio,
+  # CC0, CC BY, CC BY-SA) e il credito viene stampato sulla slide.
+  # Quelle generate sono etichettate come illustrazione: sia Instagram che
+  # TikTok richiedono di dichiarare i contenuti sintetici.
+
+# ─── PIPELINE ─────────────────────────────────────────────────────────────────
+pipeline:
+  # Motore di generazione testo.
+  #   anthropic  Claude. Nettamente migliore nel ruolo critico — il fact-check
+  #              ostile che smonta le curiosità false prima che le pubblichi.
+  #              Richiede credito a consumo (~0,10-0,25 $ a post).
+  #   gemini     Google. Free tier vero sui modelli di TESTO. Qualità
+  #              inferiore, ma fa girare tutto a costo zero.
+  provider: "gemini"
+
+  # Deve corrispondere al provider:
+  #   anthropic → claude-opus-5 (o claude-sonnet-5, più economico)
+  #   gemini    → gemini-3.5-flash | gemini-2.5-flash | gemini-3.1-flash-lite
+  # Nota: ogni modello ha la sua quota giornaliera indipendente. Se esaurisci
+  # quella di uno, cambiare modello qui riparte subito senza aspettare.
+  model: "gemini-3.1-flash-lite"
+
+  # Come si verificano i fatti.
+  #   native     il modello cerca da solo. Su Anthropic è incluso; su Google
+  #              il grounding richiede fatturazione attiva (free tier zero).
+  #   wikipedia  si portano al modello gli estratti di Wikipedia. Gratis,
+  #              nessuna chiave. Non è una fonte primaria e non copre tutto,
+  #              ma intercetta le attribuzioni sbagliate e i numeri derivati,
+  #              che sono il grosso delle curiosità false in circolazione.
+  #   none       nessuna fonte esterna: sconsigliato, il fact-check diventa
+  #              una seconda opinione dello stesso modello.
+  web_search: "wikipedia"
+
+  # Solo Gemini: tetto ai token di ragionamento. Su Gemini il ragionamento
+  # consuma lo stesso budget della risposta, quindi senza limite il JSON viene
+  # troncato a metà. Alzarlo migliora il giudizio ma aumenta il rischio.
+  thinking_budget: 2048
+  # Quante idee generare per batch. Se ne scarti molte in verifica, alza.
+  ideas_per_batch: 12
+  # Soglia minima di confidenza per pubblicare. 0.85 è severo di proposito:
+  # una pagina di curiosità che posta bufale viene distrutta nei commenti.
+  min_confidence: 0.85
+  # Similarità massima con un post già pubblicato (0-1). Sopra → scartato.
+  max_similarity: 0.55
+  # Post al giorno. IG tollera fino a 25-50 via API ma 1-2 è il ritmo giusto
+  # per una pagina nuova: l'algoritmo premia la costanza, non il volume.
+  posts_per_day: 2
+  # Ore locali di pubblicazione (24h).
+  post_hours: [13, 20]
+  timezone: "Europe/Amsterdam"
+
+# ─── APPROVAZIONE UMANA ───────────────────────────────────────────────────────
+# Con `require_approval: true` la pipeline si ferma prima di pubblicare e ti
+# manda il post su Telegram con i bottoni Approva/Scarta.
+# Consigliato ON per le prime 2-4 settimane: è il modo più economico di
+# scoprire cosa sbaglia il generatore prima che lo veda il pubblico.
+review:
+  require_approval: true
+  channel: "telegram"             # telegram | none
+
+# ─── PUBBLICAZIONE ────────────────────────────────────────────────────────────
+publish:
+  instagram:
+    enabled: true
+  tiktok:
+    enabled: false                # attiva dopo l'audit — vedi README
+    # "inbox" = carica come bozza (nessun audit richiesto, premi tu Post)
+    # "direct" = pubblica diretto (richiede audit approvato + dominio verificato)
+    mode: "inbox"
+
+# ─── COMMENTI ─────────────────────────────────────────────────────────────────
+# Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
+# ogni risposta riporta la persona sul post.
+comments:
+  # Le risposte passano da Telegram prima di uscire. Una risposta automatica
+  # sbagliata resta pubblica sotto al tuo post per sempre — e su una pagina che
+  # si presenta come "fatti verificati" costa più di dieci risposte mancate.
+  require_approval: true
+  # Quanto indietro guardare. Sui post più vecchi i commenti arrivano col
+  # contagocce e interrogarli brucia il rate limit per niente.
+  window_hours: 48
+
+  # Tetto di risposte per giro. Un account che risponde a TUTTI, sempre, è
+  # riconoscibile come automatico quanto uno che risponde male: le persone
+  # vere rispondono a una parte dei commenti, non a tutti. Le correzioni non
+  # rientrano nel tetto — quelle vanno sempre gestite.
+  max_replies_per_run: 6
+
+caption:
+  max_chars: 900
+  hashtag_count: 12
+  # Hashtag fissi sempre presenti (brand). Il resto li genera Claude sul tema.
+  pinned_hashtags: ["psychologyfacts", "humanbehaviour"]
+  cta: "Follow @oddlywireddaily for one a day."
+
+  # Dichiarazione dei contenuti sintetici. Obbligatoria in UE dal 2 agosto 2026
+  # (AI Act, art. 50): deve essere percepibile senza strumenti tecnici e al
+  # primo contatto. Sulle slide il credito è già stampato; questa riga copre
+  # chi legge solo la caption. Svuotare la stringa la disattiva — sconsigliato.
+  # La seconda frase non è difensiva: distingue l'illustrazione, che è
+  # generata, dal fatto, che è verificato. È il contrario di quello che fanno
+  # le pagine che nascondono l'uso dell'AI.
+  # Disattivata di scelta: la dichiarazione è già data due volte — il credito
+  # "Illustration: AI-generated" stampato su ogni slide, e l'etichetta
+  # "AI creator" attivata sul profilo Instagram. Ripeterla in caption sarebbe
+  # ridondante. Riattivare mettendo una stringa qui se le regole cambiano.
+  ai_disclosure: ""

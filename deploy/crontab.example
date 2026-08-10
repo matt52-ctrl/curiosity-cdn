@@ -1,0 +1,22 @@
+# Curiosity Engine — crontab per VPS
+#   crontab deploy/crontab.example
+# Controlla i path prima di installarlo.
+
+PROJECT=/home/USER/curiosity_engine
+PYTHON=/home/USER/curiosity_engine/.venv/bin/python
+
+# Ciclo completo due volte al giorno, agli orari di picco.
+# Gli orari sono UTC: 11:05 UTC = 13:05 a Amsterdam d'inverno, 12:05 CEST d'estate.
+# Se ti serve precisione stagionale, imposta CRON_TZ=Europe/Amsterdam (cron di Debian/Ubuntu).
+CRON_TZ=Europe/Amsterdam
+
+5 13 * * *  cd $PROJECT && $PYTHON run.py cycle >> data/cron.log 2>&1
+5 20 * * *  cd $PROJECT && $PYTHON run.py cycle >> data/cron.log 2>&1
+
+# Le decisioni di approvazione da Telegram ogni 15 minuti, così un post
+# approvato non aspetta il ciclo successivo per uscire.
+*/15 * * * *  cd $PROJECT && $PYTHON run.py review >> data/cron.log 2>&1
+
+# Metriche una volta al giorno: le insights di Instagram si stabilizzano
+# dopo qualche ora, non ha senso interrogarle di continuo.
+0 9 * * *  cd $PROJECT && $PYTHON run.py metrics >> data/cron.log 2>&1

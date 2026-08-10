@@ -1,0 +1,39 @@
+/* BOLD — carta avorio, grottesco pesantissimo, tutto maiuscolo.
+   Massima leggibilità in feed a scorrimento veloce. Meno elegante di
+   editorial, più aggressivo sul thumb-stop. */
+
+.slide {
+  background: #f4f0e6;
+  color: #14120f;
+}
+
+.kicker { color: #c2410c; }
+.index  { color: #14120f; opacity: .38; }
+
+.headline {
+  font-family: 'Heavy', 'Arial Black', system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: -.035em;
+  line-height: .94;
+  color: #14120f;
+}
+
+.fit-xl { font-size: 104px; }
+.fit-lg { font-size: 86px; }
+.fit-md { font-size: 72px; }
+.fit-sm { font-size: 58px; line-height: 1.0; }
+
+.body {
+  color: #3d3730;
+  max-width: 20ch;
+  border-left: 5px solid #c2410c;
+  padding-left: 26px;
+}
+
+.slide.last .headline { color: #c2410c; }
+
+.mark { color: #14120f; opacity: .5; }
+.dot  { background: #14120f; }
+.swipe { color: #c2410c; opacity: .85; }
+
+.grain { opacity: .07; mix-blend-mode: multiply; }

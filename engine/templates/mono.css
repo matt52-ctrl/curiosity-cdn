@@ -1,0 +1,56 @@
+/* MONO — scheda tecnica. Griglia, monospace, verde fosforo.
+   Funziona bene per nicchie science/tech; fuori luogo per storia o psicologia. */
+
+.slide {
+  background: #07090b;
+  color: #cfe3d8;
+}
+
+.slide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(120,255,190,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,255,190,.045) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.kicker, .index, .mark, .swipe {
+  font-family: 'Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+.kicker { color: #4ade80; }
+.index  { color: #4ade80; opacity: .5; }
+
+.headline {
+  font-family: 'Mono', ui-monospace, 'SF Mono', monospace;
+  letter-spacing: -.03em;
+  line-height: 1.12;
+  color: #eafff4;
+}
+
+.fit-xl { font-size: 82px; }
+.fit-lg { font-size: 70px; }
+.fit-md { font-size: 60px; }
+.fit-sm { font-size: 50px; }
+
+.headline::before {
+  content: "> ";
+  color: #4ade80;
+  opacity: .6;
+}
+
+.body {
+  font-family: 'Mono', ui-monospace, monospace;
+  font-size: 29px;
+  line-height: 1.55;
+  color: #9fbcae;
+  max-width: 26ch;
+}
+
+.slide.last .headline { color: #4ade80; }
+
+.mark { color: #4ade80; opacity: .55; }
+.dot  { background: #4ade80; border-radius: 0; }
+.swipe { color: #4ade80; }

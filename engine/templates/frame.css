@@ -1,0 +1,102 @@
+/* FRAME — stampa incorniciata su carta, didascalia da museo.
+   Fondo chiaro: nel feed spicca fra i post scuri, e la cornice segnala
+   "documento" più che "post". Ottimo per storia, arte, scienza. */
+
+.slide {
+  background: #efe9dc;
+  color: #1a1713;
+  padding: 74px 74px 64px;
+}
+
+/* La foto non è a tutto campo: è una stampa appoggiata sulla carta. */
+.canvas {
+  inset: 150px 110px 46%;
+  box-shadow:
+    0 2px 4px rgba(26,23,19,.10),
+    0 18px 44px rgba(26,23,19,.20);
+}
+
+.photo {
+  filter: grayscale(1) contrast(1.1) brightness(.98) sepia(.22);
+}
+
+.tone {
+  background: #8a6a45;
+  mix-blend-mode: color;
+  opacity: .3;
+}
+
+.scrim { background: none; }
+
+.kicker { color: #9a5b28; }
+.index  { color: #1a1713; opacity: .42; }
+
+.top::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 22px);
+  height: 1px;
+  background: rgba(26,23,19,.22);
+}
+
+.stage {
+  position: absolute;
+  top: 56%;
+  left: 74px; right: 74px; bottom: 0;
+  padding: 0 0 104px;
+  justify-content: flex-start;
+  gap: 22px;
+}
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  color: #17140f;
+}
+
+.fit-xl { font-size: 88px; }
+.fit-lg { font-size: 76px; }
+.fit-md { font-size: 64px; }
+.fit-sm { font-size: 54px; line-height: 1.09; }
+
+.body {
+  color: #4a4239;
+  font-size: 30px;
+  max-width: 36ch;
+}
+
+.slide.last .headline { color: #9a5b28; }
+.slide.solo .headline { color: #17140f; }
+
+/* .stage e .canvas sono fuori dal flusso, quindi il footer va ancorato
+   esplicitamente: altrimenti risale a ridosso dell'header. */
+.bottom {
+  position: absolute;
+  left: 74px; right: 74px; bottom: 56px;
+  z-index: 3;
+}
+
+.mark { color: #1a1713; opacity: .5; }
+.dot  { background: #9a5b28; }
+.swipe { color: #9a5b28; }
+
+/* Didascalia nello spazio bianco sotto il testo, come il cartellino di una
+   mostra: allineata a sinistra con la colonna, non appiccicata alla stampa. */
+.credit {
+  top: auto;
+  bottom: 118px;
+  left: 74px;
+  right: auto;
+  text-align: left;
+  color: #1a1713;
+  opacity: .42;
+  font-size: 16px;
+  font-style: italic;
+  letter-spacing: .02em;
+}
+.credit::before { content: "Image: "; }
+
+.grain { opacity: .06; mix-blend-mode: multiply; }
+
+.slide:not(.photo-slide) .canvas {
+  background: repeating-linear-gradient(45deg, #e4dccb, #e4dccb 12px, #ded5c2 12px, #ded5c2 24px);
+}
