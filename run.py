@@ -16,6 +16,7 @@ import argparse
 import json
 import random
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import List
@@ -929,6 +930,23 @@ def cmd_cycle(args: argparse.Namespace) -> int:
         analytics.collect(conn)
     except Exception as exc:
         print(f"metriche saltate: {exc}")
+
+    # 7. Scadenza dell'accesso Meta. Va controllata a ogni giro perché quando
+    #    scade non c'è nessun altro segnale: le chiamate iniziano a fallire e
+    #    il profilo si ferma senza che nessuno se ne accorga per settimane.
+    giorni = instagram.token_days_left()
+    if giorni is not None:
+        if giorni <= 0:
+            msg = "🔴 Accesso Instagram SCADUTO: la pubblicazione è ferma. Rigenera il token."
+        elif giorni <= 14:
+            msg = f"⚠️ L'accesso Instagram scade fra {giorni} giorni. Rigenera il token."
+        else:
+            msg = ""
+        if msg:
+            print(f"\n{msg}")
+            review.notify(msg)
+        else:
+            print(f"accesso Instagram valido ancora {giorni} giorni")
 
     # 6. Un ciclo che non ha prodotto nulla e ha accumulato errori è la morte
     #    silenziosa tipica di queste pipeline: il token scade, il cron continua

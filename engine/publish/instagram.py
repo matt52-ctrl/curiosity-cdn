@@ -143,6 +143,41 @@ def quota_used() -> Optional[int]:
         return None
 
 
+def token_days_left() -> Optional[int]:
+    """Giorni prima che Meta revochi l'accesso ai dati.
+
+    Il token in sé non scade (`expires_at: 0`), ma Meta applica una scadenza
+    separata all'accesso ai dati — 90 giorni dall'autorizzazione. Superata
+    quella, ogni chiamata fallisce e la pipeline si ferma senza che nulla lo
+    annunci. È il modo tipico in cui questi sistemi muoiono.
+
+    None se non determinabile.
+    """
+    import time as _time
+
+    token = env("IG_ACCESS_TOKEN")
+    if not token:
+        return None
+    try:
+        with httpx.Client(timeout=30) as client:
+            resp = client.get(
+                f"{GRAPH}/debug_token",
+                params={"input_token": token, "access_token": token},
+            )
+        data = resp.json().get("data", {})
+        if not data.get("is_valid"):
+            return 0
+        # Si prende la scadenza più vicina fra le due che Meta espone.
+        deadlines = [
+            d for d in (data.get("expires_at"), data.get("data_access_expires_at")) if d
+        ]
+        if not deadlines:
+            return None
+        return int((min(deadlines) - _time.time()) // 86400)
+    except Exception:
+        return None
+
+
 def insights(media_id: str) -> Dict[str, int]:
     """Metriche di un post. I nomi delle metriche cambiano tra versioni della
     Graph API: quelle non riconosciute vengono semplicemente ignorate."""
