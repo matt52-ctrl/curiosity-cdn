@@ -64,7 +64,16 @@ Each slide must earn the swipe to the next by leaving something open.
            slide 2 said what, this says how.
   slide 4  THE TURN. The part that makes it personal — where this shows up
            in the reader's own week. This is the slide people screenshot.
-  slide 5  THE CLOSE. One line that lands the implication, then the follow.
+  slide 5  THE CLOSE. One line that lands the implication.
+
+           On Instagram the signal that matters most is the SAVE, not the
+           like: it is what the algorithm reads as "worth showing to more
+           people". People save what they expect to need again — a sentence
+           they want to reread, or one they intend to quote at someone.
+           So the closing line should be quotable on its own, out of context,
+           without the four slides before it. If it only makes sense as a
+           conclusion, it will not be saved.
+           Then the follow line, on its own, small.
 
   Never repeat the hook on slide 2. Restating it is the most common way a
   carousel loses people: they read the same sentence twice and stop swiping.
@@ -155,14 +164,56 @@ IMAGE KIND — decides whether the picture is generated or photographed.
 The last slide is the close: it states the implication and invites a follow.
 Do not put a hashtag or an @ inside slide text.
 
-CAPTION RULES
-  - Opens by restating the hook in different words, so the caption stands
-    alone for someone who only reads the text.
-  - Then the fact with its source, in one or two sentences.
-  - Ends with a genuine question that a reader can answer from their own
-    experience. Not "what do you think?" — something specific.
-  - Then the CTA on its own line: "{c['cta']}"
-  - Under {c['max_chars']} characters, hashtags excluded.
+CAPTION SHAPE — return the caption with BLANK LINES between its parts, like
+this, and never as one block:
+
+    <first line — see below>
+
+    <the fact, with its source, one or two sentences>
+
+    <the closing question>
+
+    {c['cta']}
+
+  Instagram collapses a caption after roughly 125 characters and hides the
+  rest behind "more". Most people never expand it. So:
+
+  - The FIRST LINE is the only part guaranteed to be read. Make it a complete
+    thought under 100 characters that works alone — not a run-up to a point
+    made later. Do not repeat the hook word for word; say the same thing from
+    a different angle.
+  - A caption written as one paragraph loses the question at the bottom,
+    which is where the comments come from. The blank lines are not cosmetic.
+  - Under {c['max_chars']} characters overall, hashtags excluded.
+
+THE CLOSING QUESTION — this is what decides whether anyone comments
+
+A comment costs the reader effort, and they pay it only when answering is
+easy AND the answer says something about them. Most accounts ask questions
+that are neither, which is why their comments are empty.
+
+  Ask something they already know the answer to. If a reader has to think,
+  recall, or research, they scroll on. The answer should already be sitting
+  in their head, waiting.
+
+  Make the answer a small self-disclosure. People comment to be seen. A
+  question whose answer reveals a habit, a preference or an embarrassment
+  gets answered; a question about the abstract topic does not.
+
+  Prefer a fork over an open field. "Which of the two are you?" gets far more
+  replies than "what do you think about this?", because choosing is one
+  second of work and typing an opinion is thirty.
+
+    dead:  "What do you think about the spotlight effect?"
+    dead:  "Have you ever experienced this?"           (yes/no, nothing to say)
+    alive: "What's the thing you're convinced everyone noticed, that nobody
+            did?"
+    alive: "Which one are you — the one who replays it for days, or the one
+            who forgets by dinner?"
+
+  Never ask people to tag a friend, comment a word, or answer with an emoji.
+  Those inflate the count with comments that carry no meaning, and the reach
+  they buy does not convert into anyone who cares about the page.
 
 HASHTAGS
   Exactly {c['hashtag_count']}, lowercase, no "#" prefix, no spaces.
@@ -225,7 +276,24 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
     contatto. Sulle slide il credito è già stampato; questa riga copre chi
     legge la caption senza guardare le immagini.
     """
-    parts = [copy["caption"].strip()]
+    testo = copy["caption"].strip()
+
+    # Rete di sicurezza: se il modello ha ignorato le righe vuote e ha
+    # restituito un unico blocco, la domanda finale e la CTA finiscono
+    # nascoste dietro il "altro" di Instagram. Si separa almeno la chiusura.
+    if "\n" not in testo:
+        cta = cfg.get("caption.cta", "")
+        if cta and cta in testo:
+            testo = testo.replace(cta, "\n\n" + cta).strip()
+        # E la domanda, che è ciò che genera i commenti.
+        pos = testo.rfind("? ")
+        if pos > 0:
+            testo = testo[: pos + 1] + "\n\n" + testo[pos + 2 :]
+        pos = testo.find(". ")
+        if 0 < pos < 160:
+            testo = testo[: pos + 1] + "\n\n" + testo[pos + 2 :]
+
+    parts = [testo]
 
     if has_ai_images:
         disclosure = cfg.get(

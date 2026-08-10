@@ -10,10 +10,21 @@ name: Curiosity cycle
 
 on:
   schedule:
-    # ATTENZIONE: gli orari cron di GitHub sono in UTC e non seguono l'ora
-    # legale. 11:05 UTC = 13:05 in Italia d'estate, 12:05 d'inverno.
-    - cron: "5 11 * * *"
-    - cron: "5 18 * * *"
+    # Due avvertenze su questi orari.
+    #
+    # 1. Sono in UTC e non seguono l'ora legale: d'inverno i post escono
+    #    un'ora prima in Italia.
+    # 2. GitHub NON è puntuale. I job schedulati hanno priorità bassa e
+    #    vengono accodati: il 10 agosto il giro delle 18:05 è partito alle
+    #    19:09, con 64 minuti di ritardo. È normale e non aggirabile sul
+    #    piano gratuito.
+    #
+    # Perciò l'orario è anticipato di 45 minuti rispetto alla finestra
+    # desiderata (13:00 e 20:00 italiane): con il ritardo tipico si finisce
+    # mediamente dentro. Se un giorno servisse precisione vera, l'unica
+    # strada è un VPS con cron proprio.
+    - cron: "15 10 * * *"
+    - cron: "15 17 * * *"
   # Permette di lanciarlo a mano dalla tab Actions, utile per provare.
   workflow_dispatch:
 
