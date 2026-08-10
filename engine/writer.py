@@ -54,9 +54,26 @@ You receive a verified fact and turn it into slides plus a caption.
 NARRATIVE ARC — the five slides are one movement, not five statements.
 Each slide must earn the swipe to the next by leaving something open.
 
-  slide 1  THE CLAIM. The hook alone, at full size. No explanation, no
-           evidence, no softening. The reader must finish it wanting to know
-           whether it is true.
+  slide 1  THE CLAIM. This is the only slide most people will ever see: it is
+           what appears in the feed, and everything else depends on it. Treat
+           it with the same severity as a reel hook.
+
+             Address the reader directly. "You" — not "we", not "people", not
+             "the brain". A sentence about people in general is a lecture; a
+             sentence about the reader is an accusation, and accusations get
+             opened.
+
+             Concrete over abstract. "Ease of memory shapes your sense of
+             reality" is a textbook sentence nobody stops for. "You are more
+             afraid of the thing you can picture" is the same fact, aimed.
+
+             No hedging. "May", "can", "tends to", "often" belong in the body
+             where precision matters. In the cover they drain it.
+
+             Never a topic label. If the sentence could be the title of a
+             chapter, rewrite it as something that happens to the reader.
+
+           No explanation, no evidence, no softening on this slide.
   slide 2  THE PROOF. The study, with its most concrete detail — the number,
            the setup, the thing that was actually measured. This is where
            doubt gets answered.
@@ -79,11 +96,35 @@ Each slide must earn the swipe to the next by leaving something open.
   carousel loses people: they read the same sentence twice and stop swiping.
   Each slide's headline must be a new sentence with new information.
 
+EVERY SLIDE MUST EARN THE NEXT ONE
+
+  A carousel where each slide is a complete, closed statement gets abandoned
+  on slide two — not because the writing is bad, but because there is no
+  reason to continue. The reader has been given something finished.
+
+  So each slide except the last should leave one thing open: a number not yet
+  given, a mechanism named but not explained, a consequence stated but not
+  yet applied to the reader. The next slide pays that off and opens the next.
+
+    closed:  "The brain confuses vividness with probability."
+    open:    "The brain treats one vivid image as a statistic."
+             (→ the reader now wants to know what that does to them)
+
+  Do not do this with cliffhanger phrasing — no "but here's the thing…", no
+  "and the reason will surprise you". Those are the tells of accounts that
+  have nothing. Withhold information, not with suspense words.
+
 SLIDE RULES — these are images, not paragraphs. Text that does not fit is text
 that does not get read.
-  kicker    0-3 words, uppercase-ish label. Often a number ("01"), a category,
-            or omitted (empty string). Never a sentence.
-  headline  The line that carries the slide. HARD LIMIT 60 characters.
+  kicker    0-3 words. A LABEL that adds information the headline does not:
+            "1973", "THE STUDY", "IN PRACTICE", "THE CATCH", "WHAT IT COSTS".
+            Never a number like "01" or "02" — the slide index is already
+            printed on the right, so a numeric kicker wastes the one bit of
+            space that could tell the reader where they are in the argument.
+            Empty is better than redundant.
+  headline  The line that carries the slide. Aim for under 72 characters —
+            the layout has four size steps and handles long lines, but past
+            that it shrinks to a size nobody reads on a phone.
             On slide 1 this is the hook — it must work with zero context.
   body      0-220 characters. May be empty on the first and last slide.
             One idea per slide. Never continue a sentence onto the next slide.
@@ -265,10 +306,26 @@ Return exactly {slide_count} slides. Include these hashtags among yours: {', '.j
         slides.append(
             {"kicker": "", "headline": fact_row["kicker"][:60], "body": "", "image_query": ""}
         )
+    def _taglia(testo: str, limite: int) -> str:
+        """Accorcia senza spezzare le parole.
+
+        Il taglio secco produceva headline mozzate in mezzo a una parola
+        ("...endured a humiliati"), e quel troncamento finiva stampato sulle
+        immagini pubblicate. Meglio perdere l'ultima parola intera.
+        """
+        testo = testo.strip()
+        if len(testo) <= limite:
+            return testo
+        tagliato = testo[:limite].rsplit(" ", 1)[0].rstrip(" ,;:—-")
+        return tagliato or testo[:limite]
+
     for s in slides:
-        s["headline"] = s["headline"].strip()[:60]
-        s["body"] = s["body"].strip()[:220]
-        s["kicker"] = s["kicker"].strip()[:18]
+        # 72 invece di 60: il renderer ha già quattro gradini di corpo per le
+        # frasi lunghe, quindi il limite stretto tagliava frasi che il layout
+        # avrebbe gestito benissimo.
+        s["headline"] = _taglia(s["headline"], 72)
+        s["body"] = _taglia(s["body"], 220)
+        s["kicker"] = _taglia(s["kicker"], 22)
         # 180 e non 80: ora si chiede una scena descritta, non due parole.
         # Con il vecchio limite le descrizioni venivano tagliate a metà frase.
         s["image_query"] = s.get("image_query", "").strip()[:180]
