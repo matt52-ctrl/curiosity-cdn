@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""Scarica una libreria musicale libera, divisa per stato d'animo.
+"""Scarica la libreria musicale, divisa per stato d'animo.
 
-Perché divisa: una canzone allegra sotto una frase amara rovina il reel più di
-quanto lo rovinerebbe il silenzio. La musica non è decorazione, è la metà del
-messaggio — quindi le tracce vanno scelte in base al tono della frase, e per
-sceglierle bisogna averle catalogate prima.
+Fonte: la raccolta Audionautix (Jason Shaw) su archive.org — 147 brani sotto
+**CC0**, cioè pubblico dominio: uso commerciale libero, nessuna attribuzione
+dovuta. È musica di produzione, scritta per stare sotto a un video, e si sente
+la differenza rispetto alle registrazioni amatoriali che si trovano cercando
+"instrumental" su Wikimedia.
 
-Quattro registri, che coprono ciò che questa pagina pubblica:
-  reflective  la maggior parte dei fatti: calmo, pensoso, sospeso
-  unsettling  fatti su autoinganno e bias — qualcosa non torna
-  warm        fatti su legami, vicinanza, essere visti
-  bright      fatti sorprendenti o buffi, dove serve leggerezza
+Perché divisa per registro: una canzone allegra sotto una frase amara rovina
+il reel più del silenzio. La musica non è decoro, è metà del messaggio — e per
+sceglierla in base al tono della frase bisogna averla catalogata prima.
 
-⚠️ Nessuna di queste è "musica di tendenza". L'audio di tendenza vive solo
-dentro l'app di Instagram, è protetto da copyright, e incorporarlo nel file
-farebbe azzerare l'audio o rimuovere il post. Qui si usano solo CC0 e CC BY,
-che si possono usare commercialmente senza rischi.
+La classificazione avviene sui titoli, che in questa raccolta sono
+descrittivi ("ADarkerHeart", "AcousticMeditation2", "90SecondsOfFunk"). È un
+metodo grezzo ma verificabile: i titoli si leggono, e un brano finito nella
+cartella sbagliata si sposta a mano.
+
+⚠️ Nessuna di queste è "musica di tendenza": quella vive solo dentro l'app di
+Instagram, è protetta, e incorporarla nel file farebbe azzerare l'audio o
+rimuovere il post.
 
     python3 setup_music.py
 """
@@ -28,129 +31,116 @@ from pathlib import Path
 import httpx
 
 DEST = Path(__file__).resolve().parent / "assets" / "music"
+RACCOLTA = "audionautix-music-collection"
+BASE = f"https://archive.org/download/{RACCOLTA}"
 UA = {"User-Agent": "CuriosityEngine/1.0 (https://instagram.com/oddlywireddaily)"}
 
-# Solo licenze senza obbligo di condividere allo stesso modo: una CC BY-SA
-# imporrebbe la stessa licenza al video finale.
-LICENZE_OK = re.compile(r"^(cc0|public domain|pd|cc by( \d(\.\d)?)?)$", re.I)
+PER_REGISTRO = 6
 
-# Le ricerche sono pensate per far uscire brani diversi fra loro: cercare
-# "musica calma" quattro volte restituirebbe quattro volte lo stesso genere.
+# Parole chiave nei titoli. L'ordine conta: si assegna al primo registro che
+# combacia, quindi i termini più specifici vanno prima.
 REGISTRI = {
-    "reflective": [
-        "Komiku instrumental",
-        "calm piano instrumental",
-        "slow ambient instrumental",
-    ],
     "unsettling": [
-        "dark ambient instrumental",
-        "minor key piano instrumental",
-        "suspense instrumental",
+        "dark", "ashes", "assasin", "shadow", "storm", "cold", "zero", "fear",
+        "ghost", "haunt", "tension", "suspense", "grim", "night", "drone",
+        "empire", "war", "danger", "creep",
     ],
     "warm": [
-        "acoustic guitar instrumental",
-        "folk instrumental",
-        "gentle strings instrumental",
+        "acoustic", "morning", "heart", "wood", "sunset", "alison", "gentle",
+        "warm", "home", "folk", "campfire", "sunny", "smile", "friend",
+        "together", "porch", "amber",
     ],
     "bright": [
-        "ukulele instrumental",
-        "upbeat acoustic instrumental",
-        "playful instrumental",
+        "funk", "rock", "boom", "dance", "party", "happy", "ukulele", "jump",
+        "groove", "swing", "upbeat", "bounce", "sunshine", "cheer", "playful",
+        "disco", "pop",
+    ],
+    "reflective": [
+        "adagio", "meditation", "classical", "earth", "canvas", "azimuth",
+        "drift", "calm", "quiet", "slow", "piano", "ambient", "still",
+        "distant", "horizon", "reflect", "memory", "rain",
     ],
 }
 
-PER_REGISTRO = 3
 
-
-def _pulisci(html: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html or "")).strip()
-
-
-def _scarica_registro(client: httpx.Client, nome: str, ricerche, visti: set) -> int:
-    cartella = DEST / nome
-    cartella.mkdir(parents=True, exist_ok=True)
-    presenti = len(list(cartella.glob("*.ogg")) + list(cartella.glob("*.mp3")))
-    if presenti >= PER_REGISTRO:
-        print(f"  {nome:11} {presenti} tracce già presenti")
-        return presenti
-
-    for query in ricerche:
-        if presenti >= PER_REGISTRO:
-            break
-        try:
-            r = client.get(
-                "https://commons.wikimedia.org/w/api.php",
-                params={
-                    "action": "query",
-                    "generator": "search",
-                    "gsrsearch": f"filetype:audio {query}",
-                    "gsrlimit": 10,
-                    "gsrnamespace": 6,
-                    "prop": "imageinfo",
-                    "iiprop": "url|extmetadata|size",
-                    "format": "json",
-                },
-            )
-            r.raise_for_status()
-            pagine = r.json().get("query", {}).get("pages", {})
-        except Exception as exc:
-            print(f"  {nome:11} ricerca '{query}' fallita: {exc}")
-            continue
-
-        for p in pagine.values():
-            if presenti >= PER_REGISTRO:
-                break
-            info = (p.get("imageinfo") or [{}])[0]
-            licenza = _pulisci(
-                (info.get("extmetadata", {}).get("LicenseShortName", {}) or {}).get("value", "")
-            )
-            if not LICENZE_OK.match(licenza):
-                continue
-
-            url = (info.get("url") or "").split("?")[0]
-            size = info.get("size") or 0
-            # Troppo corta non copre un reel, troppo lunga gonfia il repo.
-            if not url or url in visti or not (200_000 < size < 12_000_000):
-                continue
-            visti.add(url)
-
-            target = cartella / re.sub(r"[^a-z0-9.]+", "-", Path(url).name.lower())
-            try:
-                audio = client.get(url)
-                audio.raise_for_status()
-                target.write_bytes(audio.content)
-            except Exception as exc:
-                print(f"  {nome:11} ✗ {target.name[:34]}: {exc}")
-                continue
-
-            presenti += 1
-            print(f"  {nome:11} ↓ {target.name[:40]} [{licenza}] {len(audio.content)//1024} KB")
-
-    return presenti
+def _registro(nome: str) -> str:
+    """Assegna un titolo a un registro. `reflective` è il ripiego."""
+    n = nome.lower()
+    for reg, parole in REGISTRI.items():
+        if any(p in n for p in parole):
+            return reg
+    return "reflective"
 
 
 def main() -> int:
     DEST.mkdir(parents=True, exist_ok=True)
-    visti: set = set()
-    totale = 0
 
-    with httpx.Client(timeout=90, follow_redirects=True, headers=UA) as client:
-        for nome, ricerche in REGISTRI.items():
-            totale += _scarica_registro(client, nome, ricerche, visti)
+    # Se le cartelle sono già piene non si riscarica: su GitHub Actions questo
+    # script gira a ogni esecuzione e rifare 24 download ogni volta sarebbe
+    # tempo sprecato.
+    gia = {
+        reg: len(list((DEST / reg).glob("*.mp3")))
+        for reg in REGISTRI
+    }
+    if all(n >= PER_REGISTRO for n in gia.values()):
+        print(f"  libreria già completa: {sum(gia.values())} tracce")
+        return 0
 
-    # Le tracce sciolte della versione precedente finiscono in reflective, che
-    # è il registro di ripiego quando un tono non ha corrispondenze.
-    sciolte = list(DEST.glob("*.ogg")) + list(DEST.glob("*.mp3"))
-    if sciolte:
-        (DEST / "reflective").mkdir(exist_ok=True)
-        for f in sciolte:
-            f.rename(DEST / "reflective" / f.name)
-        print(f"\n  {len(sciolte)} tracce sciolte spostate in reflective/")
+    try:
+        with httpx.Client(timeout=120, follow_redirects=True, headers=UA) as client:
+            meta = client.get(f"https://archive.org/metadata/{RACCOLTA}").json()
+    except Exception as exc:
+        print(f"archive.org non raggiungibile: {exc}")
+        return 1
 
+    licenza = meta.get("metadata", {}).get("licenseurl", "")
+    if "publicdomain" not in licenza and "/zero/" not in licenza:
+        print(f"⚠️ licenza inattesa ({licenza}): interrompo per prudenza")
+        return 1
+
+    brani = [
+        f["name"] for f in meta.get("files", [])
+        if f.get("name", "").lower().endswith(".mp3")
+        and 500_000 < int(f.get("size", 0) or 0) < 15_000_000
+    ]
+    print(f"  {len(brani)} brani CC0 disponibili")
+
+    # Si distribuiscono nei registri e se ne scaricano PER_REGISTRO ciascuno.
+    per_reg: dict = {r: [] for r in REGISTRI}
+    for nome in brani:
+        per_reg[_registro(nome)].append(nome)
+
+    scaricati = 0
+    with httpx.Client(timeout=180, follow_redirects=True, headers=UA) as client:
+        for reg, elenco in per_reg.items():
+            cartella = DEST / reg
+            cartella.mkdir(parents=True, exist_ok=True)
+            presenti = len(list(cartella.glob("*.mp3")))
+            print(f"  {reg:11} {len(elenco):3} candidati, {presenti} già scaricati")
+
+            for nome in elenco:
+                if presenti >= PER_REGISTRO:
+                    break
+                pulito = re.sub(r"[^a-z0-9.]+", "-", Path(nome).name.lower())
+                target = cartella / pulito
+                if target.exists():
+                    continue
+                try:
+                    r = client.get(f"{BASE}/{nome}")
+                    r.raise_for_status()
+                    target.write_bytes(r.content)
+                except Exception as exc:
+                    print(f"    ✗ {pulito[:36]}: {str(exc)[:40]}")
+                    continue
+                presenti += 1
+                scaricati += 1
+                print(f"    ↓ {pulito[:40]} {len(r.content)//1024} KB")
+
+    totale = sum(len(list((DEST / r).glob("*.mp3"))) for r in REGISTRI)
     if totale == 0:
         print("\nNessuna traccia: i reel uscirebbero muti.")
         return 1
-    print(f"\n{totale} tracce in {DEST}")
+    print(f"\n{scaricati} nuove, {totale} tracce totali in {DEST}")
     return 0
 
 

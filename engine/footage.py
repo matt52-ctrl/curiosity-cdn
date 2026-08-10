@@ -85,8 +85,41 @@ def scena_per(mood: str, seme: str = "") -> str:
     return rnd.choice(opzioni)
 
 
+def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
+    """Seconda fonte. Serve alla varietà: due archivi diversi hanno cataloghi
+    diversi, e alternarli allontana il momento in cui una clip si ripete."""
+    key = env("PIXABAY_API_KEY")
+    if not key:
+        return None
+    try:
+        r = httpx.get(
+            "https://pixabay.com/api/videos/",
+            params={"key": key, "q": query, "per_page": 20, "safesearch": "true"},
+            timeout=45,
+        )
+        r.raise_for_status()
+        hits = r.json().get("hits", [])
+    except Exception:
+        return None
+
+    for h in hits:
+        vid = f"px{h['id']}"
+        if vid in usate or h.get("duration", 0) < 5:
+            continue
+        # Pixabay espone più tagli: si prende il verticale se c'è, altrimenti
+        # il più piccolo in HD — il ritaglio a 1080×1920 avviene comunque dopo.
+        files = h.get("videos", {})
+        scelto = files.get("large") or files.get("medium")
+        if not scelto or not scelto.get("url"):
+            continue
+        if scelto.get("height", 0) < 1000:
+            continue
+        return {"id": vid, "url": scelto["url"], "durata": h["duration"]}
+    return None
+
+
 def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
-    """Cerca una clip verticale. None se Pexels non risponde o non ha nulla."""
+    """Cerca una clip verticale. None se nessuna fonte ha nulla di nuovo."""
     key = env("PEXELS_API_KEY")
     if not key:
         return None
@@ -106,7 +139,7 @@ def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
         video = r.json().get("videos", [])
     except Exception as exc:
         print(f"    Pexels non risponde: {exc}")
-        return None
+        video = []
 
     usate = _usate() if evita_usate else {}
     for v in video:
@@ -126,7 +159,9 @@ def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
         file_hd.sort(key=lambda f: f.get("height", 0))
         return {"id": v["id"], "url": file_hd[0]["link"], "durata": v["duration"]}
 
-    return None
+    # Pexels non ha nulla di nuovo per questa scena: si prova l'altro archivio
+    # prima di rinunciare e cambiare scena.
+    return _cerca_pixabay(query, usate)
 
 
 def scarica(clip: Dict) -> Optional[Path]:
