@@ -141,6 +141,8 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"\n  ⚠ brand.handle è ancora il segnaposto ({handle}) — mettilo vero")
         print("    in config.yaml, compare su ogni slide.")
 
+    _db_sync_check()
+
     if args.live:
         print("\nVERIFICA DAL VIVO")
         _live_checks()
@@ -151,6 +153,45 @@ def cmd_check(args: argparse.Namespace) -> int:
     elif not args.live:
         print("\nTutte presenti. Ora verifica che funzionino:  run.py check --live")
     return 0
+
+
+def _db_sync_check() -> None:
+    """Avverte se il database locale è diverso da quello su GitHub.
+
+    Con la pipeline che gira su Actions, il repo è la fonte di verità. Una
+    modifica fatta in locale e non spinta viene sovrascritta al prossimo
+    allineamento; una fatta su Actions e non tirata giù rende la copia locale
+    ingannevole. È già successo due volte, entrambe silenziosamente.
+    """
+    import subprocess
+
+    from engine.config import DATA_DIR, ROOT
+
+    db = DATA_DIR / "engine.db"
+    if not db.exists():
+        return
+    try:
+        r = subprocess.run(
+            ["git", "status", "--porcelain", "--", str(db.relative_to(ROOT))],
+            cwd=ROOT, capture_output=True, text=True, timeout=15,
+        )
+        sporco = bool(r.stdout.strip())
+        b = subprocess.run(
+            ["git", "rev-list", "--left-right", "--count", "HEAD...origin/main"],
+            cwd=ROOT, capture_output=True, text=True, timeout=15,
+        )
+        avanti, indietro = (b.stdout.split() + ["0", "0"])[:2]
+    except Exception:
+        return
+
+    if sporco or indietro != "0":
+        print("\n⚠️  DATABASE NON ALLINEATO CON GITHUB")
+        if sporco:
+            print("   modifiche locali non ancora spinte: verranno perse")
+        if indietro != "0":
+            print(f"   {indietro} commit su GitHub non ancora scaricati")
+        print("   Su GitHub Actions vale la copia del repo, non questa.")
+        print("   Allinea con:  git pull  (oppure git push, se le modifiche sono tue)")
 
 
 def _live_checks() -> None:
