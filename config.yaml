@@ -103,6 +103,13 @@ visuals:
   # false → cerca prima in archivio per i soggetti reali. Giusto per storia,
   #         scienza, eventi: lì la foto autentica vale più di una generata.
   prefer_generated: true
+
+  # Passi di generazione (solo cloudflare/FLUX).
+  # ⚠️ Cloudflare accetta al massimo 8 per flux-1-schnell: valori superiori
+  # fanno fallire ogni immagine con un 400. Verificato il 10 agosto 2026.
+  # Il codice limita comunque a 8, ma non alzarlo qui pensando di guadagnarci.
+  # Su questo modello la qualità si migliora dal prompt, non dai passi.
+  steps: 8
   ai_model: ""            # vuoto = default del provider
   ai_quality: "low"       # solo openai: low | medium | high
 

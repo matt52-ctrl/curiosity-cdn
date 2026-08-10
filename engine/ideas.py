@@ -80,10 +80,40 @@ VOICE
 {v['guide']}
 
 STRUCTURE OF ONE IDEA
-  hook        A single line, 5-11 words, that makes someone stop scrolling.
-              A statement or a question. No command, no clickbait formula,
-              no "did you know". It must be specific enough that a reader
-              could not have guessed the rest.
+  hook        A single line, 5-12 words. This is the whole post: it is what
+              appears in the feed, and nothing else gets read if it fails.
+
+              A hook works when it creates a gap the reader needs closed.
+              Four ways to open that gap, in rough order of strength:
+
+              1. CONTRADICT what the reader believes about themselves.
+                 weak:   "People often misjudge how others see them."
+                 strong: "You are the worst judge of how you come across."
+
+              2. Lead with a NUMBER that shouldn't be that number.
+                 weak:   "Few people notice when you make a mistake."
+                 strong: "Only 23% of people noticed the embarrassing shirt."
+
+              3. Name a CONSEQUENCE the reader has felt but never explained.
+                 weak:   "Interrupted tasks are remembered better."
+                 strong: "The task you abandoned is still using your memory."
+
+              4. State the mechanism as an UNSETTLING FACT, not a finding.
+                 weak:   "Memory reconsolidation alters stored memories."
+                 strong: "Every time you recall it, you change it slightly."
+
+              Rules that hold regardless:
+                - Address the reader as "you" when the fact is about them.
+                  "People" is a way of making a fact happen to someone else.
+                - No hedging in the hook. "May", "can", "often", "tend to"
+                  belong in the body, where precision matters; in the hook
+                  they only drain it. The claim must still be true — pick a
+                  fact that survives being stated plainly.
+                - Never open with "Did you know", "Studies show", "Turns out",
+                  "Here's why", or a number in the format "5 things".
+                - If a reader could guess the rest of the post from the hook,
+                  the hook is too generic. If they could have written it
+                  themselves, it is not a fact worth posting.
   fact        One sentence. The claim itself, stated precisely, with the
               number or the specific finding in it.
   detail      2-4 sentences. How it works or how it was found. This is where

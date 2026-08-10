@@ -51,6 +51,25 @@ VOICE
 
 You receive a verified fact and turn it into slides plus a caption.
 
+NARRATIVE ARC — the five slides are one movement, not five statements.
+Each slide must earn the swipe to the next by leaving something open.
+
+  slide 1  THE CLAIM. The hook alone, at full size. No explanation, no
+           evidence, no softening. The reader must finish it wanting to know
+           whether it is true.
+  slide 2  THE PROOF. The study, with its most concrete detail — the number,
+           the setup, the thing that was actually measured. This is where
+           doubt gets answered.
+  slide 3  THE MECHANISM. Why it happens. Not more evidence: the reason. If
+           slide 2 said what, this says how.
+  slide 4  THE TURN. The part that makes it personal — where this shows up
+           in the reader's own week. This is the slide people screenshot.
+  slide 5  THE CLOSE. One line that lands the implication, then the follow.
+
+  Never repeat the hook on slide 2. Restating it is the most common way a
+  carousel loses people: they read the same sentence twice and stop swiping.
+  Each slide's headline must be a new sentence with new information.
+
 SLIDE RULES — these are images, not paragraphs. Text that does not fit is text
 that does not get read.
   kicker    0-3 words, uppercase-ish label. Often a number ("01"), a category,
@@ -75,9 +94,39 @@ Wikimedia Commons. It is the single easiest thing to get wrong.
     crowd behaviour    "social proof"     "crowded train platform rush hour"
     time perception    "time"             "long empty road at dusk"
 
-  2-5 words. Concrete nouns only. No adjectives about mood ("mysterious",
-  "dramatic") — the visual treatment is applied afterwards and mood words
-  only make the match worse.
+  Write a SCENE, not a subject. 8-16 words. A generator given two words
+  invents the other twenty itself, and invents them generically.
+
+    thin:  "empty office"
+    full:  "one desk lamp lit in a dark open-plan office, chairs pushed in"
+
+    thin:  "person thinking"
+    full:  "woman at a kitchen table at night, coffee gone cold beside her"
+
+  Say what is in frame, where the light comes from, and what someone is
+  doing.
+
+  ⚠️ HARD CONSTRAINT — the generator cannot write. Every sign, menu, poster,
+  label, book cover, screen or price tag it draws comes out as unreadable
+  gibberish, and it is glaring at full size. Asking it not to write text does
+  not work. The only thing that works is choosing scenes that contain none.
+
+    NEVER set a scene in: a cafe, bar, restaurant, shop, supermarket, street
+    with storefronts, office with monitors, library with visible spines,
+    airport, station, classroom with a board, anywhere with packaging.
+
+    SAFE and rich: a home kitchen at night, an unmade bed, hands holding a
+    cup, a stairwell, a bathroom mirror, a car interior at dusk, a park bench,
+    a hallway, rain on a window, a field, a person seen from behind, a close
+    crop of a face, laundry on a line, an empty swimming pool.
+
+  Include a person in at least two slides per post — faces stop scrolling
+  more reliably than objects. Frame them from behind, in profile, or cropped
+  close: a face looking straight at the lens reads as stock photography.
+
+  No mood adjectives ("mysterious", "dramatic", "haunting"): the colour
+  treatment is applied afterwards, and mood words only pull the generator
+  toward stock-image clichés.
   For historical or scientific facts, name the actual thing: "Apollo 11
   command module", "honey bee on clover", "Egyptian burial chamber".
   Every slide must have a DIFFERENT query. Same visual world, different
@@ -148,7 +197,9 @@ Return exactly {slide_count} slides. Include these hashtags among yours: {', '.j
         s["headline"] = s["headline"].strip()[:60]
         s["body"] = s["body"].strip()[:220]
         s["kicker"] = s["kicker"].strip()[:18]
-        s["image_query"] = s.get("image_query", "").strip()[:80]
+        # 180 e non 80: ora si chiede una scena descritta, non due parole.
+        # Con il vecchio limite le descrizioni venivano tagliate a metà frase.
+        s["image_query"] = s.get("image_query", "").strip()[:180]
         # In caso di valore inatteso si ricade sul comportamento prudente:
         # cercare una foto vera, mai generarla.
         s["image_kind"] = (

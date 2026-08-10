@@ -385,9 +385,10 @@ def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
                 headers={"Authorization": f"Bearer {token}"},
                 json={
                     "prompt": prompt[:2000],
-                    # schnell è tarato su 4 passi; 8 costa poco di più e rende
-                    # sensibilmente meglio su scene con persone.
-                    "steps": 8,
+                    # Cloudflare rifiuta con 400 qualunque valore sopra 8, e
+                    # il rifiuto fa fallire l'intera immagine: va limitato qui
+                    # invece di fidarsi della configurazione.
+                    "steps": max(1, min(8, int(cfg.get("visuals.steps", 8)))),
                     "width": width,
                     "height": height,
                 },
