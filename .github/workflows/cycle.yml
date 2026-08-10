@@ -34,7 +34,7 @@ permissions:
 
 # Due esecuzioni sovrapposte scriverebbero sullo stesso database.
 concurrency:
-  group: curiosity-cycle
+  group: curiosity-state
   cancel-in-progress: false
 
 jobs:

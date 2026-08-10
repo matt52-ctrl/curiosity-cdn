@@ -1,0 +1,79 @@
+/* LINE — una frase sola, su sfondo trasparente, da sovrapporre al video.
+   Nessun fondo, nessuna foto: il canvas resta vuoto e ffmpeg mette sotto le
+   riprese. Per questo il testo porta la propria ombra — è l'unica cosa che
+   ne garantisce la leggibilità, visto che non sappiamo cosa ci sarà dietro. */
+
+/* base.css dà al body un fondo nero opaco: va annullato, o lo screenshot
+   esce senza canale alfa e il video non si vedrebbe sotto il testo. */
+body { background: transparent; }
+
+.slide {
+  background: transparent;
+  color: #ffffff;
+  padding: 200px 96px 240px;
+}
+
+/* Il canvas non disegna il fondo, ma serve per la velatura: le sole ombre del
+   testo non bastano quando dietro capita un cielo pallido o una parete bianca,
+   e su un reel non sappiamo mai cosa ci sarà. Una banda scura morbida al
+   centro garantisce il contrasto su qualunque ripresa, restando invisibile
+   come effetto — si legge come profondità, non come rettangolo. */
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background:
+    /* Banda orizzontale stretta all'altezza del testo. Un alone radiale largo
+       si legge come una macchia sporca nel cielo; una banda che segue la riga
+       del testo sparisce alla vista e fa comunque il suo lavoro. */
+    linear-gradient(180deg,
+      rgba(0,0,0,0) 34%, rgba(0,0,0,.34) 44%,
+      rgba(0,0,0,.34) 56%, rgba(0,0,0,0) 66%),
+    /* Leggerissima chiusura in alto e in basso: tiene l'occhio al centro e
+       stacca la firma dal fondo. */
+    linear-gradient(180deg, rgba(0,0,0,.22) 0%, rgba(0,0,0,0) 18%,
+                    rgba(0,0,0,0) 80%, rgba(0,0,0,.34) 100%);
+}
+
+.grain { display: none; }
+
+.top, .index, .nav, .credit { display: none; }
+
+.stage { justify-content: center; gap: 0; }
+
+.kicker { display: none; }
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  line-height: 1.02;
+  letter-spacing: -.028em;
+  color: #ffffff;
+  text-align: center;
+  max-width: 100%;
+  /* Doppia ombra: una stretta per staccare dal fondo, una larga e morbida
+     che scurisce l'area dietro le lettere anche su riprese chiare. */
+  text-shadow:
+    0 2px 12px rgba(0,0,0,.85),
+    0 8px 60px rgba(0,0,0,.75);
+}
+
+.fit-xl { font-size: 148px; }
+.fit-lg { font-size: 126px; }
+.fit-md { font-size: 108px; }
+.fit-sm { font-size: 88px; line-height: 1.06; }
+
+.body { display: none; }
+
+.bottom {
+  position: absolute;
+  left: 0; right: 0; bottom: 120px;
+  justify-content: center;
+}
+
+.mark {
+  color: #ffffff;
+  opacity: .72;
+  font-size: 34px;
+  letter-spacing: .1em;
+  text-shadow: 0 2px 16px rgba(0,0,0,.9);
+}

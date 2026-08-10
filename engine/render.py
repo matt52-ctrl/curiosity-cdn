@@ -11,7 +11,7 @@ import base64
 import html
 import re
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from playwright.sync_api import sync_playwright
 
@@ -62,7 +62,11 @@ def _esc(text: str) -> str:
     return html.escape(text, quote=False)
 
 
-def build_html(slides: List[Dict[str, str]], template: str = "editorial") -> str:
+def build_html(
+    slides: List[Dict[str, str]],
+    template: str = "editorial",
+    size: Optional[tuple] = None,
+) -> str:
     css_path = TEMPLATES_DIR / f"{template}.css"
     if not css_path.exists():
         raise FileNotFoundError(
@@ -72,8 +76,8 @@ def build_html(slides: List[Dict[str, str]], template: str = "editorial") -> str
     base_css = (TEMPLATES_DIR / "base.css").read_text(encoding="utf-8")
     theme_css = css_path.read_text(encoding="utf-8")
 
-    w = int(cfg.get("format.width", 1080))
-    h = int(cfg.get("format.height", 1350))
+    w, h = size or (int(cfg.get("format.width", 1080)),
+                    int(cfg.get("format.height", 1350)))
     watermark = _esc(cfg.get("brand.watermark", ""))
     total = len(slides)
 
@@ -153,28 +157,43 @@ def _slug(text: str) -> str:
 
 
 def render_slides(
-    slides: List[Dict[str, str]], name_hint: str, template: str | None = None
+    slides: List[Dict[str, str]],
+    name_hint: str,
+    template: str | None = None,
+    size: Optional[tuple] = None,
+    transparent: bool = False,
 ) -> List[Path]:
-    """Restituisce i path dei PNG generati, uno per slide."""
+    """Restituisce i path dei PNG generati, uno per slide.
+
+    `size` permette di uscire dal formato configurato: serve ai reel, che sono
+    1080×1920 mentre i post sono 1080×1350.
+    """
     template = template or cfg.get("format.template", "editorial")
     out_dir = OUTPUT_DIR / _slug(name_hint)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     html_path = out_dir / "preview.html"
-    html_path.write_text(build_html(slides, template), encoding="utf-8")
+    html_path.write_text(build_html(slides, template, size), encoding="utf-8")
 
-    w = int(cfg.get("format.width", 1080))
-    h = int(cfg.get("format.height", 1350))
+    w, h = size or (int(cfg.get("format.width", 1080)),
+                    int(cfg.get("format.height", 1350)))
     paths: List[Path] = []
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": w, "height": h})
+        # Lo sfondo trasparente serve ai reel: il testo viene sovrapposto al
+        # filmato da ffmpeg, quindi il PNG deve avere il canale alfa.
+        page = browser.new_page(
+            viewport={"width": w, "height": h},
+            **({"color_scheme": "dark"} if not transparent else {}),
+        )
         page.goto(html_path.as_uri())
         page.wait_for_timeout(300)  # lascia assestare il layout dei font
         for i in range(len(slides)):
             target = out_dir / f"{i + 1:02d}.png"
-            page.locator(".slide").nth(i).screenshot(path=str(target))
+            page.locator(".slide").nth(i).screenshot(
+                path=str(target), omit_background=transparent
+            )
             paths.append(target)
         browser.close()
 

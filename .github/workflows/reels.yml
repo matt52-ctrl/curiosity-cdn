@@ -1,0 +1,95 @@
+# Ciclo dei Reel — deliberatamente separato da quello dei caroselli.
+#
+# Perché due workflow e non uno: i due formati falliscono in modi diversi.
+# I reel dipendono da ffmpeg, da Pexels e da un caricamento video molto più
+# lento; i caroselli no. Tenendoli separati, un guasto sui video non impedisce
+# ai caroselli di uscire, e viceversa — che è esattamente il requisito.
+
+name: Curiosity reels
+
+on:
+  schedule:
+    # Orari italiani desiderati: 8:00, 12:00, 20:00.
+    # Sono in UTC (d'estate Italia = UTC+2) e anticipati di 45 minuti, perché
+    # GitHub accoda i job schedulati e parte in ritardo — misurato fino a 64
+    # minuti. Anticipare è l'unico modo di centrare mediamente la finestra.
+    - cron: "15 5 * * *"     # ~8:00 italiane
+    - cron: "15 9 * * *"     # ~12:00 italiane
+    - cron: "45 16 * * *"    # ~19:30 italiane (sfalsato dai caroselli
+                             #  delle 17:15, che scrivono lo stesso database)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # STESSO gruppo del workflow dei caroselli, di proposito: i due scrivono lo
+  # stesso database, e due esecuzioni sovrapposte lo corromperebbero o
+  # perderebbero uno dei due stati. Qui la separazione va sospesa.
+  group: curiosity-state
+  cancel-in-progress: false
+
+jobs:
+  reels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45      # il montaggio video e l'upload sono lenti
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        run: |
+          # ffmpeg non è garantito sull'immagine del runner e serve solo qui.
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Scarica font e musica
+        run: |
+          python setup_fonts.py
+          python setup_music.py
+
+      - name: Esegui il ciclo reel
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.CDN_TOKEN }}
+          GITHUB_REPO: ${{ secrets.CDN_REPO }}
+          IMAGE_HOST_BACKEND: github
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py reels
+
+      - name: Salva lo stato
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db data/footage_usate.json
+          git diff --staged --quiet && exit 0
+          git commit -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            git rebase origin/main -X ours || {
+              git rebase --abort
+              git reset --soft origin/main
+              git add data/engine.db data/footage_usate.json
+              git commit -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            }
+            sleep 5
+          done
+          echo "::error::stato NON salvato: rischio di ripubblicazione"
+          exit 1

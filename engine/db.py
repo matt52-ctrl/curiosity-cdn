@@ -67,6 +67,28 @@ CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 
 # Aggiunte dopo la prima versione dello schema. SQLite non ha
 # "ADD COLUMN IF NOT EXISTS", quindi si tenta e si ignora l'errore.
+REELS_SCHEMA = """
+-- Tabella separata dai post di proposito: reel e caroselli hanno cicli,
+-- cadenze e modalità di fallimento diverse, e mescolarli significherebbe che
+-- un problema sui video blocca anche le immagini.
+CREATE TABLE IF NOT EXISTS reels (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at    REAL NOT NULL,
+    line          TEXT NOT NULL,
+    mood          TEXT NOT NULL DEFAULT 'reflective',
+    caption       TEXT NOT NULL DEFAULT '',
+    hashtags      TEXT NOT NULL DEFAULT '[]',
+    video_path    TEXT NOT NULL DEFAULT '',
+    video_url     TEXT NOT NULL DEFAULT '',
+    ig_media_id   TEXT,
+    published_at  REAL,
+    status        TEXT NOT NULL DEFAULT 'draft'
+        -- draft | approved | published | failed
+);
+
+CREATE INDEX IF NOT EXISTS idx_reels_status ON reels(status);
+"""
+
 MIGRATIONS = [
     # Il testo delle slide: senza, un ritocco al CSS obbliga a rigenerare
     # tutto via API. Con questo si ri-renderizza a costo zero.
@@ -81,6 +103,7 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path or DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    conn.executescript(REELS_SCHEMA)
     for statement in MIGRATIONS:
         try:
             conn.execute(statement)
@@ -252,3 +275,46 @@ def top_performers(conn: sqlite3.Connection, limit: int = 10) -> List[sqlite3.Ro
         """,
         (limit,),
     ).fetchall()
+
+
+# ─── reels ────────────────────────────────────────────────────────────────────
+# Volutamente separati dai post: stessa struttura concettuale, cicli distinti.
+
+def insert_reel(conn: sqlite3.Connection, r: Dict[str, Any], status: str = "approved") -> int:
+    cur = conn.execute(
+        """INSERT INTO reels (created_at, line, mood, caption, hashtags, video_path, status)
+           VALUES (?,?,?,?,?,?,?)""",
+        (time.time(), r["line"], r.get("mood", "reflective"), r.get("caption", ""),
+         json.dumps(r.get("hashtags", [])), str(r.get("video_path", "")), status),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def reels_by_status(conn: sqlite3.Connection, status: str) -> List[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM reels WHERE status=? ORDER BY id ASC", (status,)
+    ).fetchall()
+
+
+def set_reel_url(conn: sqlite3.Connection, reel_id: int, url: str) -> None:
+    conn.execute("UPDATE reels SET video_url=? WHERE id=?", (url, reel_id))
+    conn.commit()
+
+
+def set_reel_status(conn: sqlite3.Connection, reel_id: int, status: str) -> None:
+    conn.execute("UPDATE reels SET status=? WHERE id=?", (status, reel_id))
+    conn.commit()
+
+
+def mark_reel_published(conn: sqlite3.Connection, reel_id: int, media_id: str) -> None:
+    conn.execute(
+        "UPDATE reels SET status='published', published_at=?, ig_media_id=? WHERE id=?",
+        (time.time(), media_id, reel_id),
+    )
+    conn.commit()
+
+
+def reel_lines_used(conn: sqlite3.Connection) -> List[str]:
+    """Frasi già usate: evita che lo stesso concetto torni fra i reel."""
+    return [r["line"] for r in conn.execute("SELECT line FROM reels").fetchall()]

@@ -125,6 +125,48 @@ def publish(image_urls: List[str], caption: str, alt_text: str = "") -> str:
         return published["id"]
 
 
+def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
+    """Pubblica un Reel. Restituisce l'ID del media.
+
+    Differenze rispetto alle immagini, tutte fonti di errori se ignorate:
+      - `media_type=REELS`, e il file va passato come `video_url`
+      - la lavorazione del video è molto più lenta: un container immagine è
+        pronto in pochi secondi, uno video può richiederne sessanta o più
+      - il video deve essere verticale, h264/aac, e durare fra 3 e 900 secondi
+      - come per le immagini, l'URL non può contenere query string
+    """
+    if "?" in video_url:
+        raise InstagramError(
+            f"URL con query string non supportata da Instagram: {video_url}"
+        )
+
+    user_id = require_env("IG_USER_ID")
+    token = require_env("IG_ACCESS_TOKEN")
+
+    with httpx.Client(timeout=180) as client:
+        data = {
+            "media_type": "REELS",
+            "video_url": video_url,
+            "caption": caption,
+            "access_token": token,
+        }
+        if cover_url and "?" not in cover_url:
+            data["cover_url"] = cover_url
+
+        container = _post(client, f"{user_id}/media", data)["id"]
+        # I video richiedono un'attesa molto più lunga delle immagini: con il
+        # timeout predefinito la pubblicazione fallirebbe su un container che
+        # era solo lento, non rotto.
+        _wait_ready(client, container, token, timeout=600)
+
+        published = _post(
+            client,
+            f"{user_id}/media_publish",
+            {"creation_id": container, "access_token": token},
+        )
+        return published["id"]
+
+
 def quota_used() -> Optional[int]:
     """Post pubblicati via API nelle ultime 24h. None se l'endpoint non risponde."""
     user_id = env("IG_USER_ID")

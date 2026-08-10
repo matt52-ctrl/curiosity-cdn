@@ -265,3 +265,11 @@ caption:
   # "AI creator" attivata sul profilo Instagram. Ripeterla in caption sarebbe
   # ridondante. Riattivare mettendo una stringa qui se le regole cambiano.
   ai_disclosure: ""
+
+# ─── REEL ─────────────────────────────────────────────────────────────────────
+# Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti
+# diversi. Se i video si rompono, i post continuano a uscire.
+reel:
+  line_seconds: 6.5       # durata del video: sotto i 7s il completion rate è alto
+  batch: 3                # quante frasi generare per volta
+  min_queue: 2            # sotto questa soglia il ciclo ne produce altre

@@ -14,3 +14,8 @@ assets/fonts/*.ttf
 # Conseguenza: da qui in poi la copia nel repo è la fonte di verità. Se lanci
 # il ciclo anche in locale, fai prima `git pull`, o le due copie divergono.
 SEGRETI-GITHUB.txt
+
+# Cache dei filmati scaricati da Pexels: pesanti e riscaricabili.
+# NON escludere data/footage_usate.json — è la memoria che evita di
+# riutilizzare la stessa clip, e senza il ciclo si ripete.
+data/footage/

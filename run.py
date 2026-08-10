@@ -367,6 +367,102 @@ def cmd_comments(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reels(args: argparse.Namespace) -> int:
+    """Ciclo dei reel, completamente separato da quello dei post.
+
+    Separato per scelta: i due formati hanno cadenze diverse (3 reel al giorno
+    contro 2 caroselli), tempi di lavorazione diversi, e soprattutto modi di
+    rompersi diversi. Se ffmpeg o Pexels falliscono, i caroselli devono
+    continuare a uscire come se nulla fosse — e viceversa.
+    """
+    import json as _json
+
+    from engine import footage, lines, reel
+    from engine.db import (
+        insert_reel,
+        mark_reel_published,
+        reel_lines_used,
+        reels_by_status,
+        set_reel_status,
+        set_reel_url,
+    )
+
+    conn = connect()
+
+    # 1. Magazzino: se restano meno di 2 reel pronti, se ne producono altri.
+    pronti = reels_by_status(conn, "approved")
+    print(f"reel pronti: {len(pronti)}")
+
+    if len(pronti) < int(cfg.get("reel.min_queue", 2)):
+        quanti = int(cfg.get("reel.batch", 3))
+        print(f"→ genero {quanti} frasi")
+        try:
+            usate = set(reel_lines_used(conn))
+            nuove = [l for l in lines.generate(conn, quanti + 2) if l["line"] not in usate]
+        except Exception as exc:
+            print(f"generazione frasi fallita: {exc}")
+            nuove = []
+
+        for l in nuove[:quanti]:
+            print(f"  [{l['mood']}] {l['line'][:58]}")
+            try:
+                sfondo = footage.per_frase(l["mood"], l["line"])
+                if not sfondo:
+                    print("    nessun filmato disponibile, salto")
+                    continue
+                video = reel.build_line(
+                    l["line"], sfondo, f"{abs(hash(l['line'])) % 10**8}", mood=l["mood"]
+                )
+                l["video_path"] = video
+                rid = insert_reel(conn, l)
+                # Caricamento immediato, come per i post: il reel costruito
+                # oggi può essere pubblicato da un'altra macchina domani, e su
+                # GitHub Actions il disco non sopravvive fra un giro e l'altro.
+                try:
+                    url = upload([video], prefix=f"reel-{rid}")[0]
+                    set_reel_url(conn, rid, url)
+                    print(f"    ✓ reel #{rid} pronto ({video.stat().st_size//1024} KB)")
+                except Exception as exc:
+                    print(f"    ⚠ caricamento rimandato: {exc}")
+            except Exception as exc:
+                print(f"    ✗ {exc}")
+
+        pronti = reels_by_status(conn, "approved")
+
+    # 2. Pubblicazione: uno per giro.
+    if not pronti:
+        print("nessun reel da pubblicare")
+        return 0
+
+    r = pronti[0]
+    url = r["video_url"]
+    try:
+        if not url:
+            video = Path(r["video_path"])
+            if not video.exists():
+                raise FileNotFoundError(
+                    f"video non trovato: {video}. Costruito su un'altra macchina "
+                    f"e mai caricato — il reel va rigenerato."
+                )
+            url = upload([video], prefix=f"reel-{r['id']}")[0]
+            set_reel_url(conn, r["id"], url)
+
+        caption = r["caption"]
+        tags = _json.loads(r["hashtags"] or "[]")
+        if tags:
+            caption = f"{caption}\n\n" + " ".join("#" + t for t in tags)
+
+        media_id = instagram.publish_reel(url, caption)
+        mark_reel_published(conn, r["id"], media_id)
+        print(f"✓ reel #{r['id']} pubblicato: {media_id}")
+    except Exception as exc:
+        set_reel_status(conn, r["id"], "failed")
+        print(f"✗ reel #{r['id']} fallito: {exc}")
+        review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
+
+    return 0
+
+
 def cmd_rerender(args: argparse.Namespace) -> int:
     """Ri-renderizza un post già costruito, senza chiamare nessuna API.
 
@@ -1049,6 +1145,9 @@ def main() -> int:
         help="scarica immagini reali (Wikimedia senza chiave, Pexels se configurato)",
     )
     p.set_defaults(func=cmd_preview)
+
+    p = sub.add_parser("reels", help="ciclo dei reel, indipendente dai post")
+    p.set_defaults(func=cmd_reels)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)
