@@ -146,15 +146,86 @@ def main() -> int:
     TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
     TOKEN_FILE.write_text(json.dumps({"refresh_token": refresh}, indent=2))
 
-    print("\n✓ Refresh token ottenuto.\n")
-    print("Aggiungilo a .env e ai secret di GitHub:\n")
-    print(f"YOUTUBE_REFRESH_TOKEN={refresh}\n")
+    print("\n✓ Refresh token ottenuto.")
+
+    # Si scrive da sé in .env: ricopiarlo a mano è il punto in cui si sbaglia,
+    # e un token troncato fallisce con un errore che non dice cosa è successo.
+    _aggiorna_env(refresh)
+
+    # Verifica immediata che i permessi nuovi funzionino davvero. Senza,
+    # l'esito si scoprirebbe al primo ciclo notturno, quando non c'è nessuno
+    # a leggerlo.
+    print("\nControllo che i permessi nuovi rispondano:")
+    _verifica()
+
+    print("\n" + "─" * 68)
+    print("RESTA UNA COSA SOLA, ed è a mano perché l'API non la permette:")
+    print("  il token va messo anche nei secret di GitHub, o i cicli che")
+    print("  girano lì continuano a usare quello vecchio senza i permessi.\n")
+    repo = env("GITHUB_REPO") or "TUO-UTENTE/TUO-REPO"
+    print(f"  1. apri  https://github.com/{repo}/settings/secrets/actions")
+    print("  2. YOUTUBE_REFRESH_TOKEN → Update")
+    print("  3. incolla questo:\n")
+    print(f"     {refresh}\n")
     print(
         "⚠️ Se la schermata di consenso è in stato 'Testing', questo token\n"
         "   scade fra 7 giorni. Portala in 'Production' su Google Cloud:\n"
         "   resta senza verifica e mostra un avviso, ma non scade più."
     )
     return 0
+
+
+def _aggiorna_env(refresh: str) -> None:
+    """Sostituisce la riga in .env, o la aggiunge se non c'era."""
+    from engine.config import ROOT
+
+    f = ROOT / ".env"
+    if not f.exists():
+        print("  (.env non trovato: mettilo tu)")
+        return
+    righe = f.read_text().splitlines()
+    fatto = False
+    for i, r in enumerate(righe):
+        if r.startswith("YOUTUBE_REFRESH_TOKEN="):
+            righe[i] = f"YOUTUBE_REFRESH_TOKEN={refresh}"
+            fatto = True
+            break
+    if not fatto:
+        righe.append(f"YOUTUBE_REFRESH_TOKEN={refresh}")
+    f.write_text("\n".join(righe) + "\n")
+    print("  ✓ scritto in .env")
+
+
+def _verifica() -> None:
+    """Prova i tre permessi appena concessi, uno per uno."""
+    import importlib
+
+    import engine.config as _cfg
+    importlib.reload(_cfg)          # rilegge .env appena riscritto
+    from engine.publish import youtube
+    importlib.reload(youtube)
+
+    # Serve un video vero: con la lista vuota `statistiche` esce subito senza
+    # chiamare l'API, e il controllo passerebbe senza aver provato nulla.
+    from engine.db import connect
+    riga = connect().execute(
+        "SELECT youtube_id FROM reels WHERE youtube_id IS NOT NULL LIMIT 1"
+    ).fetchone()
+    campione = riga["youtube_id"] if riga else ""
+
+    prove = [
+        ("caricamento video", lambda: youtube.access_token() and "ok"),
+        ("statistiche (visualizzazioni, like)",
+         (lambda: youtube.statistiche([campione]) and "ok") if campione
+         else (lambda: "nessun video ancora pubblicato: salto")),
+        ("percentuale di visione", lambda: youtube.ritenzione() is not None and "ok"),
+    ]
+    for nome, fn in prove:
+        try:
+            fn()
+            print(f"  ✓ {nome}")
+        except Exception as exc:
+            print(f"  ✗ {nome}: {str(exc)[:80]}")
 
 
 if __name__ == "__main__":
