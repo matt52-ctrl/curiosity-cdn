@@ -100,6 +100,9 @@ MIGRATIONS = [
     # lo stesso studio con parole diverse: e' gia' successo, e la deduplica
     # lessicale non lo intercetta perche' le frasi non si somigliano.
     "ALTER TABLE reels ADD COLUMN fact_id INTEGER",
+    # Id del video su YouTube: serve a non ricaricare due volte lo stesso
+    # Short se il ciclo rigira su un reel gia' pubblicato altrove.
+    "ALTER TABLE reels ADD COLUMN youtube_id TEXT",
 ]
 
 

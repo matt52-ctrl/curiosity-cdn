@@ -518,6 +518,29 @@ def cmd_reels(args: argparse.Namespace) -> int:
         mark_reel_published(conn, r["id"], media_id)
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
 
+        # YouTube: stesso video, altro pubblico. Sta DOPO Instagram e in un
+        # blocco proprio perche' un problema qui non deve far risultare
+        # fallito un reel gia' uscito su Instagram — sono due destinazioni
+        # indipendenti, e trattarle come una sola farebbe ripubblicare.
+        if cfg.get("publish.youtube.enabled", False):
+            try:
+                from engine.publish import youtube
+
+                titolo = (r["line"].split(".")[0])[:95]
+                yt_id = youtube.publish(
+                    Path(r["video_path"]),
+                    titolo,
+                    r["caption"],
+                    tags=_json.loads(r["hashtags"] or "[]"),
+                )
+                conn.execute(
+                    "UPDATE reels SET youtube_id=? WHERE id=?", (yt_id, r["id"])
+                )
+                conn.commit()
+                print(f"  ✓ YouTube: youtu.be/{yt_id}")
+            except Exception as exc:
+                print(f"  ⚠ YouTube saltato: {exc}")
+
         # Come per i post: video e copertina hanno esaurito il loro scopo.
         # Senza questa potatura i reel aggiungono ~9 MB al giorno al repo,
         # piu' dei caroselli.
