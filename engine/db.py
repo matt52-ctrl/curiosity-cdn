@@ -110,12 +110,37 @@ MIGRATIONS = [
     "ALTER TABLE reels ADD COLUMN yt_uses INTEGER NOT NULL DEFAULT 0",
 ]
 
+# Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
+# ha una chiave esterna su posts(id) e i reel stanno in un'altra tabella. Le
+# colonne sono anche diverse — su YouTube il segnale non sono i salvataggi ma
+# la percentuale di visione — e forzarle in un'unica tabella renderebbe
+# entrambe le letture ambigue.
+REEL_METRICS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS reel_metrics (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    reel_id       INTEGER NOT NULL REFERENCES reels(id),
+    platform      TEXT NOT NULL,          -- youtube | instagram
+    collected_at  REAL NOT NULL,
+    views         INTEGER DEFAULT 0,
+    likes         INTEGER DEFAULT 0,
+    comments      INTEGER DEFAULT 0,
+    -- Percentuale media del video guardata, 0-100. È il numero che conta:
+    -- YouTube distribuisce gli Short in base a quanto della clip viene
+    -- guardato, non a quanti like riceve.
+    avg_view_pct  REAL DEFAULT 0,
+    avg_view_sec  REAL DEFAULT 0,
+    UNIQUE(reel_id, platform, collected_at)
+);
+CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
+"""
+
 
 def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path or DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     conn.executescript(REELS_SCHEMA)
+    conn.executescript(REEL_METRICS_SCHEMA)
     for statement in MIGRATIONS:
         try:
             conn.execute(statement)
@@ -456,3 +481,47 @@ def facts_used_in_reels(conn: sqlite3.Connection) -> List[int]:
             "SELECT DISTINCT fact_id FROM reels WHERE fact_id IS NOT NULL"
         ).fetchall()
     ]
+
+
+def salva_metriche_reel(conn: sqlite3.Connection, reel_id: int, piattaforma: str,
+                        m: Dict[str, Any]) -> None:
+    conn.execute(
+        """INSERT OR REPLACE INTO reel_metrics
+           (reel_id, platform, collected_at, views, likes, comments,
+            avg_view_pct, avg_view_sec)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (reel_id, piattaforma, time.time(), m.get("views", 0), m.get("likes", 0),
+         m.get("comments", 0), m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0)),
+    )
+    conn.commit()
+
+
+def reel_migliori(conn: sqlite3.Connection, limit: int = 8) -> List[sqlite3.Row]:
+    """I reel piu' visti fino in fondo, non i piu' visti e basta.
+
+    L'ordinamento e' sulla percentuale media di visione perche' e' quella che
+    YouTube usa per decidere se continuare a distribuire uno Short. Le
+    visualizzazioni sono una conseguenza: ordinare su quelle vorrebbe dire
+    imparare dal risultato invece che dalla causa.
+
+    Il filtro sulle visualizzazioni minime evita che un video con nove
+    visualizzazioni e il 90% di visione detti la linea: a quei numeri la
+    percentuale e' rumore.
+    """
+    return conn.execute(
+        """
+        SELECT r.id, r.line, r.mood, r.hashtags,
+               MAX(m.views) AS views,
+               MAX(m.avg_view_pct) AS pct,
+               MAX(m.avg_view_sec) AS secondi,
+               MAX(m.likes) AS likes
+        FROM reel_metrics m
+        JOIN reels r ON r.id = m.reel_id
+        WHERE m.platform = 'youtube'
+        GROUP BY r.id
+        HAVING views >= 25
+        ORDER BY pct DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()

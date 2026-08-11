@@ -306,3 +306,94 @@ def rispondi_commento(comment_id: str, testo: str) -> Optional[str]:
     if r.status_code >= 400:
         raise YouTubeError(f"risposta rifiutata: {r.status_code} {r.text[:200]}")
     return r.json().get("id")
+
+
+# ─── Statistiche ──────────────────────────────────────────────────────────────
+
+ANALYTICS = "https://youtubeanalytics.googleapis.com/v2/reports"
+
+
+def statistiche(video_ids: list) -> Dict[str, Dict]:
+    """Visualizzazioni, like e commenti per un gruppo di video.
+
+    Una sola chiamata per un massimo di 50 video: interrogarli uno alla volta
+    costerebbe una unità di quota ciascuno e, con tre pubblicazioni al giorno,
+    l'elenco cresce senza smettere.
+    """
+    if not video_ids:
+        return {}
+    r = httpx.get(
+        f"{API}/videos",
+        params={"part": "statistics", "id": ",".join(video_ids[:50])},
+        headers=_intestazioni(), timeout=40,
+    )
+    if r.status_code == 403:
+        raise PermessoMancante(
+            "il token YouTube non permette di leggere le statistiche. "
+            "Rilancia una volta:  python3 setup_youtube.py"
+        )
+    if r.status_code >= 400:
+        raise YouTubeError(f"statistiche rifiutate: {r.status_code} {r.text[:160]}")
+
+    fuori = {}
+    for v in r.json().get("items", []):
+        s = v.get("statistics", {})
+        fuori[v["id"]] = {
+            "views": int(s.get("viewCount", 0) or 0),
+            "likes": int(s.get("likeCount", 0) or 0),
+            "comments": int(s.get("commentCount", 0) or 0),
+        }
+    return fuori
+
+
+def ritenzione(giorni: int = 30) -> Dict[str, Dict]:
+    """Percentuale media di video guardata, per video.
+
+    È il numero che conta davvero. YouTube decide se continuare a mostrare uno
+    Short in base a quanto della clip viene guardato: un video con poche
+    visualizzazioni ma alta percentuale viene rilanciato, uno con tante
+    visualizzazioni e bassa percentuale muore lì. I like non entrano nel
+    calcolo, ed è per questo che imparare dai like porta fuori strada.
+
+    Richiede il permesso `yt-analytics.readonly`, che è separato da quello di
+    caricamento: senza, si solleva PermessoMancante e il resto prosegue.
+    """
+    import datetime as dt
+
+    fine = dt.date.today()
+    inizio = fine - dt.timedelta(days=giorni)
+    r = httpx.get(
+        ANALYTICS,
+        params={
+            "ids": "channel==MINE",
+            "startDate": inizio.isoformat(),
+            "endDate": fine.isoformat(),
+            "metrics": "views,averageViewPercentage,averageViewDuration",
+            "dimensions": "video",
+            "sort": "-views",
+            "maxResults": 200,
+        },
+        headers=_intestazioni(), timeout=60,
+    )
+    if r.status_code in (401, 403):
+        raise PermessoMancante(
+            "il token YouTube non copre le statistiche di visione "
+            "(manca yt-analytics.readonly). Rilancia una volta:  "
+            "python3 setup_youtube.py"
+        )
+    if r.status_code >= 400:
+        raise YouTubeError(f"analytics rifiutata: {r.status_code} {r.text[:160]}")
+
+    d = r.json()
+    # Le colonne arrivano descritte a parte: leggerle per posizione fissa
+    # significherebbe rompersi in silenzio il giorno che Google ne aggiunge una.
+    colonne = [c["name"] for c in d.get("columnHeaders", [])]
+    fuori = {}
+    for riga in d.get("rows", []):
+        v = dict(zip(colonne, riga))
+        fuori[v["video"]] = {
+            "views": int(v.get("views", 0) or 0),
+            "avg_view_pct": float(v.get("averageViewPercentage", 0) or 0),
+            "avg_view_sec": float(v.get("averageViewDuration", 0) or 0),
+        }
+    return fuori

@@ -132,13 +132,20 @@ HASHTAGS
   describe the actual mechanism, not the field."""
 
 
-def generate(conn: sqlite3.Connection, count: int) -> List[Dict[str, Any]]:
+def generate(conn: sqlite3.Connection, count: int,
+             imparato: str = "") -> List[Dict[str, Any]]:
     """Ricava frasi dai fatti verificati, escludendo quelli gia' usati.
 
     L'esclusione avviene sul FATTO, non sulla frase: due reel possono
     raccontare lo stesso studio con parole completamente diverse, e in quel
     caso nessun confronto testuale li riconosce come doppioni. E' gia'
     successo — due reel sul peak-end rule pubblicati a poche ore di distanza.
+
+    `imparato` porta dentro le frasi che hanno tenuto piu' a lungo lo
+    spettatore su YouTube. Sta qui e non solo nella generazione delle
+    curiosita' perche' la percentuale di visione dipende tanto da COME e'
+    scritta la frase quanto da cosa racconta: l'aggancio ha due secondi per
+    funzionare, e quello e' un fatto di formulazione.
     """
     from .db import facts_used_in_reels
 
@@ -178,6 +185,11 @@ are not suitable here.
 {materiale}
 
 Return JSON matching the schema."""
+
+    # Va in coda al messaggio utente e non nel prompt di sistema: il sistema
+    # e' identico a ogni chiamata e resta in cache, questo cambia ogni giorno.
+    if imparato:
+        user += "\n\n" + imparato
 
     data = ask_json(_system(), user, LINES_SCHEMA, effort="medium", max_tokens=8000)
     linee = data.get("lines", [])[:count]

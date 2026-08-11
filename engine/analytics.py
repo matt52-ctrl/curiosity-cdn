@@ -15,7 +15,13 @@ import json
 import sqlite3
 from typing import List
 
-from .db import insert_metrics, published_posts, top_performers
+from .db import (
+    insert_metrics,
+    published_posts,
+    reel_migliori,
+    salva_metriche_reel,
+    top_performers,
+)
 from .publish import instagram
 
 
@@ -59,10 +65,21 @@ def report(conn: sqlite3.Connection, limit: int = 10) -> str:
 
 
 def learning_brief(conn: sqlite3.Connection, limit: int = 8) -> str:
-    """Testo da iniettare nella generazione: cosa ha funzionato finora."""
+    """Testo da iniettare nella generazione: cosa ha funzionato finora.
+
+    Mette insieme le due piattaforme. Oggi Instagram non restituisce nulla —
+    manca `instagram_manage_insights` — quindi in pratica parla YouTube; il
+    giorno che il permesso arriva, le due parti si sommano senza toccare altro.
+    """
+    pezzi = []
+
+    yt = brief_youtube(conn)
+    if yt:
+        pezzi.append(yt)
+
     rows = top_performers(conn, limit)
     if len(rows) < 3:
-        return ""
+        return "\n\n".join(pezzi)
 
     lines = []
     for r in rows:
@@ -73,9 +90,123 @@ def learning_brief(conn: sqlite3.Connection, limit: int = 8) -> str:
         rate = (r["save_rate"] or 0) * 100
         lines.append(f'  - "{r["hook"]}" [{kw}] — save rate {rate:.1f}%')
 
-    return (
+    pezzi.append(
         "These posts performed best with this audience, measured by save rate.\n"
         "Note what they have in common — subject matter, sentence shape, how\n"
         "specific the hook is — and lean that way without repeating them:\n"
         + "\n".join(lines)
     )
+    return "\n\n".join(pezzi)
+
+
+# ─── YouTube ──────────────────────────────────────────────────────────────────
+# Esiste perché su Instagram le metriche non arrivano: al token manca
+# `instagram_manage_insights` e copertura, salvataggi e condivisioni restano
+# invisibili. Su YouTube invece si leggono, quindi il ciclo di apprendimento
+# può partire da lì — su una piattaforma sola, ma con dati veri.
+
+
+def raccogli_youtube(conn: sqlite3.Connection) -> int:
+    """Aggiorna le metriche dei reel usciti su YouTube. Ritorna quanti aggiornati."""
+    from .publish import youtube as yt
+
+    righe = conn.execute(
+        "SELECT id, youtube_id FROM reels WHERE youtube_id IS NOT NULL AND youtube_id != ''"
+    ).fetchall()
+    if not righe:
+        return 0
+
+    per_video = {r["youtube_id"]: r["id"] for r in righe}
+
+    # Due fonti, unite: le statistiche pubbliche danno like e commenti, che
+    # l'API delle analytics non espone; le analytics danno la percentuale di
+    # visione, che è l'unica a spiegare *perché* un video è andato bene.
+    dati: dict = {}
+    try:
+        for vid, m in yt.statistiche(list(per_video)).items():
+            dati.setdefault(vid, {}).update(m)
+    except yt.PermessoMancante as exc:
+        print(f"    statistiche YouTube non leggibili: {exc}")
+    except Exception as exc:
+        print(f"    statistiche YouTube fallite: {exc}")
+
+    try:
+        for vid, m in yt.ritenzione().items():
+            dati.setdefault(vid, {}).update(m)
+    except yt.PermessoMancante as exc:
+        print(f"    percentuale di visione non leggibile: {exc}")
+    except Exception as exc:
+        print(f"    analytics YouTube fallita: {exc}")
+
+    n = 0
+    for vid, m in dati.items():
+        if vid in per_video:
+            salva_metriche_reel(conn, per_video[vid], "youtube", m)
+            n += 1
+    if n:
+        print(f"    {n} reel aggiornati da YouTube")
+    return n
+
+
+def rapporto_youtube(conn: sqlite3.Connection, limit: int = 12) -> str:
+    righe = conn.execute(
+        """SELECT r.id, r.line, MAX(m.views) v, MAX(m.avg_view_pct) p,
+                  MAX(m.avg_view_sec) s, MAX(m.likes) l
+           FROM reel_metrics m JOIN reels r ON r.id = m.reel_id
+           WHERE m.platform='youtube' GROUP BY r.id ORDER BY v DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    if not righe:
+        return ("Nessuna statistica YouTube. Se il canale ha già dei video, "
+                "manca il permesso: python3 setup_youtube.py")
+
+    out = ["", "  viste   visione   sec   like   frase", "  " + "─" * 68]
+    for r in righe:
+        out.append(f"  {r['v']:5d}   {r['p']:6.1f}%  {r['s']:4.0f}  {r['l']:5d}   {r['line'][:38]}")
+    return "\n".join(out)
+
+
+def brief_youtube(conn: sqlite3.Connection, limit: int = 6) -> str:
+    """Cosa insegnare al generatore, dai dati YouTube.
+
+    Si guarda la percentuale di visione e non le visualizzazioni: le
+    visualizzazioni sono l'effetto, la percentuale è la causa. Imparare
+    dall'effetto vuol dire copiare i video che YouTube ha spinto per motivi
+    che non dipendono dal testo.
+
+    Si mostrano le migliori **e** le peggiori. Il solo elenco dei vincitori dice
+    al modello "scrivi così" senza dirgli rispetto a cosa: con due estremi
+    davanti può vedere cosa cambia fra una frase che trattiene e una che perde
+    lo spettatore, che è l'unica cosa che gli serve sapere.
+    """
+    righe = reel_migliori(conn, limit * 3)
+    if len(righe) < 3:
+        return ""
+
+    def elenca(gruppo):
+        return "\n".join(
+            f'  - "{r["line"][:110]}" — {r["pct"]:.0f}% ({r["views"]} views)'
+            for r in gruppo
+        )
+
+    migliori = righe[:limit // 2 or 1]
+    # Le peggiori solo se c'è abbastanza materiale da rendere il confronto
+    # sensato: con quattro video in tutto, "la peggiore" è semplicemente la
+    # quarta e non insegna niente.
+    peggiori = righe[-(limit // 2):] if len(righe) >= 6 else []
+
+    parti = [
+        "On YouTube Shorts the number that decides distribution is how much of\n"
+        "the video the average viewer actually watched — not likes, not views.\n"
+        "\nHIGHEST RETENTION so far:\n" + elenca(migliori)
+    ]
+    if peggiori:
+        parti.append(
+            "LOWEST RETENTION so far — people left early:\n" + elenca(peggiori)
+        )
+    parti.append(
+        "Work out what separates the two groups: how fast the hook lands, how\n"
+        "concrete it is, whether the payoff justifies the wait. Write like the\n"
+        "first group without reusing their subjects."
+    )
+    return "\n\n".join(parti)

@@ -306,14 +306,18 @@ def _live_checks() -> None:
 
             _yt.access_token()
             print("  ✓ YouTube         il token si rinnova")
-            try:
-                _yt.leggi_commenti("jib667XMAwQ", limite=1)
-                print("  ✓ commenti YT     permesso presente")
-            except _yt.PermessoMancante:
-                print("  · commenti YT     permesso mancante — rilancia "
-                      "python3 setup_youtube.py")
-            except Exception:
-                pass
+            for etichetta, prova in (
+                ("commenti YT", lambda: _yt.leggi_commenti("jib667XMAwQ", limite=1)),
+                ("statistiche YT", lambda: _yt.ritenzione(giorni=7)),
+            ):
+                try:
+                    prova()
+                    print(f"  ✓ {etichetta:15} permesso presente")
+                except _yt.PermessoMancante:
+                    print(f"  · {etichetta:15} permesso mancante — rilancia "
+                          f"python3 setup_youtube.py")
+                except Exception:
+                    pass
         except Exception as exc:
             print(f"  ✗ YouTube         {str(exc)[:96]}")
 
@@ -575,6 +579,19 @@ def cmd_reels(args: argparse.Namespace) -> int:
 
     conn = connect()
 
+    # 0a. Statistiche YouTube, prima di generare qualsiasi cosa: sono l'unico
+    #     ritorno misurabile che questo sistema riceva. Su Instagram al token
+    #     manca `instagram_manage_insights`, quindi copertura e salvataggi
+    #     restano invisibili; su YouTube la percentuale di visione si legge, ed
+    #     e' proprio il numero che decide se uno Short viene rilanciato.
+    try:
+        analytics.raccogli_youtube(conn)
+    except Exception as exc:
+        print(f"statistiche YouTube saltate: {exc}")
+    imparato = analytics.brief_youtube(conn)
+    if imparato:
+        print("→ genero tenendo conto di cosa ha trattenuto di piu'")
+
     # 0. I reel consumano curiosita' ma non ne producono: solo il ciclo dei
     #    caroselli genera fatti nuovi, e lo fa in base alle SUE scorte. Senza
     #    questo controllo i reel si esauriscono in circa una settimana e il
@@ -607,7 +624,8 @@ def cmd_reels(args: argparse.Namespace) -> int:
         print(f"→ genero {quanti} frasi")
         try:
             usate = set(reel_lines_used(conn))
-            nuove = [l for l in lines.generate(conn, quanti + 2) if l["line"] not in usate]
+            nuove = [l for l in lines.generate(conn, quanti + 2, imparato=imparato)
+                     if l["line"] not in usate]
         except Exception as exc:
             print(f"generazione frasi fallita: {exc}")
             nuove = []
@@ -1474,6 +1492,11 @@ def cmd_metrics(args: argparse.Namespace) -> int:
     conn = connect()
     n = analytics.collect(conn)
     print(f"metriche aggiornate per {n} post")
+    # YouTube è l'unica piattaforma da cui arrivino numeri: su Instagram al
+    # token manca `instagram_manage_insights`, quindi `collect` qui sopra
+    # restituisce zero e continuerà a farlo finché il permesso non c'è.
+    m = analytics.raccogli_youtube(conn)
+    print(f"metriche aggiornate per {m} reel su YouTube")
     return 0
 
 
@@ -1534,11 +1557,28 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     # Le metriche mancanti vanno dette, non lasciate intuire da colonne assenti.
     print(
-        "\n⚠️  visualizzazioni, copertura, salvataggi e condivisioni non sono\n"
-        "    leggibili: manca il permesso instagram_manage_insights sul token.\n"
-        "    Sono le metriche che contano di più — finché mancano, il ciclo di\n"
-        "    apprendimento non ha dati e la qualità dipende solo dal giudizio."
+        "\n⚠️  Su Instagram visualizzazioni, copertura, salvataggi e condivisioni\n"
+        "    non sono leggibili: manca il permesso instagram_manage_insights."
     )
+
+    # YouTube invece i numeri li dà, ed è da lì che il sistema impara.
+    print("\n" + "═" * 76)
+    print("YOUTUBE")
+    try:
+        analytics.raccogli_youtube(conn)
+    except Exception as exc:
+        print(f"  aggiornamento saltato: {exc}")
+    print(analytics.rapporto_youtube(conn))
+
+    imparato = analytics.brief_youtube(conn)
+    if imparato:
+        print("\n" + "═" * 76)
+        print("COSA STA IMPARANDO (finisce dentro la generazione delle prossime frasi)")
+        print()
+        print(imparato)
+    else:
+        print("\n  Ancora troppo pochi video con dati per imparare qualcosa:")
+        print("  servono almeno 3 Short con 25+ visualizzazioni ciascuno.")
     return 0
 
 

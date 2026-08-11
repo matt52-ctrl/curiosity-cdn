@@ -33,9 +33,13 @@ REDIRECT = f"http://localhost:{PORTA}"
 # Il secondo è ampio (copre tutta la gestione del canale) ma è l'unico che
 # Google offre per rispondere ai commenti: non esiste un permesso "solo
 # commenti". Senza, il ciclo pubblica lo stesso e salta le risposte.
+#   yt-analytics.readonly  visualizzazioni e, soprattutto, percentuale media
+#                          di visione: su Shorts è quella a decidere se il
+#                          video viene spinto, non i like.
 SCOPE = " ".join([
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ])
 TOKEN_FILE = DATA_DIR / "youtube_token.json"
 
@@ -63,6 +67,16 @@ class _Ricevi(http.server.BaseHTTPRequestHandler):
         pass
 
 
+SPIEGAZIONE = """
+Cosa sblocca questa autorizzazione:
+  · caricare gli Short              (già attivo)
+  · rispondere ai commenti          (nuovo)
+  · leggere visualizzazioni e, soprattutto, la percentuale media di visione —
+    il numero con cui YouTube decide se rilanciare uno Short. È quello che fa
+    migliorare le frasi da sole: senza, il sistema scrive alla cieca.
+"""
+
+
 def main() -> int:
     client_id = env("YOUTUBE_CLIENT_ID")
     client_secret = env("YOUTUBE_CLIENT_SECRET")
@@ -85,6 +99,7 @@ def main() -> int:
         "prompt": "consent",
     })
 
+    print(SPIEGAZIONE)
     print("Apro il browser per l'autorizzazione…")
     print(f"Se non si apre, incolla questo:\n\n{url}\n")
 
