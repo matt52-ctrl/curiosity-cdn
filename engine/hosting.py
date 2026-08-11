@@ -132,7 +132,11 @@ def elimina(prefissi: List[str]) -> int:
             for f in r.json():
                 if f.get("type") != "file":
                     continue
-                d = client.delete(
+                # httpx non accetta un corpo JSON su `.delete()`: l'API di
+                # GitHub pero' lo richiede (serve lo sha del file), quindi si
+                # passa da `.request()`.
+                d = client.request(
+                    "DELETE",
                     f"https://api.github.com/repos/{repo}/contents/{f['path']}",
                     headers=headers,
                     json={"message": f"prune {f['path']}", "sha": f["sha"]},

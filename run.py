@@ -517,6 +517,17 @@ def cmd_reels(args: argparse.Namespace) -> int:
         media_id = instagram.publish_reel(url, caption, cover_url=cover_url)
         mark_reel_published(conn, r["id"], media_id)
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
+
+        # Come per i post: video e copertina hanno esaurito il loro scopo.
+        # Senza questa potatura i reel aggiungono ~9 MB al giorno al repo,
+        # piu' dei caroselli.
+        try:
+            from engine.hosting import elimina
+            n = elimina([f"reel-{r['id']}", f"reel-{r['id']}-cover"])
+            if n:
+                print(f"  · {n} file rimossi dal CDN")
+        except Exception:
+            pass
     except Exception as exc:
         set_reel_status(conn, r["id"], "failed")
         # La curiosita' torna disponibile: il reel resta segnato come fallito
@@ -527,6 +538,54 @@ def cmd_reels(args: argparse.Namespace) -> int:
         print(f"✗ reel #{r['id']} fallito: {exc}")
         review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
 
+    return 0
+
+
+def cmd_prune(args: argparse.Namespace) -> int:
+    """Rimuove dal CDN i media dei contenuti gia' pubblicati.
+
+    Instagram scarica il file una volta sola, quando crea il contenitore: dopo
+    la pubblicazione l'URL non viene piu' interrogato. Tenerli fa crescere il
+    repo di ~21 MB al giorno.
+
+    Tocca SOLO i contenuti in stato `published`. Quelli ancora in coda hanno
+    bisogno del loro URL per essere pubblicati, e cancellarli li romperebbe.
+    """
+    from engine.hosting import elimina
+
+    conn = connect()
+
+    prefissi = []
+    for r in conn.execute("SELECT id FROM posts WHERE status='published'").fetchall():
+        prefissi.append(str(r["id"]))
+    for r in conn.execute("SELECT id FROM reels WHERE status='published'").fetchall():
+        prefissi += [f"reel-{r['id']}", f"reel-{r['id']}-cover"]
+
+    # Anche i contenuti archiviati o falliti: il loro media non servira' mai
+    # a nessuno, ma resta sul CDN a occupare spazio per sempre.
+    for r in conn.execute(
+        "SELECT id FROM posts WHERE status IN ('superseded','failed','rejected')"
+    ).fetchall():
+        prefissi.append(str(r["id"]))
+    for r in conn.execute(
+        "SELECT id FROM reels WHERE status IN ('superseded','failed')"
+    ).fetchall():
+        prefissi += [f"reel-{r['id']}", f"reel-{r['id']}-cover"]
+
+    if not prefissi:
+        print("Niente da potare.")
+        return 0
+
+    print(f"→ {len(prefissi)} cartelle da contenuti gia' pubblicati")
+    if args.dry:
+        for x in prefissi:
+            print(f"    posts/{x}")
+        print("\n--dry: nulla e' stato rimosso")
+        return 0
+
+    n = elimina(prefissi)
+    print(f"✓ {n} file rimossi dal CDN")
+    print("  Nota: libera la copia di lavoro, non la storia di git.")
     return 0
 
 
@@ -1301,6 +1360,10 @@ def main() -> int:
         help="scarica immagini reali (Wikimedia senza chiave, Pexels se configurato)",
     )
     p.set_defaults(func=cmd_preview)
+
+    p = sub.add_parser("prune", help="rimuove dal CDN i media gia' pubblicati")
+    p.add_argument("--dry", action="store_true", help="mostra soltanto cosa toglierebbe")
+    p.set_defaults(func=cmd_prune)
 
     p = sub.add_parser("reels", help="ciclo dei reel, indipendente dai post")
     p.add_argument(
