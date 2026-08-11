@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List
 
 from engine import analytics, ideas, render, review, visuals, writer
-from engine.config import cfg, env
+from engine.config import DATA_DIR, cfg, env
 from engine.db import (
     connect,
     get_post,
@@ -526,12 +526,32 @@ def cmd_reels(args: argparse.Namespace) -> int:
             try:
                 from engine.publish import youtube
 
-                titolo = (r["line"].split(".")[0])[:95]
+                tag = _json.loads(r["hashtags"] or "[]")
+                # Il testo del reel e' salvato unito; per il titolo servono i
+                # due tempi separati, quindi si ricava il taglio dal punto.
+                pezzi = r["line"].split(". ", 1)
+                meta = youtube.componi_metadati(
+                    pezzi[0], pezzi[1] if len(pezzi) > 1 else "", r["caption"], tag
+                )
+                # Il percorso locale vale solo sulla macchina che ha
+                # costruito il reel: su GitHub ogni esecuzione parte da un
+                # disco vuoto, e un reel costruito ieri non ha piu' il file.
+                # Si riscarica dall'URL, che invece e' persistente.
+                locale = Path(r["video_path"])
+                if not locale.exists() and url:
+                    import httpx as _hx
+                    locale = Path(DATA_DIR) / f"yt-{r['id']}.mp4"
+                    with _hx.stream("GET", url, timeout=180, follow_redirects=True) as resp:
+                        resp.raise_for_status()
+                        with open(locale, "wb") as fh:
+                            for blocco in resp.iter_bytes(65536):
+                                fh.write(blocco)
+
                 yt_id = youtube.publish(
-                    Path(r["video_path"]),
-                    titolo,
-                    r["caption"],
-                    tags=_json.loads(r["hashtags"] or "[]"),
+                    locale,
+                    meta["title"],
+                    meta["description"],
+                    tags=meta["tags"],
                 )
                 conn.execute(
                     "UPDATE reels SET youtube_id=? WHERE id=?", (yt_id, r["id"])

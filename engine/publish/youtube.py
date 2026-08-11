@@ -26,7 +26,6 @@ from typing import Dict, Optional
 
 import httpx
 
-from .. import config as _cfg
 from ..config import DATA_DIR, env
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -88,6 +87,32 @@ def access_token() -> str:
             )
         raise YouTubeError(f"rinnovo token fallito: {detail}")
     return r.json()["access_token"]
+
+
+def componi_metadati(hook: str, reveal: str, caption: str, tags: list) -> Dict:
+    """Titolo e descrizione pensati per YouTube, non riciclati da Instagram.
+
+    Su YouTube gli Short compaiono anche nella ricerca, con un carosello
+    dedicato: il titolo e' quindi un campo di ricerca, non solo un'etichetta.
+    Su Instagram non esiste nulla di equivalente, quindi riusare la stessa
+    stringa sprecherebbe l'unico vantaggio che YouTube offre.
+
+    Gli hashtag scendono a tre: e' l'intervallo che YouTube tratta come
+    segnale, e oltre quello vengono ignorati.
+    """
+    # Il titolo unisce i due tempi: chi lo legge in ricerca vede la domanda e
+    # la risposta insieme, che e' cio' che fa cliccare.
+    titolo = hook.rstrip(".") 
+    if reveal and len(titolo) + len(reveal) < 90:
+        titolo = f"{titolo} — {reveal.rstrip('.')}"
+    titolo = titolo[:95]
+
+    tre = [t for t in tags[:3]]
+    descrizione = caption.strip()
+    if tre:
+        descrizione += "\n\n" + " ".join("#" + t for t in tre)
+
+    return {"title": titolo, "description": descrizione, "tags": tags[:15]}
 
 
 def publish(
