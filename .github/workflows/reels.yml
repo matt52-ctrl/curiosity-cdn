@@ -80,9 +80,11 @@ jobs:
       # rispondere entro la prima ora è ciò che conta, e la prima ora è questa.
       # `continue-on-error` perché una risposta mancata non deve far risultare
       # fallito un contenuto già uscito.
+      # Senza `continue-on-error`: se il comando esce con errore è perché ha
+      # incontrato qualcosa che non si risolve da sé (permesso, token, quota),
+      # e la mail di GitHub sul workflow fallito è l'unico modo di saperlo.
       - name: Rispondi ai commenti
         if: always()
-        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}

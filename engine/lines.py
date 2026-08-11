@@ -146,10 +146,18 @@ def generate(conn: sqlite3.Connection, count: int) -> List[Dict[str, Any]]:
     esclusione = (
         f"AND id NOT IN ({','.join('?' * len(usati))})" if usati else ""
     )
+    # Le curiosita' mai uscite come carosello vengono prima. Un reel puo'
+    # comunque riprendere una gia' pubblicata — meglio ripetersi che restare
+    # fermi — ma solo quando non c'e' altro: su Instagram i due formati
+    # arrivano alle stesse persone, e vedere lo stesso studio due volte in
+    # settimana e' il modo piu' rapido di far smettere di seguire.
     fatti = conn.execute(
         f"""SELECT id, hook, fact, detail, source_hint FROM facts
             WHERE status IN ('approved','rendered','published') {esclusione}
-            ORDER BY RANDOM() LIMIT ?""",
+            ORDER BY (id IN (SELECT fact_id FROM posts
+                             WHERE status IN ('published','approved','pending_review'))) ASC,
+                     RANDOM()
+            LIMIT ?""",
         (*usati, count * 2),
     ).fetchall()
 
@@ -175,11 +183,27 @@ Return JSON matching the schema."""
     linee = data.get("lines", [])[:count]
 
     pinned = cfg.get("caption.pinned_hashtags", []) or []
+    visti: set = set()
     for l in linee:
         idx = l.get("source_index", -1)
         l["fact_id"] = fatti[idx]["id"] if 0 <= idx < len(fatti) else None
+        # Il prompt chiede una curiosita' diversa per ogni frase, ma non e' una
+        # garanzia. L'esclusione a monte guarda il database, e dentro lo stesso
+        # lotto non ha ancora nulla da vedere: due frasi sullo stesso studio
+        # passerebbero entrambe e uscirebbero a poche ore di distanza.
+        if l["fact_id"] is not None and l["fact_id"] in visti:
+            l["fact_id"] = None
+            l["_doppione"] = True
+        elif l["fact_id"] is not None:
+            visti.add(l["fact_id"])
         l["hook"] = l["hook"].strip()
         l["reveal"] = l["reveal"].strip().rstrip("?")
+        # L'aggancio DEVE chiudersi con un punto. Il database salva una stringa
+        # sola e chi la rilegge — il titolo YouTube, il testo del video lungo —
+        # la rispezza sul primo ". ". Senza il punto quel taglio cade dentro la
+        # rivelazione e il titolo esce con mezza frase di troppo.
+        if l["hook"] and l["hook"][-1] not in ".!?":
+            l["hook"] += "."
         # `line` resta come testo unico per il database e i controlli
         # anti-duplicato, che ragionano su una stringa sola.
         l["line"] = f"{l['hook']} {l['reveal']}"
@@ -191,7 +215,15 @@ Return JSON matching the schema."""
             if t and t not in tag:
                 tag.append(t)
         l["hashtags"] = tag[:5]
-    return linee
+
+    # Le frasi che raccontavano una curiosità già presa da un'altra frase dello
+    # stesso lotto vengono scartate qui, non lasciate senza `fact_id`: senza il
+    # fact_id uscirebbero lo stesso e sarebbero invisibili a ogni controllo
+    # futuro, che è precisamente il guasto da cui questo pezzo nasce.
+    scartate = [l for l in linee if l.get("_doppione")]
+    if scartate:
+        print(f"  · {len(scartate)} frasi scartate: stessa curiosità di un'altra del lotto")
+    return [l for l in linee if not l.get("_doppione")]
 
 
 def full_caption(line: Dict[str, Any]) -> str:

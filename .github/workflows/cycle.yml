@@ -79,30 +79,6 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python run.py cycle
 
-      # I commenti girano in coda alla pubblicazione, non in un workflow loro:
-      # rispondere entro la prima ora è ciò che conta, e la prima ora è questa.
-      # `continue-on-error` perché una risposta mancata non deve far risultare
-      # fallito un contenuto già uscito.
-      - name: Rispondi ai commenti
-        if: always()
-        continue-on-error: true
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.CDN_TOKEN }}
-          GITHUB_REPO: ${{ secrets.CDN_REPO }}
-          IMAGE_HOST_BACKEND: github
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # Servono a leggere e rispondere ai commenti sotto agli Short.
-          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
-          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: python run.py comments
-
       - name: Salva lo stato
         # `always()`: se il ciclo fallisce a metà, quello che ha già fatto va
         # comunque salvato, o al giro dopo lo rifarebbe da capo.

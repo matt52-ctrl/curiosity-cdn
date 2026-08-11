@@ -267,6 +267,13 @@ comments:
   # rientrano nel tetto — quelle vanno sempre gestite.
   max_replies_per_run: 6
 
+  # Tetto sulle ANALISI, che è cosa diversa dal tetto sulle risposte: ogni
+  # commento nuovo costa una chiamata al modello *prima* che si decida se
+  # rispondere. Con un video che gira, trecento commenti sarebbero trecento
+  # chiamate in un giro solo — sulla stessa quota che serve a generare le
+  # curiosità. Quelli oltre il tetto restano nuovi e toccano al giro dopo.
+  max_drafts_per_run: 20
+
 caption:
   max_chars: 900
   hashtag_count: 12

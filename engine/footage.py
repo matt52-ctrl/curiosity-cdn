@@ -59,6 +59,11 @@ SCENE = {
 }
 
 
+def _ffmpeg() -> str:
+    import shutil
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+
 def _usate() -> Dict[str, str]:
     if USATE.exists():
         try:
@@ -189,6 +194,48 @@ def scarica(clip: Dict) -> Optional[Path]:
     return target
 
 
+def si_vede(video: Path) -> bool:
+    """Dice se nella clip si vede qualcosa, guardando tre fotogrammi.
+
+    Serve perché le scene notturne ("distant thunder sky", "moon night
+    clouds") a volte restituiscono riprese che sono nero pieno con due lucine.
+    Il testo sopra resta leggibile, quindi nessun controllo se ne accorge, ma
+    il risultato sono nove secondi di schermo nero: chi scorre lo legge come un
+    caricamento fallito e passa oltre. È già finito in produzione una volta.
+
+    Anche il caso opposto va escluso — un cielo bianco slavato — perché lì il
+    testo bianco sparisce del tutto.
+    """
+    import subprocess
+
+    livelli = []
+    for istante in ("1", "4", "7"):
+        try:
+            r = subprocess.run(
+                [_ffmpeg(), "-v", "error", "-ss", istante, "-i", str(video),
+                 "-frames:v", "1", "-vf", "scale=64:64,format=gray",
+                 "-f", "rawvideo", "-"],
+                capture_output=True, timeout=60,
+            )
+            if r.stdout:
+                livelli.append(sum(r.stdout) / len(r.stdout))
+        except Exception:
+            return True          # nel dubbio si tiene: meglio un fondo brutto che nessuno
+
+    if not livelli:
+        return True
+    medio = sum(livelli) / len(livelli)
+    # 0 = nero pieno, 255 = bianco pieno. Sotto 16 la ripresa non si distingue
+    # dal fondo nero; sopra 235 il testo bianco non si stacca più.
+    if medio < 16:
+        print(f"    scartata: quasi nera (luminosità {medio:.0f}/255)")
+        return False
+    if medio > 235:
+        print(f"    scartata: slavata (luminosità {medio:.0f}/255)")
+        return False
+    return True
+
+
 def per_frase(mood: str, frase: str) -> Optional[Path]:
     """Dal tono della frase al file video, provando più scene.
 
@@ -200,12 +247,21 @@ def per_frase(mood: str, frase: str) -> Optional[Path]:
     rnd = random.Random(hashlib.sha1(frase.encode()).hexdigest())
     rnd.shuffle(opzioni)
 
-    for scena in opzioni[:4]:
+    ripiego = None
+    for scena in opzioni[:5]:
         clip = cerca(scena)
         if not clip:
             continue
         path = scarica(clip)
-        if path:
+        if not path:
+            continue
+        if si_vede(path):
             print(f"    sfondo: {scena}")
             return path
-    return None
+        # Si tiene da parte: se nessuna delle cinque scene passa il controllo,
+        # un fondo brutto vale comunque più di un reel che non esce.
+        ripiego = ripiego or path
+
+    if ripiego:
+        print("    nessuna scena leggibile: uso la prima trovata")
+    return ripiego

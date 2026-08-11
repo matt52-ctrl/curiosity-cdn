@@ -21,8 +21,8 @@ import traceback
 from pathlib import Path
 from typing import List
 
-from engine import analytics, ideas, render, review, visuals, writer
-from engine.config import DATA_DIR, cfg, env
+from engine import allarme, analytics, ideas, render, review, visuals, writer
+from engine.config import DATA_DIR, ROOT, cfg, env
 from engine.db import (
     connect,
     get_post,
@@ -259,9 +259,96 @@ def _live_checks() -> None:
         except Exception as exc:
             print(f"  ✗ Instagram       {exc}")
 
-    # ─ Anthropic o Gemini, a seconda del provider configurato ─
+    # ─ Scadenza dell'accesso ai dati Meta ─
+    # Il token non scade mai, ma l'autorizzazione a leggere i dati sì: dopo
+    # quella data ogni chiamata smette di rispondere e va rifatta a mano.
+    # È l'unica scadenza di tutto il sistema che nessun automatismo può
+    # rinnovare, quindi va vista prima e non il giorno che arriva.
+    if not is_placeholder(ig_token):
+        try:
+            import datetime as _dt
+
+            d = httpx.get("https://graph.facebook.com/debug_token",
+                          params={"input_token": ig_token, "access_token": ig_token},
+                          timeout=30).json().get("data", {})
+            fine = d.get("data_access_expires_at", 0)
+            if fine:
+                giorni = (fine - time.time()) / 86400
+                segno = "✓" if giorni > 21 else "⚠"
+                print(f"  {segno} accesso Meta    scade il "
+                      f"{_dt.datetime.fromtimestamp(fine):%d/%m/%Y} "
+                      f"(fra {giorni:.0f} giorni)")
+            mancanti = {"instagram_manage_insights"} - set(d.get("scopes", []))
+            if mancanti:
+                print(f"  · permessi Meta   manca {', '.join(mancanti)} "
+                      f"— le statistiche restano a zero")
+        except Exception as exc:
+            print(f"  · accesso Meta    non verificabile: {exc}")
+
+    # ─ Il motore che scrive: una chiamata vera, non solo la chiave presente ─
     provider = cfg.get("pipeline.provider", "anthropic")
-    print(f"  · motore testo    provider={provider} model={cfg.get('pipeline.model')}")
+    try:
+        from engine.llm import ask_json
+
+        r = ask_json("Reply in JSON.", "Return {\"ok\": true}.",
+                     {"type": "object", "properties": {"ok": {"type": "boolean"}},
+                      "required": ["ok"], "additionalProperties": False},
+                     effort="low", max_tokens=2000)
+        stato = "✓" if r.get("ok") is not None else "⚠"
+        print(f"  {stato} motore testo    {provider}/{cfg.get('pipeline.model')} risponde")
+    except Exception as exc:
+        print(f"  ✗ motore testo    {provider}: {str(exc)[:96]}")
+
+    # ─ YouTube: il refresh token è la cosa che scade più in fretta ─
+    if cfg.get("publish.youtube.enabled", False):
+        try:
+            from engine.publish import youtube as _yt
+
+            _yt.access_token()
+            print("  ✓ YouTube         il token si rinnova")
+            try:
+                _yt.leggi_commenti("jib667XMAwQ", limite=1)
+                print("  ✓ commenti YT     permesso presente")
+            except _yt.PermessoMancante:
+                print("  · commenti YT     permesso mancante — rilancia "
+                      "python3 setup_youtube.py")
+            except Exception:
+                pass
+        except Exception as exc:
+            print(f"  ✗ YouTube         {str(exc)[:96]}")
+
+    # ─ Immagini e filmati: senza, i post escono su fondo pieno e i reel no ─
+    if not is_placeholder(env("CLOUDFLARE_API_TOKEN")):
+        try:
+            from engine import visuals
+
+            print("  ✓ immagini AI     Cloudflare configurato"
+                  if visuals.generate("a single grey stone on white") else
+                  "  ⚠ immagini AI     nessuna immagine restituita")
+        except Exception as exc:
+            print(f"  ✗ immagini AI     {str(exc)[:96]}")
+
+    if not is_placeholder(env("PEXELS_API_KEY")):
+        try:
+            from engine import footage
+
+            clip = footage.cerca("calm ocean at night", evita_usate=False)
+            print(f"  {'✓' if clip else '⚠'} filmati         "
+                  f"{'Pexels risponde' if clip else 'nessun filmato trovato'}")
+        except Exception as exc:
+            print(f"  ✗ filmati         {str(exc)[:96]}")
+
+    # ─ Strumenti locali: su GitHub li installa il workflow, qui possono mancare ─
+    import shutil as _sh
+
+    print(f"  {'✓' if _sh.which('ffmpeg') else '✗'} ffmpeg          "
+          f"{'presente' if _sh.which('ffmpeg') else 'assente — i reel non si montano'}")
+    font = list((ROOT / "assets" / "fonts").glob("*.ttf"))
+    musica = list((ROOT / "assets" / "music").rglob("*.mp3"))
+    print(f"  {'✓' if font else '✗'} font            {len(font)} file"
+          f"{'' if font else ' — lancia setup_fonts.py'}")
+    print(f"  {'✓' if musica else '·'} musica          {len(musica)} tracce"
+          f"{'' if musica else ' — lancia setup_music.py'}")
 
 
 def _contenuti_da_sorvegliare(conn, ore: float) -> list:
@@ -319,12 +406,19 @@ def cmd_comments(args: argparse.Namespace) -> int:
     contenuti = _contenuti_da_sorvegliare(conn, ore)
     if not contenuti:
         print(f"Niente uscito nelle ultime {ore:.0f} ore: nessun commento da leggere.")
-        return 0
+        return 1 if allarme.riepiloga("commenti") else 0
     print(f"→ {len(contenuti)} contenuti nella finestra di {ore:.0f} ore")
 
     nuovi = 0
     risposte = 0
     max_replies = int(cfg.get("comments.max_replies_per_run", 6))
+    # Tetto sulle ANALISI, non solo sulle risposte. Ogni commento nuovo costa
+    # una chiamata al modello, e il tetto sulle risposte scatta dopo: con un
+    # video che gira, trecento commenti diventano trecento chiamate in un giro
+    # solo. La quota e' la stessa che serve a generare le curiosita', quindi il
+    # risultato non sarebbe qualche risposta in meno — sarebbe la pagina ferma.
+    max_analisi = int(cfg.get("comments.max_drafts_per_run", 20))
+    analizzati = 0
     # Il permesso YouTube può mancare (token rilasciato prima che questa parte
     # esistesse). Si segnala una volta e si smette di provarci, invece di
     # ripetere lo stesso errore per ogni video.
@@ -353,6 +447,15 @@ def cmd_comments(args: argparse.Namespace) -> int:
             if c["platform"] == "youtube":
                 yt_spento = str(exc)
                 print(f"  · commenti YouTube saltati: {exc}")
+                # Il permesso mancante NON fa fallire il giro. È uno stato di
+                # configurazione noto, non un guasto: la pubblicazione
+                # continua, manca solo una funzione secondaria. Farne partire
+                # una mail a ogni giro — tre al giorno — trasformerebbe
+                # l'unico canale d'allarme che abbiamo in rumore da ignorare,
+                # ed è esattamente quando serve che verrebbe ignorato.
+                from engine.publish.youtube import PermessoMancante
+                if not isinstance(exc, PermessoMancante) and allarme.critico(exc):
+                    allarme.segnala("commenti YouTube", exc)
             else:
                 print(f"  · {c['etichetta']}: {exc}")
             continue
@@ -365,6 +468,11 @@ def cmd_comments(args: argparse.Namespace) -> int:
             # persa prima di essere registrata.
             if com.get("reply_count"):
                 continue
+            if analizzati >= max_analisi:
+                # I non analizzati non vengono segnati: al giro dopo sono
+                # ancora nuovi e toccheranno a loro.
+                continue
+            analizzati += 1
             try:
                 verdict = cm.draft_reply(
                     com.get("text", ""), gancio, fatto,
@@ -393,11 +501,13 @@ def cmd_comments(args: argparse.Namespace) -> int:
             print(f"  {flag} [{verdict['category']:10}] {azione}  "
                   f"{c['etichetta']} @{com.get('username','?')}: {com.get('text','')[:40]}")
 
+    if analizzati >= max_analisi:
+        print(f"\n⚠ tetto di {max_analisi} analisi raggiunto: i restanti al prossimo giro")
     print(f"\n{nuovi} commenti nuovi")
 
     da_inviare = cm.pending(conn)
     if not da_inviare:
-        return 0
+        return 1 if allarme.riepiloga("commenti") else 0
 
     if cfg.get("comments.require_approval", True):
         if review.enabled():
@@ -435,8 +545,10 @@ def cmd_comments(args: argparse.Namespace) -> int:
                 print(f"  ✓ risposto a @{row['username']} su {row['platform']}")
             except Exception as exc:
                 print(f"  ✗ @{row['username']}: {exc}")
+                if allarme.critico(exc):
+                    allarme.segnala("risposta commenti", exc)
 
-    return 0
+    return 1 if allarme.riepiloga("commenti") else 0
 
 
 def cmd_reels(args: argparse.Namespace) -> int:
@@ -479,6 +591,8 @@ def cmd_reels(args: argparse.Namespace) -> int:
             ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
         except Exception as exc:
             print(f"generazione curiosita' fallita: {exc}")
+            if allarme.critico(exc):
+                allarme.segnala("generazione", exc)
 
     # 1. Magazzino: se restano meno di 2 reel pronti, se ne producono altri.
     pronti = reels_by_status(conn, "approved")
@@ -676,6 +790,10 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 print(f"  ✓ YouTube: youtu.be/{yt_id}")
             except Exception as exc:
                 print(f"  ⚠ YouTube saltato: {exc}")
+                # Un singhiozzo di rete non merita una mail; un token scaduto
+                # sì, perche' da li' in poi su YouTube non esce piu' nulla.
+                if allarme.critico(exc):
+                    allarme.segnala("YouTube", exc)
 
         # Come per i post: video e copertina hanno esaurito il loro scopo.
         # Senza questa potatura i reel aggiungono ~9 MB al giorno al repo,
@@ -696,8 +814,10 @@ def cmd_reels(args: argparse.Namespace) -> int:
         conn.commit()
         print(f"✗ reel #{r['id']} fallito: {exc}")
         review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
+        if allarme.critico(exc):
+            allarme.segnala("Instagram reel", exc)
 
-    return 0
+    return 1 if allarme.riepiloga("reel") else 0
 
 
 def cmd_prune(args: argparse.Namespace) -> int:
@@ -1552,8 +1672,13 @@ def cmd_cycle(args: argparse.Namespace) -> int:
             "⚠️ Ciclo senza pubblicazioni.\n\n"
             + "\n".join(f"• <code>{p[:180]}</code>" for p in problems)
         )
+        # Un giro che non pubblica nulla E ha incontrato problemi è il caso in
+        # cui il sistema si sta spegnendo. Va segnalato anche senza Telegram:
+        # `review.notify` qui sopra non manda niente se non è configurato, e
+        # finora era l'unico avviso previsto.
+        allarme.segnala("ciclo", f"nessuna pubblicazione — {problems[0]}")
 
-    return 0
+    return 1 if allarme.riepiloga("caroselli") else 0
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
