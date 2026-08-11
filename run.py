@@ -1040,8 +1040,67 @@ def cmd_metrics(args: argparse.Namespace) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    conn = connect()
-    print(analytics.report(conn, args.limit))
+    """Rapporto sui contenuti pubblicati.
+
+    Legge i campi diretti del contenuto (like, commenti) invece delle insights:
+    quelle richiedono `instagram_manage_insights`, che il token attuale non ha.
+    Visualizzazioni, copertura, salvataggi e condivisioni restano quindi
+    invisibili — sono proprio le metriche che contano di più, ma meglio
+    mostrare quel poco che si vede che non mostrare niente.
+    """
+    import httpx
+
+    from engine.db import connect as _c
+
+    conn = _c()
+    tok, uid = env("IG_ACCESS_TOKEN"), env("IG_USER_ID")
+
+    try:
+        prof = httpx.get(
+            f"https://graph.facebook.com/v21.0/{uid}",
+            params={
+                "fields": "username,followers_count,media_count",
+                "access_token": tok,
+            },
+            timeout=40,
+        ).json()
+        print(
+            f"@{prof.get('username','?')} — "
+            f"{prof.get('followers_count','?')} follower, "
+            f"{prof.get('media_count','?')} contenuti\n"
+        )
+
+        r = httpx.get(
+            f"https://graph.facebook.com/v21.0/{uid}/media",
+            params={
+                "fields": "id,media_type,timestamp,like_count,comments_count,caption",
+                "limit": args.limit,
+                "access_token": tok,
+            },
+            timeout=40,
+        )
+        media = r.json().get("data", [])
+    except Exception as exc:
+        print(f"lettura fallita: {exc}")
+        return 1
+
+    print(f"{'quando':17} {'tipo':9} {'like':>5} {'comm':>5}  prima riga")
+    print("─" * 76)
+    for m in media:
+        tipo = "REEL" if m["media_type"] == "VIDEO" else "carosello"
+        prima = (m.get("caption") or "").split("\n")[0][:34]
+        print(
+            f"{m['timestamp'][:16]:17} {tipo:9} "
+            f"{m.get('like_count', 0):>5} {m.get('comments_count', 0):>5}  {prima}"
+        )
+
+    # Le metriche mancanti vanno dette, non lasciate intuire da colonne assenti.
+    print(
+        "\n⚠️  visualizzazioni, copertura, salvataggi e condivisioni non sono\n"
+        "    leggibili: manca il permesso instagram_manage_insights sul token.\n"
+        "    Sono le metriche che contano di più — finché mancano, il ciclo di\n"
+        "    apprendimento non ha dati e la qualità dipende solo dal giudizio."
+    )
     return 0
 
 

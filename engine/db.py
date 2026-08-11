@@ -96,6 +96,10 @@ MIGRATIONS = [
     # Descrizione della prima immagine. Instagram la indicizza nella ricerca
     # oltre a usarla per gli screen reader: veniva generata e poi buttata via.
     "ALTER TABLE posts ADD COLUMN alt_text TEXT NOT NULL DEFAULT ''",
+    # Da quale curiosita' nasce un reel. Senza, due reel possono raccontare
+    # lo stesso studio con parole diverse: e' gia' successo, e la deduplica
+    # lessicale non lo intercetta perche' le frasi non si somigliano.
+    "ALTER TABLE reels ADD COLUMN fact_id INTEGER",
 ]
 
 
@@ -282,10 +286,12 @@ def top_performers(conn: sqlite3.Connection, limit: int = 10) -> List[sqlite3.Ro
 
 def insert_reel(conn: sqlite3.Connection, r: Dict[str, Any], status: str = "approved") -> int:
     cur = conn.execute(
-        """INSERT INTO reels (created_at, line, mood, caption, hashtags, video_path, status)
-           VALUES (?,?,?,?,?,?,?)""",
+        """INSERT INTO reels
+           (created_at, line, mood, caption, hashtags, video_path, status, fact_id)
+           VALUES (?,?,?,?,?,?,?,?)""",
         (time.time(), r["line"], r.get("mood", "reflective"), r.get("caption", ""),
-         json.dumps(r.get("hashtags", [])), str(r.get("video_path", "")), status),
+         json.dumps(r.get("hashtags", [])), str(r.get("video_path", "")), status,
+         r.get("fact_id")),
     )
     conn.commit()
     return int(cur.lastrowid)
@@ -318,3 +324,13 @@ def mark_reel_published(conn: sqlite3.Connection, reel_id: int, media_id: str) -
 def reel_lines_used(conn: sqlite3.Connection) -> List[str]:
     """Frasi già usate: evita che lo stesso concetto torni fra i reel."""
     return [r["line"] for r in conn.execute("SELECT line FROM reels").fetchall()]
+
+
+def facts_used_in_reels(conn: sqlite3.Connection) -> List[int]:
+    """Curiosita' gia' diventate reel: non vanno riusate."""
+    return [
+        r["fact_id"]
+        for r in conn.execute(
+            "SELECT DISTINCT fact_id FROM reels WHERE fact_id IS NOT NULL"
+        ).fetchall()
+    ]

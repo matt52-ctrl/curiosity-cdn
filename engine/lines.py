@@ -34,13 +34,16 @@ LINES_SCHEMA = {
                     # legge in due secondi e poi non trattiene più nessuno,
                     # mentre il tempo di visione oltre i 3 secondi è il segnale
                     # che decide la distribuzione dei reel.
+                    # L'indice del fatto usato: permette di legare il reel
+                    # alla curiosita' di partenza e non riusarla mai due volte.
+                    "source_index": {"type": "integer"},
                     "hook": {"type": "string"},
                     "reveal": {"type": "string"},
                     "mood": {"type": "string", "enum": list(MOODS)},
                     "caption": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["hook", "reveal", "mood", "caption", "hashtags"],
+                "required": ["source_index", "hook", "reveal", "mood", "caption", "hashtags"],
                 "additionalProperties": False,
             },
         }
@@ -130,26 +133,39 @@ HASHTAGS
 
 
 def generate(conn: sqlite3.Connection, count: int) -> List[Dict[str, Any]]:
-    """Ricava frasi dai fatti verificati già in magazzino."""
+    """Ricava frasi dai fatti verificati, escludendo quelli gia' usati.
+
+    L'esclusione avviene sul FATTO, non sulla frase: due reel possono
+    raccontare lo stesso studio con parole completamente diverse, e in quel
+    caso nessun confronto testuale li riconosce come doppioni. E' gia'
+    successo — due reel sul peak-end rule pubblicati a poche ore di distanza.
+    """
+    from .db import facts_used_in_reels
+
+    usati = facts_used_in_reels(conn)
+    esclusione = (
+        f"AND id NOT IN ({','.join('?' * len(usati))})" if usati else ""
+    )
     fatti = conn.execute(
-        """SELECT hook, fact, detail, source_hint FROM facts
-           WHERE status IN ('approved','rendered','published')
-           ORDER BY RANDOM() LIMIT ?""",
-        (count * 2,),
+        f"""SELECT id, hook, fact, detail, source_hint FROM facts
+            WHERE status IN ('approved','rendered','published') {esclusione}
+            ORDER BY RANDOM() LIMIT ?""",
+        (*usati, count * 2),
     ).fetchall()
 
     if not fatti:
         return []
 
     materiale = "\n\n".join(
-        f"FACT: {f['fact']}\nDETAIL: {f['detail']}\nSOURCE: {f['source_hint']}"
-        for f in fatti
+        f"[{i}] FACT: {f['fact']}\n    DETAIL: {f['detail']}\n    SOURCE: {f['source_hint']}"
+        for i, f in enumerate(fatti)
     )
     user = f"""Turn these verified findings into {count} standalone lines.
 
-Use a different finding for each line. Pick the ones that survive being
-stripped to a single sentence — some facts need their evidence to make sense,
-and those are not suitable here.
+Use a different finding for each line, and set source_index to the number in
+brackets of the finding you used. Pick the ones that survive being stripped to
+a single sentence — some facts need their evidence to make sense, and those
+are not suitable here.
 
 {materiale}
 
@@ -160,6 +176,8 @@ Return JSON matching the schema."""
 
     pinned = cfg.get("caption.pinned_hashtags", []) or []
     for l in linee:
+        idx = l.get("source_index", -1)
+        l["fact_id"] = fatti[idx]["id"] if 0 <= idx < len(fatti) else None
         l["hook"] = l["hook"].strip()
         l["reveal"] = l["reveal"].strip().rstrip("?")
         # `line` resta come testo unico per il database e i controlli
