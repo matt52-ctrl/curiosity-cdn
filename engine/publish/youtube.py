@@ -92,27 +92,48 @@ def access_token() -> str:
 def componi_metadati(hook: str, reveal: str, caption: str, tags: list) -> Dict:
     """Titolo e descrizione pensati per YouTube, non riciclati da Instagram.
 
-    Su YouTube gli Short compaiono anche nella ricerca, con un carosello
-    dedicato: il titolo e' quindi un campo di ricerca, non solo un'etichetta.
-    Su Instagram non esiste nulla di equivalente, quindi riusare la stessa
-    stringa sprecherebbe l'unico vantaggio che YouTube offre.
+    Tre regole, tutte verificate contro le pratiche 2026 e tutte diverse da
+    quello che serve su Instagram:
 
-    Gli hashtag scendono a tre: e' l'intervallo che YouTube tratta come
-    segnale, e oltre quello vengono ignorati.
+    1. **Titolo sotto i 40 caratteri.** Su mobile viene troncato fra i 50 e i
+       60, e i video che rendono di piu' stanno intorno alle otto parole.
+       Quindi si usa il solo aggancio, non aggancio + rivelazione: la seconda
+       parte e' gia' nel video, ripeterla nel titolo lo taglia a meta'.
+
+    2. **Hashtag nella descrizione, mai nel titolo.** I primi tre compaiono
+       come link cliccabili sopra il titolo, e un titolo pulito lascia le
+       parole chiave in evidenza.
+
+    3. **#Shorts serve ancora.** E' il segnale con cui YouTube classifica il
+       formato. Sopra i 15 hashtag totali YouTube li ignora tutti.
     """
-    # Il titolo unisce i due tempi: chi lo legge in ricerca vede la domanda e
-    # la risposta insieme, che e' cio' che fa cliccare.
-    titolo = hook.rstrip(".") 
-    if reveal and len(titolo) + len(reveal) < 90:
-        titolo = f"{titolo} — {reveal.rstrip('.')}"
-    titolo = titolo[:95]
+    # Solo l'aggancio, tagliato su parola intera.
+    titolo = hook.rstrip(".").strip()
+    if len(titolo) > 45:
+        titolo = titolo[:45].rsplit(" ", 1)[0].rstrip(" ,;:—-")
 
-    tre = [t for t in tags[:3]]
-    descrizione = caption.strip()
-    if tre:
-        descrizione += "\n\n" + " ".join("#" + t for t in tre)
+    # Tre tag tematici piu' #Shorts: quattro in tutto, dentro l'intervallo
+    # che YouTube considera.
+    scelti = [x for x in tags[:3] if x.lower() != "shorts"] + ["Shorts"]
 
-    return {"title": titolo, "description": descrizione, "tags": tags[:15]}
+    # Ponte fra le piattaforme. Chi arriva da YouTube deve poter trovare
+    # l'account Instagram senza cercarlo, e viceversa: il filigrana
+    # @oddlywireddaily e' gia' impresso nel video, quindi chi guarda su
+    # YouTube vede l'handle anche senza leggere la descrizione. Qui si
+    # aggiunge il collegamento diretto, per chi invece la apre.
+    from ..config import cfg
+
+    handle = (cfg.get("brand.handle", "") or "").lstrip("@")
+    ponte = f"\n\nAlso on Instagram: instagram.com/{handle}" if handle else ""
+
+    descrizione = caption.strip() + ponte
+    descrizione += "\n\n" + " ".join("#" + x for x in scelti)
+
+    return {
+        "title": titolo,
+        "description": descrizione,
+        "tags": tags[:15],
+    }
 
 
 def publish(
