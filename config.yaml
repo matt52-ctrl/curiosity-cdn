@@ -293,6 +293,11 @@ publish:
     # nuovo per quel pubblico — è cross-posting, non riciclo.
     max_per_day: 2
 
+    # Tetto di TikTok, non nostro: cinque bozze pendenti ogni 24 ore, scritto
+    # nella loro documentazione. Il ciclo si ferma da sé quando lo tocca,
+    # senza trattarlo come un errore — è il ritmo previsto, non un guasto.
+    max_bozze_al_giorno: 5
+
 # ─── COMMENTI ─────────────────────────────────────────────────────────────────
 # Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
 # ogni risposta riporta la persona sul post.

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import json as _json
 import random
 import sys
 import time
@@ -1006,6 +1007,74 @@ def _salva_stato() -> None:
         _git("fetch", "origin", "main")
         _git("rebase", "origin/main", "-X", "ours")
     print("    ✗ non sono riuscito a salvare: fallo a mano con  git push")
+
+
+def cmd_ttcarica(args: argparse.Namespace) -> int:
+    """Manda i video gia' montati nell'inbox TikTok come bozze.
+
+    Perche' esiste: il caricamento multiplo su TikTok Studio richiede 1.000
+    follower. Sotto quella soglia si trascina un file alla volta, e tredici
+    video sono mezz'ora. L'API deposita le bozze da sola e non richiede alcun
+    audit finche' si resta sull'inbox.
+
+    Le bozze NON escono da sole: arrivano come notifica nell'app e tocca a te
+    premere pubblica. E' il compromesso che rende superfluo l'audit.
+    """
+    from engine.publish import tiktok
+
+    out = OUTPUT_DIR / "tiktok"
+    video = sorted(out.glob("*.mp4"))
+    if not video:
+        print(f"nessun video in {out}. Preparane prima:  run.py tiktok")
+        return 1
+
+    # Memoria di cosa e' gia' partito: senza, un secondo giro ricaricherebbe
+    # gli stessi file e brucerebbe il tetto giornaliero per niente.
+    registro = out / "caricati.json"
+    try:
+        gia = set(_json.loads(registro.read_text()))
+    except Exception:
+        gia = set()
+
+    restanti = [v for v in video if v.name not in gia]
+    if not restanti:
+        print(f"tutti i {len(video)} video sono gia' stati caricati.")
+        return 0
+
+    # Il token si chiede una volta per tutto il giro. Se manca, si scopre
+    # adesso invece che a ogni file: senza questo, credenziali assenti
+    # producevano cinque errori identici e cinque allarmi.
+    try:
+        token = tiktok._token_accesso()
+    except Exception as exc:
+        print(f"✗ {exc}")
+        return 1
+
+    tetto = int(cfg.get("publish.tiktok.max_bozze_al_giorno", 5))
+    quanti = min(tetto, int(args.quanti or tetto), len(restanti))
+    print(f"{len(restanti)} da caricare, ne mando {quanti} (tetto TikTok: {tetto}/24h)\n")
+
+    fatti = 0
+    for v in restanti[:quanti]:
+        try:
+            pid = tiktok.carica_bozza(v, token=token)
+            gia.add(v.name)
+            fatti += 1
+            print(f"  ✓ {v.name}  ({v.stat().st_size // 1024 // 1024} MB) → {pid}")
+        except tiktok.LimiteRaggiunto as exc:
+            # Non e' un guasto: e' il ritmo previsto. Si smette e basta.
+            print(f"  · tetto giornaliero raggiunto, riprovo domani ({exc})")
+            break
+        except Exception as exc:
+            print(f"  ✗ {v.name}: {str(exc)[:120]}")
+            if allarme.critico(exc):
+                allarme.segnala("TikTok", exc)
+
+    registro.write_text(_json.dumps(sorted(gia), indent=1))
+    print(f"\n{fatti} bozze inviate. Aprile dall'app TikTok e pubblicale.")
+    if len(restanti) - fatti > 0:
+        print(f"{len(restanti) - fatti} restano in coda per i prossimi giorni.")
+    return 0
 
 
 def cmd_reels(args: argparse.Namespace) -> int:
@@ -2119,6 +2188,12 @@ def main() -> int:
     p.add_argument("--salva", action="store_true",
                    help="salva su GitHub il registro dei consumi aggiornato")
     p.set_defaults(func=cmd_tiktok)
+
+    p = sub.add_parser("ttcarica",
+                       help="manda i video preparati nell'inbox TikTok come bozze")
+    p.add_argument("--quanti", type=int, default=0,
+                   help="quante bozze inviare (default e massimo: 5, tetto di TikTok)")
+    p.set_defaults(func=cmd_ttcarica)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)
