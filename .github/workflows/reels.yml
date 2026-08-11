@@ -88,12 +88,23 @@ jobs:
             if git push; then echo "stato salvato"; exit 0; fi
             echo "push respinto, tentativo $i"
             git fetch origin main
-            git rebase origin/main -X ours || {
-              git rebase --abort
-              git reset --soft origin/main
-              git add data/engine.db data/footage_usate.json
-              git commit -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
-            }
+            # NON si rebasa. `git rebase -X ours` sembra dire "vince la nostra
+            # versione", ma durante un rebase "ours" è il ramo su cui si
+            # rebasa — cioè il remoto: risolveva i conflitti buttando via
+            # proprio il database appena scritto, in silenzio e senza errore.
+            # È già costato una pubblicazione non registrata.
+            #
+            # Qui invece: l'indice torna al remoto (così le modifiche al
+            # codice arrivate nel frattempo restano), i file di questo runner
+            # non si toccano, e si ristagna solo lo stato. Il commit che ne
+            # esce è il remoto più il nostro database, che è l'unico ad aver
+            # registrato le pubblicazioni appena fatte.
+            git reset -q origin/main
+            git add data/engine.db data/footage_usate.json
+            if git diff --staged --quiet; then
+              echo "nulla da salvare"; exit 0
+            fi
+            git commit -q -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
             sleep 5
           done
           echo "::error::stato NON salvato: rischio di ripubblicazione"
