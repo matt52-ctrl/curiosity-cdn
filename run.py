@@ -264,48 +264,112 @@ def _live_checks() -> None:
     print(f"  · motore testo    provider={provider} model={cfg.get('pipeline.model')}")
 
 
+def _contenuti_da_sorvegliare(conn, ore: float) -> list:
+    """Tutto ciò che è uscito di recente, su qualunque piattaforma.
+
+    Prima guardava solo i caroselli. Ma i reel sono l'unica cosa che finora ha
+    raccolto visualizzazioni, e i loro commenti non venivano letti da nessuno:
+    il pezzo del sistema che serviva di più era spento.
+    """
+    limite = time.time() - ore * 3600
+    fuori = []
+
+    for p in conn.execute(
+        """SELECT id, fact_id, ig_media_id, published_at FROM posts
+           WHERE status='published' AND ig_media_id IS NOT NULL"""
+    ).fetchall():
+        if (p["published_at"] or 0) >= limite:
+            fuori.append({"riga_id": p["id"], "fact_id": p["fact_id"],
+                          "media": p["ig_media_id"], "platform": "instagram",
+                          "source": "post", "etichetta": f"post #{p['id']}"})
+
+    for r in conn.execute(
+        """SELECT id, fact_id, line, caption, ig_media_id, youtube_id, published_at
+           FROM reels WHERE status='published'"""
+    ).fetchall():
+        if (r["published_at"] or 0) < limite:
+            continue
+        base = {"riga_id": r["id"], "fact_id": r["fact_id"],
+                "testo_hook": r["line"], "testo_fatto": r["caption"]}
+        if r["ig_media_id"]:
+            fuori.append({**base, "media": r["ig_media_id"],
+                          "platform": "instagram", "source": "reel",
+                          "etichetta": f"reel #{r['id']}"})
+        if r["youtube_id"]:
+            fuori.append({**base, "media": r["youtube_id"],
+                          "platform": "youtube", "source": "reel",
+                          "etichetta": f"YouTube #{r['id']}"})
+
+    return fuori
+
+
 def cmd_comments(args: argparse.Namespace) -> int:
-    """Legge i commenti sui post pubblicati, redige le risposte, le manda in
-    approvazione. Rispondere entro la prima ora è il segnale più forte dopo i
-    salvataggi — per questo va nello scheduler con cadenza ravvicinata."""
+    """Legge i commenti su ciò che è uscito di recente, redige le risposte e le
+    manda — o le mette in approvazione, secondo `comments.require_approval`.
+
+    Rispondere entro la prima ora è il segnale più forte dopo i salvataggi: per
+    questo gira in coda a ogni ciclo di pubblicazione, non in un suo orario.
+    """
     from engine import comments as cm
-    from engine.db import published_posts
 
     conn = connect()
     cm.ensure_schema(conn)
 
-    posts = published_posts(conn)
-    if not posts:
-        print("Nessun post pubblicato: non ci sono commenti da leggere.")
+    ore = float(cfg.get("comments.window_hours", 48))
+    contenuti = _contenuti_da_sorvegliare(conn, ore)
+    if not contenuti:
+        print(f"Niente uscito nelle ultime {ore:.0f} ore: nessun commento da leggere.")
         return 0
-
-    # Solo i post recenti: sui vecchi i commenti arrivano col contagocce e
-    # interrogarli tutti brucia il rate limit per niente.
-    horizon = time.time() - float(cfg.get("comments.window_hours", 48)) * 3600
-    recent = [p for p in posts if (p["published_at"] or 0) >= horizon]
-    print(f"→ {len(recent)} post nella finestra, su {len(posts)} pubblicati")
+    print(f"→ {len(contenuti)} contenuti nella finestra di {ore:.0f} ore")
 
     nuovi = 0
     risposte = 0
     max_replies = int(cfg.get("comments.max_replies_per_run", 6))
+    # Il permesso YouTube può mancare (token rilasciato prima che questa parte
+    # esistesse). Si segnala una volta e si smette di provarci, invece di
+    # ripetere lo stesso errore per ogni video.
+    yt_spento = ""
 
-    for post in recent:
-        fact = conn.execute(
-            "SELECT hook, fact FROM facts WHERE id=?", (post["fact_id"],)
-        ).fetchone()
+    for c in contenuti:
+        if c["platform"] == "youtube" and yt_spento:
+            continue
 
-        for c in cm.fetch_comments(post["ig_media_id"]):
-            if cm.already_seen(conn, c["id"]):
+        # I reel portano il proprio testo; i caroselli lo prendono dal fatto.
+        gancio = c.get("testo_hook") or ""
+        fatto = c.get("testo_fatto") or ""
+        if not gancio and c.get("fact_id"):
+            f = conn.execute("SELECT hook, fact FROM facts WHERE id=?",
+                             (c["fact_id"],)).fetchone()
+            if f:
+                gancio, fatto = f["hook"], f["fact"]
+
+        try:
+            if c["platform"] == "youtube":
+                from engine.publish import youtube as yt
+                trovati = yt.leggi_commenti(c["media"])
+            else:
+                trovati = cm.fetch_comments(c["media"])
+        except Exception as exc:
+            if c["platform"] == "youtube":
+                yt_spento = str(exc)
+                print(f"  · commenti YouTube saltati: {exc}")
+            else:
+                print(f"  · {c['etichetta']}: {exc}")
+            continue
+
+        for com in trovati:
+            if cm.already_seen(conn, com["id"]):
+                continue
+            # Su YouTube sappiamo già se al commento è stato risposto: se ha
+            # risposte, quasi sempre è la nostra di un giro precedente andata
+            # persa prima di essere registrata.
+            if com.get("reply_count"):
                 continue
             try:
                 verdict = cm.draft_reply(
-                    c.get("text", ""),
-                    fact["hook"],
-                    fact["fact"],
+                    com.get("text", ""), gancio, fatto,
                     recent_replies=cm.recent_replies(conn),
-                    commenter_history=cm.commenter_history(
-                        conn, c.get("username", "")
-                    ),
+                    commenter_history=cm.commenter_history(conn, com.get("username", "")),
                 )
             except Exception as exc:
                 print(f"  ✗ analisi fallita: {exc}")
@@ -314,21 +378,20 @@ def cmd_comments(args: argparse.Namespace) -> int:
             # Tetto alle risposte: un account che risponde a tutti, sempre, è
             # riconoscibile quanto uno che risponde male. Le correzioni non
             # rientrano nel tetto — quelle vanno sempre gestite.
-            if (
-                verdict["should_reply"]
-                and verdict["category"] != "correction"
-                and risposte >= max_replies
-            ):
+            if (verdict["should_reply"] and verdict["category"] != "correction"
+                    and risposte >= max_replies):
                 verdict["should_reply"] = False
                 verdict["reason"] = "tetto risposte per giro raggiunto"
             if verdict["should_reply"]:
                 risposte += 1
 
-            cm.record(conn, c, post["id"], verdict)
+            cm.record(conn, com, c["riga_id"], verdict,
+                      platform=c["platform"], source=c["source"])
             nuovi += 1
             flag = "!" if verdict["needs_human"] else " "
-            action = "→ rispondere" if verdict["should_reply"] else "  ignorare"
-            print(f"  {flag} [{verdict['category']:10}] {action}  @{c.get('username','?')}: {c.get('text','')[:46]}")
+            azione = "→ rispondere" if verdict["should_reply"] else "  ignorare"
+            print(f"  {flag} [{verdict['category']:10}] {azione}  "
+                  f"{c['etichetta']} @{com.get('username','?')}: {com.get('text','')[:40]}")
 
     print(f"\n{nuovi} commenti nuovi")
 
@@ -340,7 +403,8 @@ def cmd_comments(args: argparse.Namespace) -> int:
         if review.enabled():
             for row in da_inviare:
                 review.notify(
-                    f"💬 <b>@{row['username']}</b> ({row['category']})\n"
+                    f"💬 <b>@{row['username']}</b> ({row['category']}) "
+                    f"su {row['platform']}\n"
                     f"<i>{row['text'][:200]}</i>\n\n"
                     f"Risposta proposta:\n{row['draft']}\n\n"
                     f"<code>/reply {row['id']}</code> per inviarla · "
@@ -348,19 +412,27 @@ def cmd_comments(args: argparse.Namespace) -> int:
                 )
             print(f"{len(da_inviare)} risposte inviate su Telegram per approvazione")
         else:
-            print(f"\n{len(da_inviare)} risposte in attesa (Telegram non configurato):")
+            # Senza Telegram l'approvazione non ha chi la dia: le risposte
+            # resterebbero in coda per sempre. Meglio dirlo che accumularle.
+            print(f"\n⚠ {len(da_inviare)} risposte in attesa, ma non c'è nessuno che possa")
+            print("  approvarle: comments.require_approval è true e Telegram non è")
+            print("  configurato. Metti require_approval: false, o configura Telegram.")
             for row in da_inviare:
-                print(f"  @{row['username']}: {row['text'][:60]}")
+                print(f"  @{row['username']}: {row['text'][:56]}")
                 print(f"    → {row['draft']}")
     else:
-        # Pieno automatico: le correzioni restano comunque all'umano.
+        # Pieno automatico: le correzioni restano comunque fuori. Se qualcuno
+        # segnala un errore vero, una risposta automatica che difende il post
+        # fa più danno di dieci risposte mancate.
         for row in da_inviare:
             if row["needs_human"]:
+                cm.mark(conn, row["id"], "skipped")
+                print(f"  · @{row['username']}: lasciato all'umano ({row['category']})")
                 continue
             try:
-                cm.post_reply(row["id"], row["draft"])
+                cm.invia_risposta(row, row["draft"])
                 cm.mark(conn, row["id"], "replied")
-                print(f"  ✓ risposto a @{row['username']}")
+                print(f"  ✓ risposto a @{row['username']} su {row['platform']}")
             except Exception as exc:
                 print(f"  ✗ @{row['username']}: {exc}")
 

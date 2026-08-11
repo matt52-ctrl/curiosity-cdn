@@ -246,10 +246,17 @@ publish:
 # Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
 # ogni risposta riporta la persona sul post.
 comments:
-  # Le risposte passano da Telegram prima di uscire. Una risposta automatica
-  # sbagliata resta pubblica sotto al tuo post per sempre — e su una pagina che
-  # si presenta come "fatti verificati" costa più di dieci risposte mancate.
-  require_approval: true
+  # true = le risposte passano da Telegram prima di uscire.
+  # false = escono da sole, TRANNE quelle che il modello marca come da leggere
+  #         a un umano: correzioni, cose mediche, confidenze personali. Quelle
+  #         restano senza risposta, che è l'esito giusto — se qualcuno segnala
+  #         un errore vero, una risposta automatica che difende il post fa più
+  #         danno di dieci risposte mancate.
+  #
+  # Sta su false perché non c'è nessuno in ascolto: Telegram non è configurato,
+  # e con true le risposte si accumulavano in coda senza che nessuno potesse
+  # approvarle. Meglio rispondere alle domande facili e tacere sul resto.
+  require_approval: false
   # Quanto indietro guardare. Sui post più vecchi i commenti arrivano col
   # contagocce e interrogarli brucia il rate limit per niente.
   window_hours: 48

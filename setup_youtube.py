@@ -27,7 +27,16 @@ from engine.config import DATA_DIR, env
 
 PORTA = 8723
 REDIRECT = f"http://localhost:{PORTA}"
-SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+# Due permessi, non uno:
+#   youtube.upload    caricare i video — il minimo per pubblicare
+#   youtube.force-ssl leggere e scrivere i commenti sotto ai propri video
+# Il secondo è ampio (copre tutta la gestione del canale) ma è l'unico che
+# Google offre per rispondere ai commenti: non esiste un permesso "solo
+# commenti". Senza, il ciclo pubblica lo stesso e salta le risposte.
+SCOPE = " ".join([
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+])
 TOKEN_FILE = DATA_DIR / "youtube_token.json"
 
 _codice = {"valore": None}

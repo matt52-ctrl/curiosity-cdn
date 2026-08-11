@@ -222,3 +222,87 @@ def publish(
 
 def quota_note() -> str:
     return "6 caricamenti al giorno (10.000 unità, 1.600 a video)"
+
+
+# ─── Commenti ─────────────────────────────────────────────────────────────────
+# Servono il permesso `youtube.force-ssl`, che è più ampio del solo
+# caricamento. Chi ha autorizzato prima che questa parte esistesse ha un token
+# senza quel permesso: le chiamate qui sotto falliscono con 403 e il ciclo
+# tira dritto. Si sistema rilanciando una volta `python3 setup_youtube.py`.
+
+API = "https://www.googleapis.com/youtube/v3"
+
+
+class PermessoMancante(YouTubeError):
+    """Il token c'è ma non copre i commenti — non è un guasto, è un setup vecchio."""
+
+
+def _intestazioni() -> Dict:
+    return {"Authorization": f"Bearer {access_token()}"}
+
+
+def leggi_commenti(video_id: str, limite: int = 25) -> list:
+    """Commenti di primo livello sotto un video, nella forma usata da engine.comments.
+
+    Si normalizzano i campi ai nomi di Instagram (`id`, `text`, `username`)
+    perché la parte che redige le risposte non deve sapere da quale
+    piattaforma arriva il commento: la voce e le regole sono le stesse.
+    """
+    try:
+        r = httpx.get(
+            f"{API}/commentThreads",
+            params={"part": "snippet", "videoId": video_id,
+                    "maxResults": min(limite, 100), "order": "time",
+                    "textFormat": "plainText"},
+            headers=_intestazioni(), timeout=40,
+        )
+    except YouTubeError:
+        raise
+    except Exception as exc:
+        print(f"    lettura commenti YouTube fallita: {exc}")
+        return []
+
+    if r.status_code == 403:
+        testo = r.text[:200]
+        if "insufficient" in testo.lower() or "Scope" in testo:
+            raise PermessoMancante(
+                "il token YouTube non copre i commenti (manca youtube.force-ssl). "
+                "Rilancia una volta:  python3 setup_youtube.py"
+            )
+        # I commenti disattivati sul video non sono un errore da segnalare.
+        return []
+    if r.status_code >= 400:
+        print(f"    lettura commenti YouTube: {r.status_code} {r.text[:120]}")
+        return []
+
+    fuori = []
+    for t in r.json().get("items", []):
+        c = t["snippet"]["topLevelComment"]
+        s = c["snippet"]
+        fuori.append({
+            "id": c["id"],
+            "text": s.get("textOriginal", ""),
+            "username": s.get("authorDisplayName", ""),
+            "timestamp": s.get("publishedAt", ""),
+            # Serve a non rispondere due volte: YouTube dice già quante
+            # risposte ha il thread, Instagram va interrogato a parte.
+            "reply_count": t["snippet"].get("totalReplyCount", 0),
+        })
+    return fuori
+
+
+def rispondi_commento(comment_id: str, testo: str) -> Optional[str]:
+    r = httpx.post(
+        f"{API}/comments",
+        params={"part": "snippet"},
+        json={"snippet": {"parentId": comment_id, "textOriginal": testo[:9000]}},
+        headers=_intestazioni(), timeout=40,
+    )
+    if r.status_code == 403:
+        raise PermessoMancante(
+            "il token YouTube non permette di rispondere (manca youtube.force-ssl). "
+            "Rilancia una volta:  python3 setup_youtube.py"
+        )
+    if r.status_code >= 400:
+        raise YouTubeError(f"risposta rifiutata: {r.status_code} {r.text[:200]}")
+    return r.json().get("id")

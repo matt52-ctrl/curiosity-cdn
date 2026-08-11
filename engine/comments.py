@@ -250,7 +250,7 @@ def post_reply(comment_id: str, message: str) -> Optional[str]:
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS comments (
-    id            TEXT PRIMARY KEY,      -- id del commento su Instagram
+    id            TEXT PRIMARY KEY,      -- id del commento sulla piattaforma
     post_id       INTEGER,
     username      TEXT,
     text          TEXT,
@@ -262,17 +262,33 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 """
 
+# La tabella nasce quando c'era solo Instagram e solo i caroselli. Le colonne
+# aggiunte dicono da dove arriva il commento: senza, una risposta destinata a
+# YouTube verrebbe mandata all'API di Instagram, che restituirebbe un id
+# sconosciuto e la risposta andrebbe persa.
+MIGRAZIONI = [
+    "ALTER TABLE comments ADD COLUMN platform TEXT NOT NULL DEFAULT 'instagram'",
+    "ALTER TABLE comments ADD COLUMN source TEXT NOT NULL DEFAULT 'post'",
+]
+
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    for m in MIGRAZIONI:
+        try:
+            conn.execute(m)
+        except sqlite3.OperationalError:
+            pass          # già applicata
     conn.commit()
 
 
-def record(conn: sqlite3.Connection, comment: Dict, post_id: int, verdict: Dict) -> None:
+def record(conn: sqlite3.Connection, comment: Dict, post_id: int, verdict: Dict,
+           platform: str = "instagram", source: str = "post") -> None:
     conn.execute(
         """INSERT OR IGNORE INTO comments
-           (id, post_id, username, text, seen_at, category, draft, needs_human, status)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           (id, post_id, username, text, seen_at, category, draft, needs_human,
+            status, platform, source)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (
             comment["id"],
             post_id,
@@ -283,9 +299,19 @@ def record(conn: sqlite3.Connection, comment: Dict, post_id: int, verdict: Dict)
             verdict["reply"],
             1 if verdict["needs_human"] else 0,
             "pending" if verdict["should_reply"] else "skipped",
+            platform,
+            source,
         ),
     )
     conn.commit()
+
+
+def invia_risposta(riga, testo: str) -> Optional[str]:
+    """Manda la risposta all'API giusta in base a dove sta il commento."""
+    if riga["platform"] == "youtube":
+        from .publish.youtube import rispondi_commento
+        return rispondi_commento(riga["id"], testo)
+    return post_reply(riga["id"], testo)
 
 
 def already_seen(conn: sqlite3.Connection, comment_id: str) -> bool:
