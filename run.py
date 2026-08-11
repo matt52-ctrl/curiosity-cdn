@@ -480,7 +480,18 @@ def cmd_reels(args: argparse.Namespace) -> int:
         if tags:
             caption = f"{caption}\n\n" + " ".join("#" + t for t in tags)
 
-        media_id = instagram.publish_reel(url, caption)
+        # Copertina esplicita, se il montaggio l'ha estratta. Senza, Instagram
+        # sceglie un fotogramma a caso e nel feed il reel appare come una clip
+        # di stock senza testo.
+        cover_url = ""
+        cover = Path(r["video_path"]).parent / "cover.jpg"
+        if cover.exists():
+            try:
+                cover_url = upload([cover], prefix=f"reel-{r['id']}-cover")[0]
+            except Exception as exc:
+                print(f"  ⚠ copertina non caricata: {exc}")
+
+        media_id = instagram.publish_reel(url, caption, cover_url=cover_url)
         mark_reel_published(conn, r["id"], media_id)
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
     except Exception as exc:

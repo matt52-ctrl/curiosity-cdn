@@ -268,7 +268,7 @@ def build_line(
         stacco = float(cfg.get("reel.reveal_at", 3.4))
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.45:alpha=1,"
+            f"[1:v]format=rgba,"
             f"fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
             f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
             f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[b];"
@@ -278,7 +278,7 @@ def build_line(
     else:
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.5:alpha=1,"
+            f"[1:v]format=rgba,"
             f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[txt];"
             f"[bg][txt]overlay=0:0:format=auto[v]"
         )
@@ -305,6 +305,21 @@ def build_line(
         str(out),
     ]
     _run(args)
+
+    # Copertina esplicita. Senza, Instagram sceglie da sé un fotogramma e
+    # spesso pesca prima che il testo compaia: nel feed e nella griglia il
+    # reel appare come una clip di stock qualunque, senza motivo per fermarsi.
+    # Il secondo scelto è dopo la dissolvenza d'ingresso e prima della
+    # rivelazione, quindi mostra l'aggancio per intero.
+    copertina = out.parent / "cover.jpg"
+    try:
+        _run([
+            ff, "-y", "-ss", "1.2", "-i", str(out),
+            "-frames:v", "1", "-q:v", "3", str(copertina),
+        ])
+    except Exception as exc:
+        print(f"    copertina non estratta: {exc}")
+
     return out
 
 
