@@ -991,6 +991,17 @@ def _publish_one(conn, post) -> bool:
                 print(f"  ⚠ TikTok saltato: {exc}")
 
         mark_published(conn, post_id, ig_media_id, tiktok_id)
+
+        # I file sul CDN hanno esaurito il loro scopo: Instagram li ha gia'
+        # scaricati. Tenerli fa crescere il repo di ~6 MB a carosello.
+        try:
+            from engine.hosting import elimina
+            n = elimina([str(post_id)])
+            if n:
+                print(f"  · {n} file rimossi dal CDN")
+        except Exception:
+            pass
+
         return True
 
     except Exception as exc:
@@ -1166,7 +1177,26 @@ def cmd_cycle(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"commenti saltati: {exc}")
 
-    # 6. Aggiorna le metriche.
+    # 6. Scadenza del token Meta. Quando scade tutto si ferma senza errori
+    #    visibili: il ciclo continua a girare e a risultare verde, ma nessuna
+    #    pubblicazione va a buon fine. E' il guasto piu' insidioso del sistema,
+    #    quindi va annunciato con settimane di anticipo.
+    try:
+        giorni = instagram.token_days_left()
+        if giorni is not None and giorni <= 14:
+            msg = (
+                f"Il token Instagram scade fra {giorni} giorni. "
+                f"Quando scade la pagina smette di pubblicare senza segnalare "
+                f"nulla. Rigeneralo dal Graph API Explorer e aggiorna il "
+                f"secret IG_ACCESS_TOKEN su GitHub."
+            )
+            print(f"\n⚠️  {msg}")
+            problems.append(msg)
+            review.notify(f"⚠️ {msg}")
+    except Exception:
+        pass
+
+    # 7. Aggiorna le metriche.
     try:
         analytics.collect(conn)
     except Exception as exc:

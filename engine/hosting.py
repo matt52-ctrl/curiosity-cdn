@@ -96,3 +96,47 @@ def upload(paths: List[Path], prefix: str) -> List[str]:
     if backend == "local":
         return [p.as_uri() for p in paths]
     raise ValueError(f"IMAGE_HOST_BACKEND sconosciuto: {backend}")
+
+
+def elimina(prefissi: List[str]) -> int:
+    """Rimuove dal CDN i file gia' serviti a Instagram.
+
+    Sicuro: Instagram scarica il media UNA VOLTA, quando si crea il contenitore.
+    Dopo la pubblicazione l'URL non viene piu' interrogato, quindi tenere i file
+    non serve a nulla e il repo cresce di ~21 MB al giorno — circa 2 GB in tre
+    mesi, oltre la soglia di avviso di GitHub.
+
+    ⚠️ Questo libera la copia di lavoro, non la storia di git: i file restano
+    nei commit passati. Per recuperare davvero lo spazio serve periodicamente
+    un ramo orfano che riparta da zero.
+    """
+    backend = env("IMAGE_HOST_BACKEND", "github").lower()
+    if backend != "github":
+        return 0
+
+    token = env("GITHUB_TOKEN")
+    repo = env("GITHUB_REPO")
+    if not token or not repo:
+        return 0
+
+    tolti = 0
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    with httpx.Client(timeout=60) as client:
+        for prefisso in prefissi:
+            r = client.get(
+                f"https://api.github.com/repos/{repo}/contents/posts/{prefisso}",
+                headers=headers,
+            )
+            if r.status_code != 200:
+                continue
+            for f in r.json():
+                if f.get("type") != "file":
+                    continue
+                d = client.delete(
+                    f"https://api.github.com/repos/{repo}/contents/{f['path']}",
+                    headers=headers,
+                    json={"message": f"prune {f['path']}", "sha": f["sha"]},
+                )
+                if d.status_code < 300:
+                    tolti += 1
+    return tolti

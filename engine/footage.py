@@ -120,9 +120,14 @@ def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
 
 def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
     """Cerca una clip verticale. None se nessuna fonte ha nulla di nuovo."""
+    usate = _usate() if evita_usate else {}
+
     key = env("PEXELS_API_KEY")
     if not key:
-        return None
+        # Senza chiave Pexels si passa direttamente all'altro archivio.
+        # Prima si usciva qui restituendo None, rendendo irraggiungibile il
+        # ripiego proprio nel caso in cui serve di piu'.
+        return _cerca_pixabay(query, usate)
     try:
         r = httpx.get(
             "https://api.pexels.com/videos/search",
@@ -141,7 +146,6 @@ def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
         print(f"    Pexels non risponde: {exc}")
         video = []
 
-    usate = _usate() if evita_usate else {}
     for v in video:
         if str(v["id"]) in usate:
             continue
