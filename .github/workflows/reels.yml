@@ -83,11 +83,13 @@ jobs:
 
       # I commenti girano in coda alla pubblicazione, non in un workflow loro:
       # rispondere entro la prima ora è ciò che conta, e la prima ora è questa.
-      # `continue-on-error` perché una risposta mancata non deve far risultare
-      # fallito un contenuto già uscito.
-      # Senza `continue-on-error`: se il comando esce con errore è perché ha
-      # incontrato qualcosa che non si risolve da sé (permesso, token, quota),
-      # e la mail di GitHub sul workflow fallito è l'unico modo di saperlo.
+      #
+      # Niente `continue-on-error`, di proposito. Il comando esce già a zero
+      # sui casi previsti — permesso mancante, nessun commento nuovo, quota —
+      # quindi se esce in errore ha incontrato qualcosa che non si risolve da
+      # sé, e la mail di GitHub sul workflow fallito è l'unico modo di
+      # accorgersene. Lo stato viene salvato comunque: il passo dopo è
+      # `if: always()`, quindi un rosso qui non perde una pubblicazione.
       - name: Rispondi ai commenti
         if: always()
         env:
@@ -108,11 +110,6 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python run.py comments
-        # Un problema qui non deve far risultare fallito un giro che ha
-        # pubblicato correttamente: rispondere ai commenti e' un di piu',
-        # pubblicare e' il lavoro. Senza questo, un singolo errore sulle
-        # risposte manderebbe una mail di fallimento per un ciclo riuscito.
-        continue-on-error: true
 
       - name: Salva lo stato
         if: always()
