@@ -23,3 +23,8 @@ data/footage/
 # Musica: la riscarica setup_music.py, che il workflow dei reel esegue a ogni
 # giro. Versionarla aggiungerebbe 40 MB al repo senza alcun vantaggio.
 assets/music/
+
+# Refresh token di YouTube: e' una credenziale, non uno stato.
+# Versionarlo permetterebbe a chiunque legga il repo di caricare video sul
+# canale. GitHub blocca il push se ci finisce dentro — giustamente.
+data/youtube_token.json

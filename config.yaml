@@ -223,9 +223,9 @@ publish:
   instagram:
     enabled: true
   youtube:
-    # Attiva dopo aver ottenuto il refresh token con setup_youtube.py.
+    # Verificato con un caricamento reale l'11 agosto 2026.
     # Quota: 6 caricamenti al giorno — ai 3 reel attuali sta larga.
-    enabled: false
+    enabled: true
 
   tiktok:
     enabled: false                # attiva dopo l'audit — vedi README

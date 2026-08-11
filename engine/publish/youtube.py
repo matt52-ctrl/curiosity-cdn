@@ -120,6 +120,7 @@ def publish(
     title: str,
     description: str,
     tags: Optional[list] = None,
+    privacy: str = "public",
 ) -> str:
     """Carica un video come Short pubblico. Restituisce l'id del video."""
     if not video.exists():
@@ -139,7 +140,9 @@ def publish(
             "categoryId": "22",
         },
         "status": {
-            "privacyStatus": "public",
+            # `private` serve alle prove: permette di verificare che l'intera
+            # catena funzioni senza mettere nulla davanti al pubblico.
+            "privacyStatus": privacy,
             "selfDeclaredMadeForKids": False,
         },
     }
