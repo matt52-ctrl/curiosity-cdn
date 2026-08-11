@@ -12,6 +12,7 @@ Il resto del progetto non sa quale dei due sta usando: entrambi passano da
 from __future__ import annotations
 
 import json
+import time
 import re
 from typing import Any, Dict, List, Optional
 
@@ -133,6 +134,69 @@ def _gemini_schema(node: Any) -> Any:
     return node
 
 
+# Errori che passano da soli: il modello e' sovraccarico o c'e' stato un
+# singhiozzo di rete. Prima non erano distinti da quelli veri, e un 503 di
+# trenta secondi buttava giu' l'intero ciclo — un lotto da undici video morto
+# sul primo perche' Google aveva un picco di richieste.
+PASSEGGERI = {500, 502, 503, 504}
+
+# Attese crescenti. La prima e' corta perche' la maggior parte dei 503 dura
+# pochi secondi; le ultime sono lunghe perche' se dopo un minuto ancora non
+# risponde, insistere ogni due secondi non aiuta e consuma soltanto.
+ATTESE = [3, 8, 20, 45]
+
+
+def _chiedi_con_ritenta(key: str, body: Dict[str, Any]) -> "httpx.Response":
+    """Interroga Gemini ritentando sugli errori passeggeri.
+
+    Il 429 e' un caso a parte: puo' voler dire "troppe richieste al minuto"
+    (passa da solo) oppure "quota giornaliera finita" (non passa fino a
+    domani). Non essendo distinguibili dal codice, si ritenta una volta sola
+    con un'attesa lunga: se era il primo caso si risolve, se era il secondo si
+    sono persi trenta secondi invece di un ciclo intero.
+    """
+    ultimo = None
+    for tentativo, attesa in enumerate([*ATTESE, None]):
+        try:
+            with httpx.Client(timeout=300) as client:
+                resp = client.post(
+                    f"{GEMINI_URL}/{MODEL}:generateContent",
+                    headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                    json=body,
+                )
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            ultimo = f"rete: {exc}"
+            resp = None
+        else:
+            if resp.status_code < 400:
+                return resp
+            if resp.status_code == 429 and tentativo >= 1:
+                raise RuntimeError(
+                    "Quota Gemini esaurita. Il free tier ha limiti giornalieri: "
+                    "riprova più tardi, oppure passa a un modello più leggero "
+                    "(pipeline.model: gemini-3.1-flash-lite)."
+                )
+            if resp.status_code not in PASSEGGERI and resp.status_code != 429:
+                raise RuntimeError(f"Gemini {resp.status_code}: {resp.text[:300]}")
+            ultimo = f"{resp.status_code}"
+
+        if attesa is None:
+            break
+        # Il 429 aspetta piu' a lungo: se e' un limite al minuto, tre secondi
+        # non bastano a farlo scadere.
+        pausa = 35 if (resp is not None and resp.status_code == 429) else attesa
+        print(f"    Gemini {ultimo}, riprovo fra {pausa}s "
+              f"(tentativo {tentativo + 1}/{len(ATTESE)})")
+        time.sleep(pausa)
+
+    raise RuntimeError(
+        f"Gemini non risponde dopo {len(ATTESE)} tentativi (ultimo: {ultimo}). "
+        f"Se persiste, cambia pipeline.model in config.yaml: ogni modello ha "
+        f"la sua quota indipendente."
+    )
+
+
+
 def _gemini_ask_json(
     system: str,
     user: str,
@@ -173,21 +237,7 @@ def _gemini_ask_json(
         body["generationConfig"]["responseMimeType"] = "application/json"
         body["generationConfig"]["responseSchema"] = _gemini_schema(schema)
 
-    with httpx.Client(timeout=300) as client:
-        resp = client.post(
-            f"{GEMINI_URL}/{MODEL}:generateContent",
-            headers={"x-goog-api-key": key, "Content-Type": "application/json"},
-            json=body,
-        )
-
-    if resp.status_code == 429:
-        raise RuntimeError(
-            "Quota Gemini esaurita. Il free tier ha limiti giornalieri: "
-            "riprova più tardi, oppure passa a un modello più leggero "
-            "(pipeline.model: gemini-3.1-flash-lite)."
-        )
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Gemini {resp.status_code}: {resp.text[:300]}")
+    resp = _chiedi_con_ritenta(key, body)
 
     data = resp.json()
     candidates = data.get("candidates") or []

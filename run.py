@@ -765,9 +765,22 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
     print(f"\npreparo {da_fare} video da {quante} curiosita' l'uno (~{durata:.0f}s)\n")
 
     lotto = []
+    falliti = 0
     for i in range(da_fare):
         print(f"[{i + 1}/{da_fare}]")
-        frasi = lines.generate(conn, quante, canale="tiktok")
+        # Ogni video e' indipendente dagli altri: se uno fallisce — modello
+        # sovraccarico, filmato non trovato, ffmpeg che inciampa — gli altri
+        # devono uscire lo stesso. Prima l'eccezione risaliva e il lotto
+        # moriva sul primo video, buttando via anche il lavoro gia' fatto.
+        try:
+            frasi = lines.generate(conn, quante, canale="tiktok")
+        except Exception as exc:
+            print(f"  ✗ scrittura fallita: {str(exc)[:90]}")
+            falliti += 1
+            if falliti >= 3:
+                print("  tre fallimenti di fila: mi fermo, c'e' qualcosa che non va")
+                break
+            continue
         frasi = [f for f in frasi if f.get("fact_id")][:quante]
         if len(frasi) < quante:
             print(f"  solo {len(frasi)} frasi utilizzabili: mi fermo qui")
@@ -777,10 +790,17 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
                  "_frase": f} for f in frasi]
         import hashlib as _h
         nome = "tt-" + _h.sha1(frasi[0]["line"].encode()).hexdigest()[:8]
-        video, montate = _reel.build_multi(voci, nome, totale=durata)
+        try:
+            video, montate = _reel.build_multi(voci, nome, totale=durata)
+        except Exception as exc:
+            print(f"  ✗ montaggio fallito: {str(exc)[:90]}")
+            falliti += 1
+            continue
         if not video:
             print("  montaggio fallito, salto")
+            falliti += 1
             continue
+        falliti = 0        # un successo azzera il contatore: conta la serie
 
         frasi = [v["_frase"] for v in montate]
         testi = tiktok.componi_didascalia(frasi)
@@ -802,9 +822,10 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
         return 1
 
     _scrivi_istruzioni(out, lotto)
+    _scrivi_pagina(out, lotto)
     print(f"\n{'─' * 62}")
     print(f"{len(lotto)} video pronti in  {out}")
-    print(f"Istruzioni e testi da incollare:  {out / 'DA-CARICARE.md'}")
+    print(f"Apri questa e clicca per copiare:  {out / 'carica.html'}")
     print(f"{'─' * 62}")
     print("\n⚠️  Il database e' cambiato: se non lo salvi su GitHub, il prossimo")
     print("    ciclo non sapra' che queste curiosita' sono gia' andate su TikTok.")
@@ -812,6 +833,89 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
     if args.salva:
         _salva_stato()
     return 0
+
+
+def _scrivi_pagina(out: Path, lotto: list) -> None:
+    """Una pagina con un pulsante «copia» per ogni didascalia.
+
+    Il foglio in markdown va bene per leggere, ma caricare undici video
+    significa undici selezioni col mouse dentro un blocco di testo, e sbagliare
+    la selezione una volta su tre. L'attrito e' la ragione per cui una routine
+    manuale viene abbandonata dopo la seconda settimana: qui si riduce a un
+    clic per campo.
+    """
+    import html as _h
+    import json as _j
+
+    righe = []
+    for i, v in enumerate(lotto, 1):
+        dentro = "".join(f"<li>{_h.escape(f['line'])}</li>" for f in v["frasi"])
+        righe.append(f"""
+        <article>
+          <h2>{i}. <code>{_h.escape(v['file'])}</code></h2>
+          <div class="campo">
+            <label>Didascalia</label>
+            <pre id="d{i}">{_h.escape(v['didascalia'])}</pre>
+            <button data-t="d{i}">copia didascalia</button>
+          </div>
+          <div class="campo">
+            <label>Commento da fissare — dopo la pubblicazione</label>
+            <pre id="c{i}">{_h.escape(v['commento'])}</pre>
+            <button data-t="c{i}">copia commento</button>
+          </div>
+          <details><summary>cosa c'è dentro</summary><ul>{dentro}</ul></details>
+        </article>""")
+
+    orari = _j.dumps(["01:00", "07:00", "13:00", "19:00"])
+    Path(out / "carica.html").write_text(f"""<!doctype html>
+<meta charset="utf-8"><title>Lotto TikTok</title>
+<style>
+ :root {{ color-scheme: light dark; }}
+ body {{ font: 16px/1.55 -apple-system, system-ui, sans-serif; max-width: 46rem;
+        margin: 2rem auto; padding: 0 1.2rem; }}
+ h1 {{ font-size: 1.5rem; margin-bottom: .2rem; }}
+ .guida {{ background: color-mix(in srgb, canvastext 6%, canvas);
+           padding: 1rem 1.2rem; border-radius: 10px; margin: 1.2rem 0 2rem; }}
+ .guida ol {{ margin: .4rem 0 0; padding-left: 1.2rem; }}
+ article {{ border-top: 1px solid color-mix(in srgb, canvastext 18%, canvas);
+            padding-top: 1.4rem; margin-top: 1.8rem; }}
+ h2 {{ font-size: 1.05rem; }}
+ code {{ font-size: .9em; opacity: .75; }}
+ .campo {{ margin: 1rem 0; }}
+ label {{ display: block; font-size: .78rem; text-transform: uppercase;
+          letter-spacing: .07em; opacity: .6; margin-bottom: .35rem; }}
+ pre {{ white-space: pre-wrap; background: color-mix(in srgb, canvastext 7%, canvas);
+        padding: .8rem 1rem; border-radius: 8px; margin: 0 0 .5rem; font-size: .93rem;
+        font-family: inherit; }}
+ button {{ font: inherit; font-size: .88rem; padding: .45rem 1rem; cursor: pointer;
+           border: 1px solid color-mix(in srgb, canvastext 30%, canvas);
+           border-radius: 7px; background: canvas; color: canvastext; }}
+ button:hover {{ background: color-mix(in srgb, canvastext 10%, canvas); }}
+ button.ok {{ background: #1a7f37; border-color: #1a7f37; color: #fff; }}
+ details {{ margin-top: .8rem; font-size: .9rem; opacity: .8; }}
+</style>
+<h1>Lotto TikTok — {len(lotto)} video</h1>
+<div class="guida">
+  <strong>tiktok.com dal computer → TikTok Studio → Upload</strong>
+  <ol>
+    <li>trascina il video</li>
+    <li>clicca «copia didascalia» qui sotto e incolla</li>
+    <li>premi <strong>Schedule</strong>, non Post</li>
+    <li>quando è uscito, fissa il commento</li>
+  </ol>
+  <p style="margin:.7rem 0 0">Orari ogni 6 ore: <strong>01:00 · 07:00 · 13:00 · 19:00</strong><br>
+  <small>L'una di notte sono le 19:00 a New York — è il turno più forte per l'inglese.</small></p>
+</div>
+{''.join(righe)}
+<script>
+document.querySelectorAll('button[data-t]').forEach(b => {{
+  b.onclick = async () => {{
+    await navigator.clipboard.writeText(document.getElementById(b.dataset.t).textContent);
+    const p = b.textContent; b.textContent = 'copiato'; b.classList.add('ok');
+    setTimeout(() => {{ b.textContent = p; b.classList.remove('ok'); }}, 1200);
+  }};
+}});
+</script>""", encoding="utf-8")
 
 
 def _scrivi_istruzioni(out: Path, lotto: list) -> None:
