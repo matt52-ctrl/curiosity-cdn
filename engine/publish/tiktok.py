@@ -105,3 +105,70 @@ def status(publish_id: str) -> Dict:
         )
     resp.raise_for_status()
     return resp.json()
+
+
+# ─── Preparazione dei lotti ───────────────────────────────────────────────────
+# Non si pubblica via API, e non è una rinuncia: l'API può solo depositare una
+# bozza nell'inbox dell'app, mentre il programmatore di TikTok vive in TikTok
+# Studio, sul desktop. Una bozza nell'inbox non si può passare a Studio — sono
+# due percorsi che non si toccano. Passando direttamente dai file si evitano
+# l'app sviluppatore, l'audit di 2-4 settimane e la verifica del dominio, e si
+# ottiene in cambio l'unica cosa che serve davvero: la programmazione.
+
+def componi_didascalia(frasi: list) -> Dict[str, str]:
+    """Didascalia, hashtag e commento da fissare, per un video del lotto.
+
+    La didascalia resta corta di proposito. Su TikTok viene troncata dopo poche
+    righe e il resto sta sotto un "altro" che quasi nessuno apre: metterci il
+    contesto significa scriverlo per nessuno. L'aggancio della prima curiosità
+    fa da titolo, il resto lo dice il video.
+    """
+    apertura = frasi[0]["hook"].rstrip(".").strip()
+
+    # Gli hashtag stanno in fondo e sono pochi. Venti hashtag generici erano
+    # una tattica di anni fa: oggi diluiscono il segnale su cui TikTok decide
+    # a chi mostrarti, ed è meglio essere classificati con precisione su tre
+    # temi che vagamente su venti.
+    tag = ["psychology", "humanbehavior", "psychologyfacts", "learnontiktok"]
+
+    def _chiave(h: str) -> str:
+        """Forma normalizzata per riconoscere lo stesso hashtag scritto in due modi.
+
+        Il caso vero, non teorico: le curiosita' sono scritte in inglese
+        britannico e gli hashtag fissi in americano, quindi #humanbehaviour e
+        #humanbehavior finivano entrambi nella stessa lista bruciando uno dei
+        cinque posti per dire due volte la stessa cosa.
+        """
+        return h.lower().replace("our", "or").rstrip("s")
+
+    propri = []
+    visti = {_chiave(x) for x in tag}
+    for f in frasi:
+        for h in (f.get("hashtags") or [])[:2]:
+            h = h.lstrip("#")
+            if _chiave(h) not in visti:
+                visti.add(_chiave(h))
+                propri.append(h)
+    scelti = (propri[:2] + tag)[:5]
+
+    return {
+        "didascalia": f"{apertura} — and three more things your mind does without asking.\n\n"
+                      + " ".join("#" + x for x in scelti),
+        # Il commento fissato è il ponte verso le altre due piattaforme. Sta
+        # nei commenti e non nella didascalia per due motivi: la didascalia
+        # viene troncata, e TikTok tratta con più sospetto ciò che spinge
+        # fuori dalla piattaforma quando sta nel corpo del post.
+        "commento": _ponte(),
+    }
+
+
+def _ponte() -> str:
+    """Il commento da fissare sotto al video: dove trovare il resto."""
+    ig = (cfg.get("brand.handle", "") or "").lstrip("@")
+    yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+    pezzi = ["One checked fact a day."]
+    if ig:
+        pezzi.append(f"Longer versions on Instagram: @{ig}")
+    if yt:
+        pezzi.append(f"Full ones on YouTube: @{yt}")
+    return "\n".join(pezzi)

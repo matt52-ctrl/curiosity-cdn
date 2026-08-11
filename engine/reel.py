@@ -26,6 +26,29 @@ from .config import OUTPUT_DIR, ROOT, cfg
 
 REEL_SIZE = (1080, 1920)
 
+def _gradazione() -> str:
+    """Filtro colore applicato a OGNI filmato di sfondo, prima del testo.
+
+    Le clip di stock arrivano da fonti diverse e non hanno niente in comune:
+    una notturna desaturata e una al neon rosa acceso finivano nello stesso
+    video una dopo l'altra, e la seconda non sembrava della stessa pagina.
+    Su un profilo il colore e' meta' del riconoscimento.
+
+    Perche' una curva e non `brightness`: abbassare la luminosita' di una
+    quantita' fissa spegne le clip gia' scure — misurato, una notturna passava
+    da 18 a 5 di luminosita' media, cioe' nero. La curva lascia i neri dove
+    sono e comprime solo le luci alte, che sono il vero problema: quelle
+    coprono il testo bianco e sfondano la palette.
+    """
+    sat = float(cfg.get("reel.grade_saturation", 0.45))
+    if sat >= 1.0 and not cfg.get("reel.grade_highlights", True):
+        return ""
+    pezzi = [f"eq=saturation={sat}"]
+    if cfg.get("reel.grade_highlights", True):
+        pezzi.append("curves=all='0/0 0.5/0.44 1/0.78'")
+    return ",".join(pezzi) + ","
+
+
 
 def _ffmpeg() -> str:
     exe = shutil.which("ffmpeg")
@@ -233,7 +256,7 @@ def build_line(
         args += ["-stream_loop", "-1", "-t", f"{dur}", "-i", str(background)]
         sfondo = (
             f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-            f"crop={w}:{h},format=yuv420p[bg]"
+            f"crop={w}:{h},{_gradazione()}format=yuv420p[bg]"
         )
     else:
         n = int(dur * 30)
@@ -241,7 +264,7 @@ def build_line(
         sfondo = (
             f"[0:v]scale={w*2}:{h*2},zoompan=z='min(zoom+0.0008,1.12)':d={n}"
             f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30,"
-            f"format=yuv420p[bg]"
+            f"{_gradazione()}format=yuv420p[bg]"
         )
 
     # `-loop 1` è indispensabile: senza, l'immagine del testo fornisce un solo
@@ -340,7 +363,9 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
     return compose(frames, out, music)
 
 
-def build_multi(voci: List[Dict], name: str) -> tuple:
+def build_multi(voci: List[Dict], name: str,
+                totale: Optional[float] = None,
+                massimo: Optional[float] = None) -> tuple:
     """Ritorna (percorso, voci_effettivamente_montate).
 
     Le due cose vanno insieme: se un filmato non si trova quel segmento salta,
@@ -374,8 +399,15 @@ def build_multi(voci: List[Dict], name: str) -> tuple:
     # Il limite superiore serve al caso opposto: con una curiosita' sola la
     # divisione darebbe trentatre' secondi di frase ferma, che e' peggio di
     # un video breve.
-    totale = float(cfg.get("reel.long_target_seconds", 33.0))
-    massimo = float(cfg.get("reel.long_max_seconds_per_fact", 16.0))
+    # La durata complessiva arriva da fuori perche' ogni piattaforma ha la
+    # sua finestra: YouTube premia i 30-45 secondi, TikTok i 42-54 sui
+    # contenuti che spiegano qualcosa. Un valore fisso andrebbe bene su una e
+    # male sull'altra — lo stesso errore che avevamo fatto con i 9 secondi di
+    # Instagram mandati su YouTube.
+    totale = float(totale if totale is not None
+                   else cfg.get("reel.long_target_seconds", 33.0))
+    massimo = float(massimo if massimo is not None
+                    else cfg.get("reel.long_max_seconds_per_fact", 16.0))
     per_voce = min(massimo, totale / max(1, len(voci)))
     stacco = per_voce * 0.4          # quando l'aggancio lascia il posto
     print(f"    {len(voci)} curiosita' x {per_voce:.1f}s = {per_voce*len(voci):.0f}s")
@@ -407,7 +439,7 @@ def build_multi(voci: List[Dict], name: str) -> tuple:
         seg = tmp / f"{i:02d}.mp4"
         filtro = (
             f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-            f"crop={w}:{h},format=yuv420p[bg];"
+            f"crop={w}:{h},{_gradazione()}format=yuv420p[bg];"
             f"[1:v]format=rgba,fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
             f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
             f"fade=t=out:st={per_voce - 0.5:.2f}:d=0.4:alpha=1[b];"

@@ -266,10 +266,32 @@ publish:
     reuse_cooldown_hours: 48
 
   tiktok:
-    enabled: false                # attiva dopo l'audit — vedi README
-    # "inbox" = carica come bozza (nessun audit richiesto, premi tu Post)
-    # "direct" = pubblica diretto (richiede audit approvato + dominio verificato)
-    mode: "inbox"
+    # I video NON si pubblicano da soli, e non è una limitazione tecnica che
+    # si può aggirare: l'API può solo depositare bozze nell'inbox dell'app,
+    # mentre il programmatore di TikTok sta in TikTok Studio (desktop). Sono
+    # due percorsi che non si incontrano — una bozza nell'inbox non la puoi
+    # passare a Studio. Quindi si salta l'API del tutto: `run.py tiktok`
+    # prepara i file, tu li trascini in Studio e li programmi in un colpo.
+    # Vantaggio collaterale: niente app sviluppatore, niente audit di 2-4
+    # settimane, niente verifica del dominio.
+    enabled: true
+
+    # Quanti video prepara ogni volta. Studio programma fino a 10 giorni
+    # avanti (non 30: quelli sono gli scheduler esterni), quindi un lotto da
+    # 20 copre dieci giorni a due al giorno.
+    batch: 20
+
+    # Quattro curiosità per video. Su TikTok i contenuti che spiegano qualcosa
+    # rendono meglio fra i 42 e i 54 secondi — più larga della finestra di
+    # YouTube (30-45) e molto più di quella di Instagram (7-15). Quattro per
+    # ~11 secondi l'una centrano i 45.
+    facts_per_video: 4
+    target_seconds: 45.0
+
+    # Non serve generare curiosità apposta: il registro dei consumi è per
+    # canale, e su TikTok non è mai uscito nulla. Tutto l'archivio è materiale
+    # nuovo per quel pubblico — è cross-posting, non riciclo.
+    max_per_day: 2
 
 # ─── COMMENTI ─────────────────────────────────────────────────────────────────
 # Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
@@ -357,6 +379,16 @@ reel:
   # riceve più curiosità in fila. Durata complessiva del video: la finestra
   # premiata è 30-45 secondi — sotto i 30 il video viene trattato come uno
   # scarto, sopra i 45 la percentuale di visione crolla e con lei la spinta.
+  # Correzione colore applicata a ogni filmato di sfondo. Le clip di stock
+  # arrivano da fonti diverse e non hanno nulla in comune: senza, una notturna
+  # desaturata e una al neon rosa finiscono nello stesso video e la seconda non
+  # sembra della stessa pagina. Su un profilo il colore è metà del riconoscimento.
+  grade_saturation: 0.45
+  # Comprime solo le luci alte, lasciando i neri dove sono. Abbassare la
+  # luminosità di una quantità fissa spegnerebbe le clip già scure — misurato:
+  # una notturna passava da 18 a 5 di luminosità media, cioè nero.
+  grade_highlights: true
+
   long_target_seconds: 33.0
   # Tetto per singola curiosità: la durata di ciascuna si ricava dividendo il
   # totale, ma con poche curiosità in archivio la divisione darebbe segmenti

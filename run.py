@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List
 
 from engine import allarme, analytics, ideas, render, review, visuals, writer
-from engine.config import DATA_DIR, ROOT, cfg, env
+from engine.config import DATA_DIR, OUTPUT_DIR, ROOT, cfg, env
 from engine.db import (
     connect,
     quanti_liberi,
@@ -707,6 +707,201 @@ def _giro_youtube(conn, imparato: str) -> None:
         # perche' da li' in poi su YouTube non esce piu' nulla.
         if allarme.critico(exc):
             allarme.segnala("YouTube", exc)
+
+
+def cmd_tiktok(args: argparse.Namespace) -> int:
+    """Prepara un lotto di video da caricare a mano su TikTok Studio.
+
+    Perche' non si pubblica da qui: l'API di TikTok, senza audit, puo' solo
+    depositare una bozza nell'inbox dell'app. Ma il programmatore di TikTok
+    sta in TikTok Studio, sul desktop, e non vede le bozze dell'inbox — sono
+    due percorsi separati. Siccome cio' che serve e' programmare (un video
+    alle 8, uno alle 13, e cosi' via senza stare al telefono), l'API non
+    porterebbe nulla: tanto vale passare dai file e risparmiarsi l'app
+    sviluppatore, l'audit di 2-4 settimane e la verifica del dominio.
+
+    Le curiosita' non vanno generate apposta: il registro dei consumi e' per
+    canale e su TikTok non e' mai uscito niente, quindi tutto l'archivio e'
+    materiale nuovo per quel pubblico. E' cross-posting, non riciclo.
+    """
+    from engine import lines, reel as _reel
+    from engine.db import quanti_liberi, segna_uso_fatto
+    from engine.publish import tiktok
+
+    conn = connect()
+    quante = int(cfg.get("publish.tiktok.facts_per_video", 4))
+    durata = float(cfg.get("publish.tiktok.target_seconds", 45.0))
+    voluti = int(args.quanti or cfg.get("publish.tiktok.batch", 20))
+
+    out = OUTPUT_DIR / "tiktok"
+    out.mkdir(parents=True, exist_ok=True)
+
+    liberi = quanti_liberi(conn, "tiktok")
+    possibili = liberi // quante
+    print(f"curiosita' mai uscite su TikTok: {liberi} → {possibili} video possibili")
+
+    # Si genera solo se il lotto richiesto non ci sta. Ogni giro costa un paio
+    # di minuti, quindi si smette appena bastano invece di riempire il magazzino.
+    giri = 0
+    while possibili < voluti and giri < int(args.max_generazioni):
+        print(f"  servono {voluti - possibili} video in piu': genero (giro {giri + 1})")
+        try:
+            ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
+        except Exception as exc:
+            print(f"  generazione fallita: {exc}")
+            break
+        giri += 1
+        nuovo = quanti_liberi(conn, "tiktok") // quante
+        if nuovo <= possibili:
+            print("  la generazione non ha aggiunto nulla di utilizzabile, smetto")
+            break
+        possibili = nuovo
+
+    da_fare = min(voluti, possibili)
+    if not da_fare:
+        print(f"servono almeno {quante} curiosita' libere per un video. Nessuna.")
+        return 1
+
+    print(f"\npreparo {da_fare} video da {quante} curiosita' l'uno (~{durata:.0f}s)\n")
+
+    lotto = []
+    for i in range(da_fare):
+        print(f"[{i + 1}/{da_fare}]")
+        frasi = lines.generate(conn, quante, canale="tiktok")
+        frasi = [f for f in frasi if f.get("fact_id")][:quante]
+        if len(frasi) < quante:
+            print(f"  solo {len(frasi)} frasi utilizzabili: mi fermo qui")
+            break
+
+        voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
+                 "_frase": f} for f in frasi]
+        import hashlib as _h
+        nome = "tt-" + _h.sha1(frasi[0]["line"].encode()).hexdigest()[:8]
+        video, montate = _reel.build_multi(voci, nome, totale=durata)
+        if not video:
+            print("  montaggio fallito, salto")
+            continue
+
+        frasi = [v["_frase"] for v in montate]
+        testi = tiktok.componi_didascalia(frasi)
+
+        # Il file si sposta in una cartella piatta e numerata: trascinare venti
+        # file da venti sottocartelle diverse dentro Studio e' il genere di
+        # attrito che fa smettere di usare uno strumento.
+        dest = out / f"{i + 1:02d}-{nome}.mp4"
+        dest.write_bytes(video.read_bytes())
+
+        for f in frasi:
+            segna_uso_fatto(conn, f["fact_id"], "tiktok", dest.name)
+
+        lotto.append({"file": dest.name, "frasi": frasi, **testi})
+        print(f"  ✓ {dest.name} ({dest.stat().st_size // 1024 // 1024} MB)")
+
+    if not lotto:
+        print("nessun video preparato")
+        return 1
+
+    _scrivi_istruzioni(out, lotto)
+    print(f"\n{'─' * 62}")
+    print(f"{len(lotto)} video pronti in  {out}")
+    print(f"Istruzioni e testi da incollare:  {out / 'DA-CARICARE.md'}")
+    print(f"{'─' * 62}")
+    print("\n⚠️  Il database e' cambiato: se non lo salvi su GitHub, il prossimo")
+    print("    ciclo non sapra' che queste curiosita' sono gia' andate su TikTok.")
+    print("    Lo faccio io adesso? Lancia:  python3 run.py tiktok --salva")
+    if args.salva:
+        _salva_stato()
+    return 0
+
+
+def _scrivi_istruzioni(out: Path, lotto: list) -> None:
+    """Un foglio solo con tutto quello che serve incollare, in ordine."""
+    ig = (cfg.get("brand.handle", "") or "").lstrip("@")
+    r = [
+        "# Lotto TikTok da caricare",
+        "",
+        f"{len(lotto)} video pronti in questa cartella.",
+        "",
+        "## Come si fa",
+        "",
+        "1. Apri **tiktok.com** dal computer → TikTok Studio → **Carica**",
+        "   (dal telefono non si puo' programmare: la funzione sta solo qui)",
+        "2. Trascina dentro il primo video",
+        "3. Incolla la didascalia qui sotto",
+        "4. **Programma** invece di pubblicare — TikTok arriva fino a 10 giorni avanti",
+        "5. Dopo che e' uscito, fissa il commento indicato sotto ciascuno",
+        "",
+        "Orari suggeriti, due al giorno: **13:00 e 19:00** italiane.",
+        "Sono le fasce in cui il pubblico anglofono e' piu' attivo — mezzogiorno",
+        "sulla costa est americana e sera in Europa.",
+        "",
+        "---",
+        "",
+    ]
+    for i, v in enumerate(lotto, 1):
+        r += [
+            f"## {i}. `{v['file']}`",
+            "",
+            "**Didascalia**",
+            "",
+            "```",
+            v["didascalia"],
+            "```",
+            "",
+            "**Commento da fissare** (dopo la pubblicazione)",
+            "",
+            "```",
+            v["commento"],
+            "```",
+            "",
+            "<details><summary>Cosa c'e' dentro</summary>",
+            "",
+        ]
+        r += [f"- {f['line']}" for f in v["frasi"]]
+        r += ["", "</details>", "", "---", ""]
+
+    if ig:
+        r += [
+            "## Bio del profilo TikTok",
+            "",
+            "Da mettere una volta sola (80 caratteri massimo):",
+            "",
+            "```",
+            "Why people do what they do. One checked fact a day.",
+            "```",
+            "",
+            f"E nel campo del sito: `instagram.com/{ig}`",
+            "",
+        ]
+    (out / "DA-CARICARE.md").write_text("\n".join(r), encoding="utf-8")
+
+
+def _salva_stato() -> None:
+    """Porta su GitHub il registro dei consumi aggiornato.
+
+    Senza, i cicli automatici — che girano su GitHub e leggono il database da
+    li' — non saprebbero che quelle curiosita' sono gia' andate su TikTok, e
+    la copia locale verrebbe sovrascritta al primo giro.
+    """
+    import subprocess
+
+    from engine.config import ROOT
+
+    def _git(*a):
+        return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True)
+
+    _git("add", "data/engine.db")
+    if not _git("diff", "--staged", "--quiet").returncode:
+        print("    (niente da salvare)")
+        return
+    _git("commit", "-m", f"tiktok: lotto preparato {time.strftime('%Y-%m-%d %H:%M')}")
+    for _ in range(3):
+        if _git("push").returncode == 0:
+            print("    ✓ stato salvato su GitHub")
+            return
+        _git("fetch", "origin", "main")
+        _git("rebase", "origin/main", "-X", "ours")
+    print("    ✗ non sono riuscito a salvare: fallo a mano con  git push")
 
 
 def cmd_reels(args: argparse.Namespace) -> int:
@@ -1811,6 +2006,15 @@ def main() -> int:
         help="costruisce i reel ma non li pubblica — da usare per le prove",
     )
     p.set_defaults(func=cmd_reels)
+
+    p = sub.add_parser("tiktok", help="prepara un lotto di video da caricare a mano")
+    p.add_argument("--quanti", type=int, default=0,
+                   help="quanti video preparare (default: publish.tiktok.batch)")
+    p.add_argument("--max-generazioni", type=int, default=3,
+                   help="quanti giri di generazione al massimo per riempire il lotto")
+    p.add_argument("--salva", action="store_true",
+                   help="salva su GitHub il registro dei consumi aggiornato")
+    p.set_defaults(func=cmd_tiktok)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)
