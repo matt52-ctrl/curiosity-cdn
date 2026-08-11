@@ -380,5 +380,11 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
         if disclosure:
             parts.append(disclosure)
 
+    # Rimando al canale YouTube. Sta prima degli hashtag e non in fondo:
+    # dopo il muro di hashtag non lo legge nessuno.
+    ponte = cfg.get("caption.cross_promo", "")
+    if ponte:
+        parts.append(ponte)
+
     parts.append(" ".join("#" + t for t in copy["hashtags"]))
     return "\n\n".join(parts)

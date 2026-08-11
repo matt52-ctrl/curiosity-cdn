@@ -119,6 +119,28 @@ MIGRATIONS = [
 # colonne sono anche diverse — su YouTube il segnale non sono i salvataggi ma
 # la percentuale di visione — e forzarle in un'unica tabella renderebbe
 # entrambe le letture ambigue.
+# Registro dei consumi: quale curiosita' e' gia' stata usata, su quale
+# piattaforma. Prima l'informazione era sparsa — i caroselli la deducevano da
+# posts.fact_id, i reel da reels.fact_id, e nessuno dei due guardava l'altro.
+# Il risultato era che la stessa curiosita' usciva come carosello e poi come
+# reel: il fatto #3 e' andato in onda quattro volte.
+#
+# Il canale e' la piattaforma, non il formato: su Instagram carosello e reel
+# arrivano alle stesse persone, quindi contano come una cosa sola. YouTube e'
+# un pubblico diverso e ha un registro suo — la stessa curiosita' puo' uscire
+# su entrambe le piattaforme, e' normale e voluto, ma mai due volte sulla
+# stessa.
+FACT_USES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS fact_uses (
+    fact_id   INTEGER NOT NULL REFERENCES facts(id),
+    channel   TEXT    NOT NULL,          -- instagram | youtube
+    used_at   REAL    NOT NULL,
+    ref       TEXT,                      -- da dove: post-12, reel-8, yt-3
+    PRIMARY KEY (fact_id, channel)
+);
+CREATE INDEX IF NOT EXISTS idx_fact_uses ON fact_uses(channel, fact_id);
+"""
+
 REEL_METRICS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS reel_metrics (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,6 +167,8 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     conn.executescript(REELS_SCHEMA)
     conn.executescript(REEL_METRICS_SCHEMA)
+    conn.executescript(FACT_USES_SCHEMA)
+    _recupera_consumi(conn)
     for statement in MIGRATIONS:
         try:
             conn.execute(statement)
@@ -193,8 +217,18 @@ def set_fact_status(conn: sqlite3.Connection, fact_id: int, status: str) -> None
 
 
 def next_approved_fact(conn: sqlite3.Connection) -> Optional[sqlite3.Row]:
+    """La prossima curiosita' per un carosello.
+
+    L'esclusione su fact_uses non c'era, ed e' il motivo per cui il fatto #3
+    e' uscito quattro volte: due caroselli e due reel. Il carosello guardava
+    solo lo stato della curiosita', che resta 'approved' anche dopo che un
+    reel l'ha usata.
+    """
     return conn.execute(
-        "SELECT * FROM facts WHERE status='approved' ORDER BY confidence DESC, id ASC LIMIT 1"
+        """SELECT * FROM facts
+           WHERE status='approved'
+             AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel='instagram')
+           ORDER BY confidence DESC, id ASC LIMIT 1"""
     ).fetchone()
 
 
@@ -234,7 +268,13 @@ def insert_post(
         ),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    pid = int(cur.lastrowid)
+    # Si registra alla CREAZIONE, non alla pubblicazione: dal momento in
+    # cui la curiosita' e' impegnata in un contenuto non deve piu' essere
+    # pescabile, o il giro successivo ne costruisce un secondo identico
+    # mentre il primo e' ancora in coda.
+    segna_uso_fatto(conn, fact_id, 'instagram', f'post-{pid}')
+    return pid
 
 
 def set_post_urls(conn: sqlite3.Connection, post_id: int, urls: List[str]) -> None:
@@ -396,7 +436,9 @@ def insert_reel(conn: sqlite3.Connection, r: Dict[str, Any], status: str = "appr
          r.get("fact_id")),
     )
     conn.commit()
-    return int(cur.lastrowid)
+    rid = int(cur.lastrowid)
+    segna_uso_fatto(conn, r.get("fact_id"), "instagram", f"reel-{rid}")
+    return rid
 
 
 def reel_spalle(conn, lead, quante: int = 2) -> list:
@@ -577,3 +619,78 @@ def reel_migliori(conn: sqlite3.Connection, limit: int = 8) -> List[sqlite3.Row]
         """,
         (limit,),
     ).fetchall()
+
+
+# ─── registro dei consumi ─────────────────────────────────────────────────────
+
+def _recupera_consumi(conn: sqlite3.Connection) -> None:
+    """Ricostruisce il registro dai contenuti gia' esistenti.
+
+    Serve una volta sola, al primo avvio dopo l'introduzione della tabella:
+    senza, tutte le curiosita' gia' pubblicate risulterebbero libere e
+    tornerebbero in circolo. Gira a ogni apertura ma non costa nulla — le
+    righe hanno chiave primaria e la seconda volta non entrano.
+    """
+    conn.execute(
+        """INSERT OR IGNORE INTO fact_uses (fact_id, channel, used_at, ref)
+           SELECT fact_id, 'instagram', COALESCE(published_at, created_at, 0),
+                  'post-' || id
+           FROM posts WHERE fact_id IS NOT NULL"""
+    )
+    conn.execute(
+        """INSERT OR IGNORE INTO fact_uses (fact_id, channel, used_at, ref)
+           SELECT fact_id, 'instagram', COALESCE(published_at, created_at, 0),
+                  'reel-' || id
+           FROM reels WHERE fact_id IS NOT NULL"""
+    )
+    # Su YouTube risultano consumate le curiosita' dei reel gia' caricati e
+    # quelle che hanno fatto da spalla in un video lungo.
+    conn.execute(
+        """INSERT OR IGNORE INTO fact_uses (fact_id, channel, used_at, ref)
+           SELECT fact_id, 'youtube', COALESCE(published_at, created_at, 0),
+                  'reel-' || id
+           FROM reels
+           WHERE fact_id IS NOT NULL AND (youtube_id IS NOT NULL OR yt_uses > 0)"""
+    )
+    conn.commit()
+
+
+def segna_uso_fatto(conn: sqlite3.Connection, fact_id: Optional[int],
+                    canale: str, ref: str = "") -> None:
+    if not fact_id:
+        return
+    conn.execute(
+        """INSERT OR IGNORE INTO fact_uses (fact_id, channel, used_at, ref)
+           VALUES (?,?,?,?)""",
+        (fact_id, canale, time.time(), ref),
+    )
+    conn.commit()
+
+
+def fatti_liberi(conn: sqlite3.Connection, canale: str,
+                 limite: int = 50) -> List[sqlite3.Row]:
+    """Curiosita' verificate mai uscite su questo canale.
+
+    L'esclusione e' dura, non una preferenza. Prima era una preferenza perche'
+    la produzione era scarsa e restare fermi sembrava peggio che ripetersi;
+    ora la produzione si alza da sola quando le scorte scendono, quindi il
+    ripiego non serve piu' — e quel ripiego era esattamente cio' che faceva
+    uscire la stessa curiosita' due volte.
+    """
+    return conn.execute(
+        """SELECT * FROM facts
+           WHERE status IN ('approved','rendered','published')
+             AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)
+           ORDER BY confidence DESC, id ASC
+           LIMIT ?""",
+        (canale, limite),
+    ).fetchall()
+
+
+def quanti_liberi(conn: sqlite3.Connection, canale: str) -> int:
+    return conn.execute(
+        """SELECT COUNT(*) n FROM facts
+           WHERE status IN ('approved','rendered','published')
+             AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)""",
+        (canale,),
+    ).fetchone()["n"]

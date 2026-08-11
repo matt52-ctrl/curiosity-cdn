@@ -25,6 +25,7 @@ from engine import allarme, analytics, ideas, render, review, visuals, writer
 from engine.config import DATA_DIR, ROOT, cfg, env
 from engine.db import (
     connect,
+    quanti_liberi,
     get_post,
     insert_post,
     mark_published,
@@ -555,6 +556,139 @@ def cmd_comments(args: argparse.Namespace) -> int:
     return 1 if allarme.riepiloga("commenti") else 0
 
 
+
+
+def _rifornisci(conn) -> None:
+    """Genera curiosita' finche' entrambi i canali hanno scorte sufficienti.
+
+    Il controllo e' per canale e non globale: Instagram e YouTube hanno
+    registri separati, e un archivio pieno di curiosita' gia' uscite su
+    Instagram non serve a YouTube. Prima si contava una cosa sola — le
+    curiosita' mai diventate reel — e i caroselli non entravano nel conto.
+
+    Il tetto sui giri esiste perche' la generazione e' l'unico punto del ciclo
+    che puo' consumare quota senza un limite naturale: se il fact-check
+    bocciasse tutto, senza tetto girerebbe finche' non finisce la quota
+    giornaliera, lasciando a secco anche le didascalie e le risposte.
+    """
+    fabbisogno = {
+        # Al giorno: 2 caroselli + 3 reel = 5 su Instagram; 3 video da 3
+        # curiosita' = 9 su YouTube. Si tiene circa un giorno di margine.
+        "instagram": int(cfg.get("pipeline.buffer_instagram", 10)),
+        "youtube": int(cfg.get("pipeline.buffer_youtube", 12)),
+    }
+    tetto = int(cfg.get("pipeline.max_batches_per_run", 2))
+
+    for giro in range(tetto + 1):
+        stato = {c: quanti_liberi(conn, c) for c in fabbisogno}
+        manca = [c for c, n in stato.items() if n < fabbisogno[c]]
+        print("scorte: " + ", ".join(
+            f"{c} {stato[c]}/{fabbisogno[c]}" + ("" if c not in manca else " ⚠")
+            for c in fabbisogno))
+        if not manca:
+            return
+        if giro >= tetto:
+            print(f"  tetto di {tetto} generazioni per giro raggiunto, riprendo al prossimo")
+            return
+        print(f"→ genero per: {', '.join(manca)}")
+        try:
+            ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
+        except Exception as exc:
+            print(f"generazione curiosita' fallita: {exc}")
+            if allarme.critico(exc):
+                allarme.segnala("generazione", exc)
+            return
+
+
+def _pubblica_youtube(conn, imparato: str = "") -> None:
+    """Costruisce e pubblica un video YouTube con curiosita' tutte nuove.
+
+    Indipendente da Instagram di proposito. Le due piattaforme hanno pubblici
+    diversi e tempi diversi: la stessa curiosita' puo' uscire su entrambe — e'
+    normale e voluto — ma il registro dei consumi e' separato, quindi su
+    YouTube nessuna torna una seconda volta.
+
+    Il tetto giornaliero non e' la quota API (sei caricamenti, ne servono tre):
+    e' che oltre i due-tre Short al giorno la spinta per video cala, perche'
+    ognuno viene provato su un piccolo pubblico prima di essere distribuito e
+    pubblicarne troppi significa togliersi spazio da soli.
+    """
+    import json as _json
+
+    from engine import lines, reel as _reel
+    from engine.db import quanti_liberi, segna_uso_fatto
+    from engine.publish import youtube
+
+    quante = int(cfg.get("publish.youtube.facts_per_video", 3))
+    tetto = int(cfg.get("publish.youtube.max_per_day", 3))
+
+    usciti = conn.execute(
+        """SELECT COUNT(*) n FROM fact_uses
+           WHERE channel='youtube' AND used_at > ?""",
+        (time.time() - 86400,),
+    ).fetchone()["n"]
+    if usciti >= tetto * quante:
+        print(f"  · YouTube: gia' {usciti // quante} video nelle ultime 24 ore, tetto {tetto}")
+        return
+
+    # Scorte. Il video si costruisce solo se ci sono abbastanza curiosita'
+    # mai uscite su YouTube: meglio saltare un giro che montare un video con
+    # una curiosita' sola, o riprenderne una gia' vista.
+    liberi = quanti_liberi(conn, "youtube")
+    print(f"  · YouTube: {liberi} curiosita' mai uscite li'")
+    if liberi < quante:
+        print(f"    scorte sotto {quante}, genero")
+        try:
+            ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
+        except Exception as exc:
+            print(f"    generazione fallita: {exc}")
+        liberi = quanti_liberi(conn, "youtube")
+    if liberi < quante:
+        print(f"    ancora {liberi}: salto questo giro invece di ripetermi")
+        return
+
+    frasi = lines.generate(conn, quante, imparato=imparato, canale="youtube")
+    frasi = [f for f in frasi if f.get("fact_id")][:quante]
+    if len(frasi) < quante:
+        print(f"    solo {len(frasi)} frasi utilizzabili su {quante}: salto")
+        return
+
+    # I filmati NON si cercano qui: ci pensa build_multi. Cercarli prima per
+    # sapere se ci sono significa scaricarli due volte — quota Pexels doppia e
+    # sei clip marcate come usate per un video che ne mostra tre.
+    voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
+             "_frase": f} for f in frasi]
+
+    import hashlib as _h
+    nome = _h.sha1(frasi[0]["line"].encode()).hexdigest()[:10]
+    video, montate = _reel.build_multi(voci, nome)
+    if not video:
+        print("    montaggio fallito")
+        return
+
+    # Solo le curiosita' davvero finite nel video: se un filmato mancava, quel
+    # segmento e' saltato e annunciarla nella descrizione sarebbe una bugia.
+    frasi = [v["_frase"] for v in montate]
+    if not frasi:
+        print("    nessun segmento montato")
+        return
+
+    meta = youtube.componi_metadati(
+        frasi[0]["hook"], frasi[0]["reveal"], frasi[0].get("caption", ""),
+        frasi[0].get("hashtags", []),
+        altre=[f["line"] for f in frasi[1:]],
+    )
+    yt_id = youtube.publish(video, meta["title"], meta["description"],
+                            tags=meta["tags"])
+
+    # Si registra DOPO il caricamento riuscito: se YouTube rifiuta, le
+    # curiosita' devono restare disponibili per il giro dopo invece di
+    # risultare bruciate da un errore di rete.
+    for f in frasi:
+        segna_uso_fatto(conn, f["fact_id"], "youtube", f"yt-{yt_id}")
+    print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove")
+
+
 def cmd_reels(args: argparse.Namespace) -> int:
     """Ciclo dei reel, completamente separato da quello dei post.
 
@@ -570,9 +704,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
         insert_reel,
         mark_reel_published,
         reel_lines_used,
-        reel_spalle,
         reels_by_status,
-        segna_uso_yt,
         set_reel_status,
         set_reel_url,
     )
@@ -596,20 +728,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
     #    caroselli genera fatti nuovi, e lo fa in base alle SUE scorte. Senza
     #    questo controllo i reel si esauriscono in circa una settimana e il
     #    ciclo resta verde producendo zero.
-    liberi = conn.execute(
-        """SELECT COUNT(*) n FROM facts
-           WHERE status IN ('approved','rendered','published')
-             AND id NOT IN (SELECT COALESCE(fact_id,-1) FROM reels)"""
-    ).fetchone()["n"]
-    print(f"curiosita' non ancora usate nei reel: {liberi}")
-    if liberi < int(cfg.get("reel.min_facts", 6)):
-        print("→ scorte basse, genero nuove curiosita'")
-        try:
-            ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
-        except Exception as exc:
-            print(f"generazione curiosita' fallita: {exc}")
-            if allarme.critico(exc):
-                allarme.segnala("generazione", exc)
+    _rifornisci(conn)
 
     # 1. Magazzino: se restano meno di 2 reel pronti, se ne producono altri.
     pronti = reels_by_status(conn, "approved")
@@ -728,88 +847,21 @@ def cmd_reels(args: argparse.Namespace) -> int:
         # problema qui non deve far risultare fallito un reel gia' uscito su
         # Instagram — sono due destinazioni indipendenti, e trattarle come una
         # sola farebbe ripubblicare.
+        #
+        # Il video YouTube non e' piu' una rielaborazione del reel appena
+        # uscito: e' costruito da curiosita' proprie, mai andate su YouTube.
+        # Prima riciclava le gia' pubblicate come riempitivo, perche' Instagram
+        # produce tre curiosita' al giorno e ogni video ne vuole tre — la
+        # richiesta era il triplo dell'offerta e il riciclo era obbligato. Ora
+        # la generazione si alza quando le scorte scendono, quindi ogni video
+        # esce con materiale nuovo e nessuna curiosita' torna due volte.
         if cfg.get("publish.youtube.enabled", False):
             try:
-                from engine import reel as _reel
-                from engine.publish import youtube
-
-                tag = _json.loads(r["hashtags"] or "[]")
-                # YouTube riceve la VARIANTE LUNGA, non lo stesso file di
-                # Instagram: la finestra premiata da YouTube e' 30-45 secondi,
-                # quella di Instagram 7-15. Un file solo andrebbe bene su una
-                # piattaforma e male sull'altra.
-                #
-                # Apre sempre la curiosita' appena pubblicata: e' quella
-                # nuova, ed e' cio' che il titolo promette. Le altre si
-                # pescano fra le gia' uscite, scegliendo le meno riusate, e
-                # non pesano sulla generazione. Cosi' ogni video lungo resta
-                # unico (apertura, filmati e musica diversi) senza chiedere
-                # tre curiosita' nuove al giorno, che non ci sono.
-                locale = None
-                extra: list = []
-                if cfg.get("publish.youtube.long_form", True):
-                    try:
-                        def _spezza(riga: str, umore: str) -> dict:
-                            pz = riga.split(". ", 1)
-                            return {"hook": pz[0],
-                                    "reveal": pz[1] if len(pz) > 1 else "",
-                                    "mood": umore}
-
-                        quante = int(cfg.get("publish.youtube.facts_per_video", 3))
-                        spalle = reel_spalle(conn, r, quante - 1)
-                        voci = [_spezza(r["line"], r["mood"])]
-                        voci += [_spezza(x["line"], x["mood"]) for x in spalle]
-
-                        # Con meno di due curiosita' il video lungo non ha
-                        # senso: nei primi giorni l'archivio e' vuoto e si
-                        # esce con il breve, senza che sia un errore.
-                        if len(voci) >= 2:
-                            locale = _reel.build_multi(voci, f"r{r['id']}")
-                            if locale:
-                                segna_uso_yt(conn, [r["id"]] + [x["id"] for x in spalle])
-                                extra = [x["line"] for x in spalle]
-                                print(f"    variante lunga: {len(voci)} curiosita'")
-                        else:
-                            print("    archivio troppo corto: esce il video breve")
-                    except Exception as exc:
-                        print(f"    variante lunga fallita, uso il breve: {exc}")
-
-                # Ripiego sul file breve, riscaricandolo se la macchina non e'
-                # quella che l'ha costruito.
-                if locale is None:
-                    locale = Path(r["video_path"])
-                if not locale.exists() and url:
-                    import httpx as _hx
-                    locale = Path(DATA_DIR) / f"yt-{r['id']}.mp4"
-                    with _hx.stream("GET", url, timeout=180, follow_redirects=True) as resp:
-                        resp.raise_for_status()
-                        with open(locale, "wb") as fh:
-                            for blocco in resp.iter_bytes(65536):
-                                fh.write(blocco)
-
-                # Il testo del reel e' salvato unito; per il titolo servono i
-                # due tempi separati, quindi si ricava il taglio dal punto.
-                pezzi = r["line"].split(". ", 1)
-                meta = youtube.componi_metadati(
-                    pezzi[0], pezzi[1] if len(pezzi) > 1 else "",
-                    r["caption"], tag, altre=extra,
-                )
-
-                yt_id = youtube.publish(
-                    locale,
-                    meta["title"],
-                    meta["description"],
-                    tags=meta["tags"],
-                )
-                conn.execute(
-                    "UPDATE reels SET youtube_id=? WHERE id=?", (yt_id, r["id"])
-                )
-                conn.commit()
-                print(f"  ✓ YouTube: youtu.be/{yt_id}")
+                _pubblica_youtube(conn, imparato)
             except Exception as exc:
                 print(f"  ⚠ YouTube saltato: {exc}")
                 # Un singhiozzo di rete non merita una mail; un token scaduto
-                # sì, perche' da li' in poi su YouTube non esce piu' nulla.
+                # si', perche' da li' in poi su YouTube non esce piu' nulla.
                 if allarme.critico(exc):
                     allarme.segnala("YouTube", exc)
 

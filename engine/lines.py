@@ -133,7 +133,7 @@ HASHTAGS
 
 
 def generate(conn: sqlite3.Connection, count: int,
-             imparato: str = "") -> List[Dict[str, Any]]:
+             imparato: str = "", canale: str = "instagram") -> List[Dict[str, Any]]:
     """Ricava frasi dai fatti verificati, escludendo quelli gia' usati.
 
     L'esclusione avviene sul FATTO, non sulla frase: due reel possono
@@ -147,25 +147,19 @@ def generate(conn: sqlite3.Connection, count: int,
     scritta la frase quanto da cosa racconta: l'aggancio ha due secondi per
     funzionare, e quello e' un fatto di formulazione.
     """
-    from .db import facts_used_in_reels
-
-    usati = facts_used_in_reels(conn)
-    esclusione = (
-        f"AND id NOT IN ({','.join('?' * len(usati))})" if usati else ""
-    )
-    # Le curiosita' mai uscite come carosello vengono prima. Un reel puo'
-    # comunque riprendere una gia' pubblicata — meglio ripetersi che restare
-    # fermi — ma solo quando non c'e' altro: su Instagram i due formati
-    # arrivano alle stesse persone, e vedere lo stesso studio due volte in
-    # settimana e' il modo piu' rapido di far smettere di seguire.
+    # Esclusione dura su tutto cio' che e' gia' uscito su Instagram, caroselli
+    # compresi. Prima era una preferenza — le mai usate venivano prima, ma in
+    # mancanza si ripescava — e quel ripiego faceva ricomparire lo stesso
+    # studio a giorni di distanza sullo stesso profilo. Il ripiego esisteva
+    # perche' la produzione era scarsa; ora le scorte si rigenerano da sole
+    # quando scendono, quindi non serve piu'.
     fatti = conn.execute(
-        f"""SELECT id, hook, fact, detail, source_hint FROM facts
-            WHERE status IN ('approved','rendered','published') {esclusione}
-            ORDER BY (id IN (SELECT fact_id FROM posts
-                             WHERE status IN ('published','approved','pending_review'))) ASC,
-                     RANDOM()
+        """SELECT id, hook, fact, detail, source_hint FROM facts
+            WHERE status IN ('approved','rendered','published')
+              AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)
+            ORDER BY RANDOM()
             LIMIT ?""",
-        (*usati, count * 2),
+        (canale, count * 2),
     ).fetchall()
 
     if not fatti:
@@ -240,4 +234,12 @@ Return JSON matching the schema."""
 
 def full_caption(line: Dict[str, Any]) -> str:
     tags = " ".join("#" + t for t in line["hashtags"])
-    return f"{line['caption'].strip()}\n\n{tags}"
+    pezzi = [line["caption"].strip()]
+    # Rimando al canale YouTube, prima degli hashtag: dopo non lo legge
+    # nessuno. Instagram non rende cliccabili i link in didascalia, quindi si
+    # scrive il nome del canale, che si puo' cercare, invece di un URL.
+    ponte = cfg.get("caption.cross_promo", "")
+    if ponte:
+        pezzi.append(ponte)
+    pezzi.append(tags)
+    return "\n\n".join(pezzi)

@@ -124,8 +124,11 @@ def componi_metadati(hook: str, reveal: str, caption: str, tags: list,
     # aggiunge il collegamento diretto, per chi invece la apre.
     from ..config import cfg
 
+    # Su YouTube i link nella descrizione SONO cliccabili, al contrario di
+    # Instagram: qui conviene l'URL completo, non il solo nome.
     handle = (cfg.get("brand.handle", "") or "").lstrip("@")
-    ponte = f"\n\nAlso on Instagram: instagram.com/{handle}" if handle else ""
+    ponte = (f"\n\nOne of these every day on Instagram too:\n"
+             f"https://instagram.com/{handle}") if handle else ""
 
     descrizione = caption.strip()
 

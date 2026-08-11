@@ -12,6 +12,11 @@ brand:
   # Contatto inserito nello User-Agent verso Wikimedia Commons: la loro policy
   # lo richiede e senza throttlano le richieste. Una email o un URL vanno bene.
   contact: "https://instagram.com/oddlywireddaily"
+  # Le due destinazioni, usate per rimandare l'una all'altra. Chi arriva da uno
+  # Short deve poter trovare il profilo Instagram e viceversa: sono due
+  # pubblici diversi, e senza un rimando esplicito restano due pagine separate
+  # con lo stesso nome invece che una sola con due porte d'ingresso.
+  youtube: "@OddlyWiredDaily"
 
 # ─── NICCHIA ──────────────────────────────────────────────────────────────────
 # Determina il prompt di generazione. Più è stretta, più l'algoritmo profila
@@ -176,7 +181,20 @@ pipeline:
   # troncato a metà. Alzarlo migliora il giudizio ma aumenta il rischio.
   thinking_budget: 2048
   # Quante idee generare per batch. Se ne scarti molte in verifica, alza.
-  ideas_per_batch: 12
+  ideas_per_batch: 16
+
+  # Scorte minime per canale, sotto le quali il ciclo genera. Il fabbisogno
+  # giornaliero è di 5 curiosità su Instagram (2 caroselli + 3 reel) e 9 su
+  # YouTube (3 video da 3): questi valori tengono circa un giorno di margine.
+  # I due registri sono separati, quindi la stessa curiosità può servire
+  # entrambi i canali — ma mai due volte lo stesso.
+  buffer_instagram: 10
+  buffer_youtube: 12
+
+  # Tetto di generazioni per singolo giro. La generazione è l'unico punto che
+  # può consumare quota senza un limite naturale: se il fact-check bocciasse
+  # tutto, senza tetto girerebbe finché non finisce la quota giornaliera.
+  max_batches_per_run: 2
   # Soglia minima di confidenza per pubblicare. 0.85 è severo di proposito:
   # una pagina di curiosità che posta bufale viene distrutta nei commenti.
   # Abbassato da 0.85 a 0.75 il 10 agosto, insieme alla revisione del
@@ -235,6 +253,11 @@ publish:
     # ~33 secondi. Sotto i 30 il video esce dalla finestra che YouTube premia,
     # sopra i 45 la percentuale di visione crolla.
     facts_per_video: 3
+    # Tetto di video al giorno. Non è la quota API (sei caricamenti al giorno,
+    # ne servono tre): oltre i due-tre Short quotidiani la spinta per video
+    # cala, perché ognuno viene provato su un piccolo pubblico prima di essere
+    # distribuito e pubblicarne troppi significa togliersi spazio da soli.
+    max_per_day: 3
     # Quanto deve restare ferma una curiosità prima di poter tornare come
     # spalla in un altro video. Senza, quella appena uscita ricompare nel
     # video successivo al proprio: chi guarda due Short di fila vede due
@@ -286,6 +309,14 @@ caption:
   # Hashtag fissi sempre presenti (brand). Il resto li genera Claude sul tema.
   pinned_hashtags: ["psychologyfacts", "humanbehaviour"]
   cta: "Follow @oddlywireddaily for one a day."
+
+  # Rimando al canale YouTube, accodato alla didascalia prima degli hashtag.
+  # Instagram non rende cliccabili i link in didascalia: va scritto in modo
+  # che si possa cercare a mano, quindi il nome del canale e non un URL lungo.
+  # Il link vero e proprio va messo in bio — quello sì cliccabile — e la bio
+  # non è modificabile da API, quindi resta l'unica cosa da fare a mano.
+  # Svuotare la stringa per toglierlo.
+  cross_promo: "More on YouTube: @OddlyWiredDaily"
 
   # Dichiarazione dei contenuti sintetici. Obbligatoria in UE dal 2 agosto 2026
   # (AI Act, art. 50): deve essere percepibile senza strumenti tecnici e al

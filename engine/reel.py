@@ -74,6 +74,7 @@ def compose(frames: List[Path], out: Path, music: Optional[Path] = None) -> Path
     tmp = out.parent / "_segmenti"
     tmp.mkdir(parents=True, exist_ok=True)
     segmenti: List[Path] = []
+    montate: List[Dict] = []
 
     for i, (frame, dur) in enumerate(zip(frames, durate)):
         seg = tmp / f"{i:02d}.mp4"
@@ -339,7 +340,13 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
     return compose(frames, out, music)
 
 
-def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
+def build_multi(voci: List[Dict], name: str) -> tuple:
+    """Ritorna (percorso, voci_effettivamente_montate).
+
+    Le due cose vanno insieme: se un filmato non si trova quel segmento salta,
+    e chi scrive la descrizione deve sapere quali curiosita' sono finite
+    davvero nel video. Annunciarne una che non c'e' e' peggio che ometterla.
+    """
     """Versione lunga per YouTube: piu' curiosita' concatenate in un video solo.
 
     Perche' esiste: Instagram premia i reel da 7-15 secondi, YouTube gli Short
@@ -354,7 +361,7 @@ def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
     from . import footage, render
 
     if not voci:
-        return None
+        return None, []
 
     ff = _ffmpeg()
     w, h = REEL_SIZE
@@ -379,12 +386,15 @@ def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
     tmp.mkdir(exist_ok=True)
 
     segmenti: List[Path] = []
+    montate: List[Dict] = []
     for i, v in enumerate(voci):
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
         sfondo = footage.per_frase(v.get("mood", "reflective"), hook + str(i))
         if not sfondo:
+            print(f"    nessun filmato per la curiosita' {i+1}: la salto")
             continue
+        montate.append(v)
 
         overlays = render.render_slides(
             [
@@ -419,7 +429,7 @@ def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
         segmenti.append(seg)
 
     if not segmenti:
-        return None
+        return None, []
 
     # Concatenazione + una sola traccia musicale sopra l'intero video: cambiare
     # brano a ogni curiosita' spezzerebbe il video in tre cose separate.
@@ -455,4 +465,4 @@ def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
     except Exception:
         pass
 
-    return out
+    return out, montate
