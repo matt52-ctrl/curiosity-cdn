@@ -689,6 +689,26 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove")
 
 
+def _giro_youtube(conn, imparato: str) -> None:
+    """YouTube, separato per davvero da Instagram.
+
+    Stava dentro il blocco di pubblicazione del reel, quindi bastava che non
+    ci fosse un reel pronto — o che Instagram rifiutasse — perche' anche
+    YouTube restasse fermo, pur avendo curiosita' proprie e nessun bisogno di
+    Instagram. Il contenuto era gia' indipendente, l'innesco no.
+    """
+    if not cfg.get("publish.youtube.enabled", False):
+        return
+    try:
+        _pubblica_youtube(conn, imparato)
+    except Exception as exc:
+        print(f"  ⚠ YouTube saltato: {exc}")
+        # Un singhiozzo di rete non merita una mail; un token scaduto si',
+        # perche' da li' in poi su YouTube non esce piu' nulla.
+        if allarme.critico(exc):
+            allarme.segnala("YouTube", exc)
+
+
 def cmd_reels(args: argparse.Namespace) -> int:
     """Ciclo dei reel, completamente separato da quello dei post.
 
@@ -798,8 +818,9 @@ def cmd_reels(args: argparse.Namespace) -> int:
 
     # 2. Pubblicazione: uno per giro.
     if not pronti:
-        print("nessun reel da pubblicare")
-        return 0
+        print("nessun reel da pubblicare per Instagram")
+        _giro_youtube(conn, imparato)      # YouTube non dipende da Instagram
+        return 1 if allarme.riepiloga("reel") else 0
 
     # In prova si costruisce e basta. Pubblicare un reel di collaudo lo mette
     # davanti al pubblico prima che qualcuno l'abbia guardato, e su Instagram
@@ -843,28 +864,6 @@ def cmd_reels(args: argparse.Namespace) -> int:
         mark_reel_published(conn, r["id"], media_id)
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
 
-        # YouTube. Sta DOPO Instagram e in un blocco proprio perche' un
-        # problema qui non deve far risultare fallito un reel gia' uscito su
-        # Instagram — sono due destinazioni indipendenti, e trattarle come una
-        # sola farebbe ripubblicare.
-        #
-        # Il video YouTube non e' piu' una rielaborazione del reel appena
-        # uscito: e' costruito da curiosita' proprie, mai andate su YouTube.
-        # Prima riciclava le gia' pubblicate come riempitivo, perche' Instagram
-        # produce tre curiosita' al giorno e ogni video ne vuole tre — la
-        # richiesta era il triplo dell'offerta e il riciclo era obbligato. Ora
-        # la generazione si alza quando le scorte scendono, quindi ogni video
-        # esce con materiale nuovo e nessuna curiosita' torna due volte.
-        if cfg.get("publish.youtube.enabled", False):
-            try:
-                _pubblica_youtube(conn, imparato)
-            except Exception as exc:
-                print(f"  ⚠ YouTube saltato: {exc}")
-                # Un singhiozzo di rete non merita una mail; un token scaduto
-                # si', perche' da li' in poi su YouTube non esce piu' nulla.
-                if allarme.critico(exc):
-                    allarme.segnala("YouTube", exc)
-
         # Come per i post: video e copertina hanno esaurito il loro scopo.
         # Senza questa potatura i reel aggiungono ~9 MB al giorno al repo,
         # piu' dei caroselli.
@@ -886,6 +885,9 @@ def cmd_reels(args: argparse.Namespace) -> int:
         review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
         if allarme.critico(exc):
             allarme.segnala("Instagram reel", exc)
+
+    # Fuori dal try: un reel Instagram fallito non deve tenere fermo YouTube.
+    _giro_youtube(conn, imparato)
 
     return 1 if allarme.riepiloga("reel") else 0
 
