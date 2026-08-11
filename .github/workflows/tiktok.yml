@@ -12,10 +12,21 @@ name: Curiosity TikTok
 
 on:
   schedule:
-    # ~7:30 italiane. Presto di proposito: le cinque bozze devono essere già
-    # nell'inbox quando Mattia guarda il telefono la mattina, così le pubblica
-    # nell'arco della giornata invece di trovarle a sera.
-    - cron: "45 4 * * *"
+    # UNA bozza alla volta, negli orari di pubblicazione — non cinque all'alba.
+    #
+    # Il motivo non è la comodità: dall'app TikTok non si può programmare, quindi
+    # una bozza si pubblica quando la tocchi. Cinque bozze consegnate insieme
+    # verrebbero pubblicate insieme, e si farebbero concorrenza sullo stesso
+    # pubblico nella stessa ora.
+    #
+    # Consegnandone una per volta, la notifica di TikTok diventa il promemoria:
+    # non devi ricordarti di pubblicare alle 13, alle 13 te lo dice il telefono.
+    # Gli orari sono anticipati di ~45 minuti perché GitHub accoda i lavori
+    # programmati e parte in ritardo, misurato fino a 64 minuti.
+    - cron: "15 6 * * *"     # ~9:00 italiane
+    - cron: "15 11 * * *"    # ~14:00
+    - cron: "15 16 * * *"    # ~19:00 — sfalsato dai reel delle 18:45
+    - cron: "15 20 * * *"    # ~23:00, sera negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
@@ -35,7 +46,7 @@ concurrency:
 jobs:
   tiktok:
     runs-on: ubuntu-latest
-    timeout-minutes: 90      # montare cinque video da 45s è lento
+    timeout-minutes: 40      # un video da 45s, più l'eventuale generazione
 
     steps:
       - uses: actions/checkout@v4
@@ -66,9 +77,9 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-        # Cinque al giorno è il tetto di TikTok: montarne di più sarebbe
-        # lavoro sprecato, perché resterebbero in coda invecchiando.
-        run: python run.py tiktok --quanti 5 --max-generazioni 2
+        # Uno per giro. Quattro giri al giorno restano sotto il tetto di
+        # cinque bozze ogni 24 ore, con un margine per un recupero manuale.
+        run: python run.py tiktok --quanti 1 --max-generazioni 1
 
       - name: Carica le bozze nell'inbox
         if: ${{ !inputs.prova }}
@@ -78,7 +89,7 @@ jobs:
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python run.py ttcarica
+        run: python run.py ttcarica --quanti 1
 
       - name: Salva lo stato
         if: always()
