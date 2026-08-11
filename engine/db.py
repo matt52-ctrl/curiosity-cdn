@@ -108,6 +108,10 @@ MIGRATIONS = [
     # nuova, le altre si pescano fra le gia' uscite. Senza questo contatore
     # si ripescherebbero sempre le stesse.
     "ALTER TABLE reels ADD COLUMN yt_uses INTEGER NOT NULL DEFAULT 0",
+    # Quando la curiosita' e' comparsa l'ultima volta in un video YouTube.
+    # Il solo contatore non basta: a parita' di riusi bisogna sapere QUANDO,
+    # o si ripesca quella appena andata in onda.
+    "ALTER TABLE reels ADD COLUMN yt_last_used REAL NOT NULL DEFAULT 0",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -409,16 +413,61 @@ def reel_spalle(conn, lead, quante: int = 2) -> list:
     feed passano a giorni di distanza, dentro lo stesso video sarebbero uno
     dopo l'altro.
     """
+    from .config import cfg
     from .ideas import similarity
 
+    # Due criteri, in quest'ordine: prima chi e' stato riusato meno, poi chi
+    # e' fermo da piu' tempo. Il secondo non e' un dettaglio — ordinando per
+    # id decrescente, come faceva prima, a parita' di riusi usciva sempre la
+    # curiosita' appena pubblicata, e finiva come spalla nel video successivo
+    # al proprio. La distanza media fra due apparizioni era di un video.
     candidati = conn.execute(
         """SELECT * FROM reels
            WHERE status = 'published' AND id != ?
-           ORDER BY yt_uses ASC, id DESC
-           LIMIT 40""",
+           ORDER BY yt_uses ASC, yt_last_used ASC, id ASC
+           LIMIT 60""",
         (lead["id"],),
     ).fetchall()
 
+    # Periodo di riposo: una curiosita' uscita da poco non torna, nemmeno se
+    # il contatore la indica come la meno usata. E' la garanzia dura; il
+    # contatore da solo e' solo una preferenza, e nei primi giorni — quando
+    # l'archivio e' corto — non basta.
+    riposo = float(cfg.get("publish.youtube.reuse_cooldown_hours", 48)) * 3600
+    limite = time.time() - riposo
+    riposati = [c for c in candidati if (c["yt_last_used"] or 0) < limite]
+
+    # Se non ne restano abbastanza si allarga, invece di consegnare un video
+    # piu' corto: nei primi giorni l'archivio e' piccolo e il riposo da solo
+    # svuoterebbe la scelta. Con tre video al giorno da tre curiosita', in 48
+    # ore ne servono diciotto distinte: finche' l'archivio non le ha, il
+    # riposo non puo' essere rispettato e va allentato.
+    if len(riposati) < quante:
+        # Ordine per sola anzianita' d'uso: qui il contatore va ignorato.
+        # E' proprio lui il problema — una curiosita' appena usata come
+        # apertura ha un solo riuso all'attivo, quindi il contatore la fa
+        # sembrare la piu' riposata di tutte pochi secondi dopo che e' uscita.
+        avanzo = sorted(
+            (c for c in candidati if c["id"] not in {x["id"] for x in riposati}),
+            key=lambda c: (c["yt_last_used"] or 0),
+        )
+        riposati = riposati + avanzo
+
+    # Regola dura, valida anche quando il riposo e' allentato: mai riprendere
+    # le curiosita' del video precedente. Il riposo e' una preferenza che nei
+    # primi giorni cede; questa no. Due Short di fila che condividono una
+    # curiosita' sono la cosa piu' visibile di tutte per chi ne guarda due.
+    ultimo = conn.execute(
+        "SELECT MAX(yt_last_used) u FROM reels WHERE yt_last_used > 0"
+    ).fetchone()["u"]
+    if ultimo:
+        senza_ultimi = [c for c in riposati if (c["yt_last_used"] or 0) < ultimo]
+        # Si applica solo se lascia abbastanza materiale: con l'archivio agli
+        # inizi, un video piu' corto sarebbe un danno peggiore.
+        if len(senza_ultimi) >= quante:
+            riposati = senza_ultimi
+
+    candidati = riposati
     scelti: list = []
     testi = [lead["line"]]
     visti_fact = {lead["fact_id"]} - {None}
@@ -439,8 +488,11 @@ def reel_spalle(conn, lead, quante: int = 2) -> list:
 def segna_uso_yt(conn, ids: list) -> None:
     if not ids:
         return
-    conn.executemany("UPDATE reels SET yt_uses = yt_uses + 1 WHERE id=?",
-                     [(i,) for i in ids])
+    ora = time.time()
+    conn.executemany(
+        "UPDATE reels SET yt_uses = yt_uses + 1, yt_last_used = ? WHERE id=?",
+        [(ora, i) for i in ids],
+    )
     conn.commit()
 
 

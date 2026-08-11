@@ -235,6 +235,12 @@ publish:
     # ~33 secondi. Sotto i 30 il video esce dalla finestra che YouTube premia,
     # sopra i 45 la percentuale di visione crolla.
     facts_per_video: 3
+    # Quanto deve restare ferma una curiosità prima di poter tornare come
+    # spalla in un altro video. Senza, quella appena uscita ricompare nel
+    # video successivo al proprio: chi guarda due Short di fila vede due
+    # volte la stessa cosa, ed è il modo più veloce per sembrare una pagina
+    # che ricicla. Si allarga da sé se l'archivio è ancora troppo corto.
+    reuse_cooldown_hours: 48
 
   tiktok:
     enabled: false                # attiva dopo l'audit — vedi README
