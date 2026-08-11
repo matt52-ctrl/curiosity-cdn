@@ -18,6 +18,11 @@ on:
     - cron: "45 16 * * *"    # ~19:30 italiane (sfalsato dai caroselli
                              #  delle 17:15, che scrivono lo stesso database)
   workflow_dispatch:
+    inputs:
+      prova:
+        description: "Prova a vuoto: costruisce tutto ma non pubblica"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -74,7 +79,7 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: python run.py reels
+        run: python run.py reels ${{ inputs.prova && '--no-publish' || '' }}
 
       # I commenti girano in coda alla pubblicazione, non in un workflow loro:
       # rispondere entro la prima ora è ciò che conta, e la prima ora è questa.
