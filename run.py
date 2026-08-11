@@ -382,7 +382,9 @@ def cmd_reels(args: argparse.Namespace) -> int:
         insert_reel,
         mark_reel_published,
         reel_lines_used,
+        reel_spalle,
         reels_by_status,
+        segna_uso_yt,
         set_reel_status,
         set_reel_url,
     )
@@ -518,26 +520,60 @@ def cmd_reels(args: argparse.Namespace) -> int:
         mark_reel_published(conn, r["id"], media_id)
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
 
-        # YouTube: stesso video, altro pubblico. Sta DOPO Instagram e in un
-        # blocco proprio perche' un problema qui non deve far risultare
-        # fallito un reel gia' uscito su Instagram — sono due destinazioni
-        # indipendenti, e trattarle come una sola farebbe ripubblicare.
+        # YouTube. Sta DOPO Instagram e in un blocco proprio perche' un
+        # problema qui non deve far risultare fallito un reel gia' uscito su
+        # Instagram — sono due destinazioni indipendenti, e trattarle come una
+        # sola farebbe ripubblicare.
         if cfg.get("publish.youtube.enabled", False):
             try:
+                from engine import reel as _reel
                 from engine.publish import youtube
 
                 tag = _json.loads(r["hashtags"] or "[]")
-                # Il testo del reel e' salvato unito; per il titolo servono i
-                # due tempi separati, quindi si ricava il taglio dal punto.
-                pezzi = r["line"].split(". ", 1)
-                meta = youtube.componi_metadati(
-                    pezzi[0], pezzi[1] if len(pezzi) > 1 else "", r["caption"], tag
-                )
-                # Il percorso locale vale solo sulla macchina che ha
-                # costruito il reel: su GitHub ogni esecuzione parte da un
-                # disco vuoto, e un reel costruito ieri non ha piu' il file.
-                # Si riscarica dall'URL, che invece e' persistente.
-                locale = Path(r["video_path"])
+                # YouTube riceve la VARIANTE LUNGA, non lo stesso file di
+                # Instagram: la finestra premiata da YouTube e' 30-45 secondi,
+                # quella di Instagram 7-15. Un file solo andrebbe bene su una
+                # piattaforma e male sull'altra.
+                #
+                # Apre sempre la curiosita' appena pubblicata: e' quella
+                # nuova, ed e' cio' che il titolo promette. Le altre si
+                # pescano fra le gia' uscite, scegliendo le meno riusate, e
+                # non pesano sulla generazione. Cosi' ogni video lungo resta
+                # unico (apertura, filmati e musica diversi) senza chiedere
+                # tre curiosita' nuove al giorno, che non ci sono.
+                locale = None
+                extra: list = []
+                if cfg.get("publish.youtube.long_form", True):
+                    try:
+                        def _spezza(riga: str, umore: str) -> dict:
+                            pz = riga.split(". ", 1)
+                            return {"hook": pz[0],
+                                    "reveal": pz[1] if len(pz) > 1 else "",
+                                    "mood": umore}
+
+                        quante = int(cfg.get("publish.youtube.facts_per_video", 3))
+                        spalle = reel_spalle(conn, r, quante - 1)
+                        voci = [_spezza(r["line"], r["mood"])]
+                        voci += [_spezza(x["line"], x["mood"]) for x in spalle]
+
+                        # Con meno di due curiosita' il video lungo non ha
+                        # senso: nei primi giorni l'archivio e' vuoto e si
+                        # esce con il breve, senza che sia un errore.
+                        if len(voci) >= 2:
+                            locale = _reel.build_multi(voci, f"r{r['id']}")
+                            if locale:
+                                segna_uso_yt(conn, [r["id"]] + [x["id"] for x in spalle])
+                                extra = [x["line"] for x in spalle]
+                                print(f"    variante lunga: {len(voci)} curiosita'")
+                        else:
+                            print("    archivio troppo corto: esce il video breve")
+                    except Exception as exc:
+                        print(f"    variante lunga fallita, uso il breve: {exc}")
+
+                # Ripiego sul file breve, riscaricandolo se la macchina non e'
+                # quella che l'ha costruito.
+                if locale is None:
+                    locale = Path(r["video_path"])
                 if not locale.exists() and url:
                     import httpx as _hx
                     locale = Path(DATA_DIR) / f"yt-{r['id']}.mp4"
@@ -546,6 +582,14 @@ def cmd_reels(args: argparse.Namespace) -> int:
                         with open(locale, "wb") as fh:
                             for blocco in resp.iter_bytes(65536):
                                 fh.write(blocco)
+
+                # Il testo del reel e' salvato unito; per il titolo servono i
+                # due tempi separati, quindi si ricava il taglio dal punto.
+                pezzi = r["line"].split(". ", 1)
+                meta = youtube.componi_metadati(
+                    pezzi[0], pezzi[1] if len(pezzi) > 1 else "",
+                    r["caption"], tag, altre=extra,
+                )
 
                 yt_id = youtube.publish(
                     locale,

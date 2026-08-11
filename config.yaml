@@ -226,6 +226,15 @@ publish:
     # Verificato con un caricamento reale l'11 agosto 2026.
     # Quota: 6 caricamenti al giorno — ai 3 reel attuali sta larga.
     enabled: true
+    # true = YouTube riceve la variante da ~33 secondi con tre curiosita',
+    # dentro la finestra 30-45s che la piattaforma premia. Instagram continua
+    # a ricevere il formato breve, che e' quello che funziona li'.
+    # false = stesso video su entrambe (piu' semplice, meno efficace su YT).
+    long_form: true
+    # Quante curiosita' in fila nel video lungo. A ~11 secondi l'una, 3 danno
+    # ~33 secondi. Sotto i 30 il video esce dalla finestra che YouTube premia,
+    # sopra i 45 la percentuale di visione crolla.
+    facts_per_video: 3
 
   tiktok:
     enabled: false                # attiva dopo l'audit — vedi README
@@ -292,3 +301,13 @@ reel:
   # genera di nuove. Senza, i reel si esaurirebbero in circa una settimana
   # perché consumano fatti ma non ne producono.
   min_facts: 6
+  # ─── Variante lunga per YouTube ────────────────────────────────────────────
+  # Su Instagram resta il formato breve, che è quello che funziona lì; YouTube
+  # riceve più curiosità in fila. Durata complessiva del video: la finestra
+  # premiata è 30-45 secondi — sotto i 30 il video viene trattato come uno
+  # scarto, sopra i 45 la percentuale di visione crolla e con lei la spinta.
+  long_target_seconds: 33.0
+  # Tetto per singola curiosità: la durata di ciascuna si ricava dividendo il
+  # totale, ma con poche curiosità in archivio la divisione darebbe segmenti
+  # lunghissimi con una frase ferma sullo schermo.
+  long_max_seconds_per_fact: 16.0

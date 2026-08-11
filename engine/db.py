@@ -103,6 +103,11 @@ MIGRATIONS = [
     # Id del video su YouTube: serve a non ricaricare due volte lo stesso
     # Short se il ciclo rigira su un reel gia' pubblicato altrove.
     "ALTER TABLE reels ADD COLUMN youtube_id TEXT",
+    # Quante volte la curiosita' e' comparsa in un video lungo di YouTube.
+    # I video lunghi mettono in fila piu' curiosita': la prima e' sempre
+    # nuova, le altre si pescano fra le gia' uscite. Senza questo contatore
+    # si ripescherebbero sempre le stesse.
+    "ALTER TABLE reels ADD COLUMN yt_uses INTEGER NOT NULL DEFAULT 0",
 ]
 
 
@@ -298,6 +303,55 @@ def insert_reel(conn: sqlite3.Connection, r: Dict[str, Any], status: str = "appr
     )
     conn.commit()
     return int(cur.lastrowid)
+
+
+def reel_spalle(conn, lead, quante: int = 2) -> list:
+    """Curiosita' di supporto per il video lungo di YouTube.
+
+    Il video lungo apre sempre con la curiosita' appena uscita e prosegue con
+    altre gia' pubblicate. Si scelgono quelle riusate meno volte, cosi' il
+    riuso gira su tutto l'archivio invece di battere sempre le stesse; a
+    parita' si preferisce la piu' recente, che e' anche la meglio scritta
+    (il generatore migliora nel tempo).
+
+    Il filtro sui doppioni non e' una precauzione teorica: in archivio ci sono
+    gia' due reel che raccontano lo stesso effetto con parole diverse. Nel
+    feed passano a giorni di distanza, dentro lo stesso video sarebbero uno
+    dopo l'altro.
+    """
+    from .ideas import similarity
+
+    candidati = conn.execute(
+        """SELECT * FROM reels
+           WHERE status = 'published' AND id != ?
+           ORDER BY yt_uses ASC, id DESC
+           LIMIT 40""",
+        (lead["id"],),
+    ).fetchall()
+
+    scelti: list = []
+    testi = [lead["line"]]
+    visti_fact = {lead["fact_id"]} - {None}
+    for c in candidati:
+        if c["fact_id"] is not None and c["fact_id"] in visti_fact:
+            continue
+        if any(similarity(c["line"], t) > 0.45 for t in testi):
+            continue
+        scelti.append(c)
+        testi.append(c["line"])
+        if c["fact_id"] is not None:
+            visti_fact.add(c["fact_id"])
+        if len(scelti) >= quante:
+            break
+    return scelti
+
+
+def segna_uso_yt(conn, ids: list) -> None:
+    if not ids:
+        return
+    conn.executemany("UPDATE reels SET yt_uses = yt_uses + 1 WHERE id=?",
+                     [(i,) for i in ids])
+    conn.commit()
 
 
 def reels_by_status(conn: sqlite3.Connection, status: str) -> List[sqlite3.Row]:

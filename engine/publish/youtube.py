@@ -89,7 +89,8 @@ def access_token() -> str:
     return r.json()["access_token"]
 
 
-def componi_metadati(hook: str, reveal: str, caption: str, tags: list) -> Dict:
+def componi_metadati(hook: str, reveal: str, caption: str, tags: list,
+                     altre: Optional[list] = None) -> Dict:
     """Titolo e descrizione pensati per YouTube, non riciclati da Instagram.
 
     Tre regole, tutte verificate contro le pratiche 2026 e tutte diverse da
@@ -126,7 +127,18 @@ def componi_metadati(hook: str, reveal: str, caption: str, tags: list) -> Dict:
     handle = (cfg.get("brand.handle", "") or "").lstrip("@")
     ponte = f"\n\nAlso on Instagram: instagram.com/{handle}" if handle else ""
 
-    descrizione = caption.strip() + ponte
+    descrizione = caption.strip()
+
+    # Il video lungo contiene piu' curiosita', ma la didascalia racconta solo
+    # la prima. Elencare anche le altre non e' un vezzo: YouTube indicizza la
+    # descrizione, e senza questo il video risulta a tema solo dell'apertura
+    # mentre due terzi del parlato riguardano altro.
+    if altre:
+        righe = "\n".join(f"· {x.rstrip('.')}." for x in altre if x)
+        if righe:
+            descrizione += "\n\nAlso in this video:\n" + righe
+
+    descrizione += ponte
     descrizione += "\n\n" + " ".join("#" + x for x in scelti)
 
     return {

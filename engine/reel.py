@@ -337,3 +337,122 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
         music = None
 
     return compose(frames, out, music)
+
+
+def build_multi(voci: List[Dict], name: str) -> Optional[Path]:
+    """Versione lunga per YouTube: piu' curiosita' concatenate in un video solo.
+
+    Perche' esiste: Instagram premia i reel da 7-15 secondi, YouTube gli Short
+    da 30-45. Con un formato solo si finisce per andare bene su una piattaforma
+    e male sull'altra. Questa funzione costruisce la variante YouTube tenendo
+    identici stile, tipografia e registro musicale — cambia solo il montaggio.
+
+    Ogni curiosita' ha il proprio filmato: cambiare scena ogni dieci secondi
+    e' anche cio' che tiene lo spettatore oltre la meta', dove un fondo unico
+    per trenta secondi lo perderebbe.
+    """
+    from . import footage, render
+
+    if not voci:
+        return None
+
+    ff = _ffmpeg()
+    w, h = REEL_SIZE
+
+    # La durata per curiosita' si ricava dal totale, non e' fissa: con tre
+    # curiosita' a undici secondi il video sta nella finestra premiata, con
+    # due sole cadrebbe a ventidue e ne uscirebbe. Meglio dare piu' respiro
+    # a ciascuna che consegnare un video troppo corto.
+    #
+    # Il limite superiore serve al caso opposto: con una curiosita' sola la
+    # divisione darebbe trentatre' secondi di frase ferma, che e' peggio di
+    # un video breve.
+    totale = float(cfg.get("reel.long_target_seconds", 33.0))
+    massimo = float(cfg.get("reel.long_max_seconds_per_fact", 16.0))
+    per_voce = min(massimo, totale / max(1, len(voci)))
+    stacco = per_voce * 0.4          # quando l'aggancio lascia il posto
+    print(f"    {len(voci)} curiosita' x {per_voce:.1f}s = {per_voce*len(voci):.0f}s")
+
+    out_dir = OUTPUT_DIR / f"yt-{name}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tmp = out_dir / "_segmenti"
+    tmp.mkdir(exist_ok=True)
+
+    segmenti: List[Path] = []
+    for i, v in enumerate(voci):
+        hook = v.get("hook") or v.get("line", "")
+        reveal = v.get("reveal", "")
+        sfondo = footage.per_frase(v.get("mood", "reflective"), hook + str(i))
+        if not sfondo:
+            continue
+
+        overlays = render.render_slides(
+            [
+                {"kicker": "", "headline": hook, "body": ""},
+                {"kicker": "", "headline": reveal or hook, "body": ""},
+            ],
+            f"yt-{name}-{i}", "line", size=REEL_SIZE, transparent=True,
+        )
+
+        seg = tmp / f"{i:02d}.mp4"
+        filtro = (
+            f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+            f"crop={w}:{h},format=yuv420p[bg];"
+            f"[1:v]format=rgba,fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
+            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
+            f"fade=t=out:st={per_voce - 0.5:.2f}:d=0.4:alpha=1[b];"
+            f"[bg][a]overlay=0:0:format=auto[p];"
+            f"[p][b]overlay=0:0:format=auto[v]"
+        )
+        _run([
+            ff, "-y",
+            "-stream_loop", "-1", "-t", f"{per_voce}", "-i", str(sfondo),
+            "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[0]),
+            "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[1]),
+            "-filter_complex", filtro, "-map", "[v]",
+            "-t", f"{per_voce}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+            "-maxrate", "6M", "-bufsize", "12M",
+            "-pix_fmt", "yuv420p", "-r", "30",
+            str(seg),
+        ])
+        segmenti.append(seg)
+
+    if not segmenti:
+        return None
+
+    # Concatenazione + una sola traccia musicale sopra l'intero video: cambiare
+    # brano a ogni curiosita' spezzerebbe il video in tre cose separate.
+    elenco = tmp / "elenco.txt"
+    elenco.write_text("".join(f"file '{s.name}'\n" for s in segmenti))
+
+    durata = per_voce * len(segmenti)
+    musica = _traccia_a_caso(name, voci[0].get("mood", "reflective"))
+    out = out_dir / "short.mp4"
+
+    args = [ff, "-y", "-f", "concat", "-safe", "0", "-i", str(elenco)]
+    if musica:
+        args += ["-stream_loop", "-1", "-i", str(musica)]
+    args += ["-c:v", "copy"]
+    if musica:
+        args += [
+            "-map", "0:v", "-map", "1:a",
+            "-af", f"volume=0.3,afade=t=out:st={durata - 1.5:.2f}:d=1.5",
+            "-c:a", "aac", "-b:a", "128k", "-shortest",
+        ]
+    args += ["-movflags", "+faststart", str(out)]
+    _run(args)
+
+    for s in segmenti:
+        s.unlink(missing_ok=True)
+    elenco.unlink(missing_ok=True)
+    tmp.rmdir()
+
+    # Copertina: il primo aggancio in campo, come per i reel brevi.
+    try:
+        _run([ff, "-y", "-ss", "1.5", "-i", str(out), "-frames:v", "1",
+              "-q:v", "3", str(out.parent / "cover.jpg")])
+    except Exception:
+        pass
+
+    return out
