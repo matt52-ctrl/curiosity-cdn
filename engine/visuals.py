@@ -616,6 +616,12 @@ def attach_images(slides: List[Dict[str, str]]) -> int:
             continue
 
         slide["image"] = as_data_uri(path)
+        # Da dove viene la foto. L'immagine incorporata serve solo a rendere
+        # le slide adesso e non viene salvata (peserebbe un megabyte a slide
+        # in un database che sta nel repo); questi due campi bastano a
+        # ritrovarla se un giorno si vuole ri-renderizzare il post.
+        slide["image_file"] = str(path)
+        slide["image_src"] = image.url or ""
         slide["credit"] = image.credit
         found += 1
         if image.source.startswith("ai:"):

@@ -201,7 +201,7 @@ def insert_post(
             json.dumps(hashtags),
             json.dumps(image_paths),
             status,
-            json.dumps(slides or []),
+            json.dumps(senza_immagini(slides or [])),
         ),
     )
     conn.commit()
@@ -234,6 +234,26 @@ def mark_published(
     )
     conn.commit()
     alleggerisci_slides(conn)
+
+
+def senza_immagini(slides: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Copia delle slide senza le immagini incorporate.
+
+    Le slide portano la foto dentro di se' in base64 — circa un megabyte
+    l'una — perche' il rendering avviene in memoria subito dopo. Sul database
+    quei byte non devono arrivare: il database sta nel repo, e a cinque
+    megabyte per post GitHub smette di accettare il push nel giro di giorni.
+
+    Restano `image_file` e `image_src`, che dicono dov'era la foto: bastano a
+    ricostruire il post se serve, e pesano qualche decina di byte.
+    """
+    pulite = []
+    for s in slides:
+        c = dict(s)
+        if isinstance(c.get("image"), str) and c["image"].startswith("data:"):
+            c["image"] = ""
+        pulite.append(c)
+    return pulite
 
 
 def alleggerisci_slides(conn: sqlite3.Connection) -> int:

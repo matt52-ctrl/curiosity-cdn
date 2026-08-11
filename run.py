@@ -685,6 +685,51 @@ def cmd_prune(args: argparse.Namespace) -> int:
     return 0
 
 
+def _ripristina_immagini(slides: list) -> int:
+    """Rimette le foto dentro le slide lette dal database.
+
+    Prima si prova la cache su disco, che e' il caso normale in locale; se il
+    file non c'e' piu' — succede su una macchina diversa, o dopo una pulizia —
+    si riscarica dall'indirizzo originale. Se non riesce nessuna delle due, la
+    slide esce su fondo pieno: brutta ma non rotta, che e' meglio di un post
+    che non si ri-renderizza affatto.
+    """
+    from engine.visuals import as_data_uri
+
+    rimesse = 0
+    for s in slides:
+        if s.get("image"):
+            continue
+        percorso = s.get("image_file", "")
+        if percorso and Path(percorso).exists():
+            s["image"] = as_data_uri(Path(percorso))
+            rimesse += 1
+            continue
+        # Le immagini generate hanno un `image_src` che punta alla cache
+        # locale: se il file non c'è più, non c'è niente da riscaricare — la
+        # stessa richiesta a FLUX darebbe un'altra immagine, non quella.
+        src = s.get("image_src", "")
+        if not src.startswith(("http://", "https://")):
+            continue
+        try:
+            import httpx
+            r = httpx.get(src, timeout=45, follow_redirects=True)
+            r.raise_for_status()
+            # Sempre nella cache di questa macchina: `image_file` è il percorso
+            # di dove il post fu costruito, che su un computer diverso può
+            # essere una cartella che non esiste o su cui non si scrive.
+            import hashlib as _h
+            nome = _h.sha1(src.encode()).hexdigest()[:16]
+            dest = DATA_DIR / "imgcache" / f"{nome}{Path(src).suffix[:5] or '.jpg'}"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(r.content)
+            s["image"] = as_data_uri(dest)
+            rimesse += 1
+        except Exception as exc:
+            print(f"    ⚠ foto non recuperata ({src[:44]}): {exc}")
+    return rimesse
+
+
 def cmd_rerender(args: argparse.Namespace) -> int:
     """Ri-renderizza un post già costruito, senza chiamare nessuna API.
 
@@ -709,6 +754,13 @@ def cmd_rerender(args: argparse.Namespace) -> int:
         if not slides:
             print(f"  · #{post['id']} saltato: costruito prima che il testo venisse salvato")
             continue
+
+        # Le foto non stanno nel database — ci starebbero a un megabyte l'una,
+        # in un file versionato nel repo. Si rimettono ora, dalla cache locale
+        # se c'e' ancora, altrimenti riscaricandole dall'originale.
+        rimesse = _ripristina_immagini(slides)
+        if rimesse:
+            print(f"  · #{post['id']}: {rimesse} foto rimesse")
 
         # Le immagini stanno nella cartella del post: si rileggono da lì invece
         # di riscaricarle.
