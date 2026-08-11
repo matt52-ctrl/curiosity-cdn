@@ -108,6 +108,11 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python run.py comments
+        # Un problema qui non deve far risultare fallito un giro che ha
+        # pubblicato correttamente: rispondere ai commenti e' un di piu',
+        # pubblicare e' il lavoro. Senza questo, un singolo errore sulle
+        # risposte manderebbe una mail di fallimento per un ciclo riuscito.
+        continue-on-error: true
 
       - name: Salva lo stato
         if: always()
