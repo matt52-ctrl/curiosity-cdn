@@ -20,13 +20,27 @@ from .publish import instagram
 
 
 def collect(conn: sqlite3.Connection) -> int:
-    """Aggiorna le metriche di tutti i post pubblicati. Ritorna quanti aggiornati."""
+    """Aggiorna le metriche di tutti i post pubblicati. Ritorna quanti aggiornati.
+
+    Se non aggiorna nulla lo dice, e dice perche'. Prima falliva in silenzio a
+    ogni ciclo: nei log comparivano zero metriche senza alcuna indicazione che
+    la causa fosse un permesso mancante e non l'assenza di dati.
+    """
+    pubblicati = published_posts(conn)
     updated = 0
-    for post in published_posts(conn):
+    for post in pubblicati:
         metrics = instagram.insights(post["ig_media_id"])
         if metrics:
             insert_metrics(conn, post["id"], metrics)
             updated += 1
+
+    if pubblicati and updated == 0:
+        print(
+            f"    nessuna metrica su {len(pubblicati)} post pubblicati: "
+            f"al token manca instagram_manage_insights. Copertura, "
+            f"salvataggi e condivisioni restano invisibili, e il ciclo di "
+            f"apprendimento non ha dati su cui lavorare."
+        )
     return updated
 
 

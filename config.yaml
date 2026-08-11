@@ -283,3 +283,7 @@ reel:
   # evita che il profilo diventi prevedibile: chi vede sempre lo stesso schema
   # smette di aspettare la seconda parte.
   single_ratio: 0.4
+  # Sotto questa soglia di curiosità non ancora usate nei reel, il ciclo ne
+  # genera di nuove. Senza, i reel si esaurirebbero in circa una settimana
+  # perché consumano fatti ma non ne producono.
+  min_facts: 6

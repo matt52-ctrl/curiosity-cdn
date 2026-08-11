@@ -389,6 +389,23 @@ def cmd_reels(args: argparse.Namespace) -> int:
 
     conn = connect()
 
+    # 0. I reel consumano curiosita' ma non ne producono: solo il ciclo dei
+    #    caroselli genera fatti nuovi, e lo fa in base alle SUE scorte. Senza
+    #    questo controllo i reel si esauriscono in circa una settimana e il
+    #    ciclo resta verde producendo zero.
+    liberi = conn.execute(
+        """SELECT COUNT(*) n FROM facts
+           WHERE status IN ('approved','rendered','published')
+             AND id NOT IN (SELECT COALESCE(fact_id,-1) FROM reels)"""
+    ).fetchone()["n"]
+    print(f"curiosita' non ancora usate nei reel: {liberi}")
+    if liberi < int(cfg.get("reel.min_facts", 6)):
+        print("→ scorte basse, genero nuove curiosita'")
+        try:
+            ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
+        except Exception as exc:
+            print(f"generazione curiosita' fallita: {exc}")
+
     # 1. Magazzino: se restano meno di 2 reel pronti, se ne producono altri.
     pronti = reels_by_status(conn, "approved")
     print(f"reel pronti: {len(pronti)}")
@@ -424,10 +441,16 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 else:
                     testo, risposta = l.get("hook") or l["line"], l.get("reveal", "")
 
+                # Nome stabile: hash() in Python e' salato per processo, quindi
+                # lo stesso reel finiva in cartelle diverse a ogni esecuzione,
+                # accumulando copie orfane e rendendo impossibile ricostruirlo.
+                import hashlib as _h
+                nome = _h.sha1(l["line"].encode()).hexdigest()[:10]
+
                 video = reel.build_line(
                     testo,
                     sfondo,
-                    f"{abs(hash(l['line'])) % 10**8}",
+                    nome,
                     mood=l["mood"],
                     reveal=risposta,
                 )
@@ -496,6 +519,11 @@ def cmd_reels(args: argparse.Namespace) -> int:
         print(f"✓ reel #{r['id']} pubblicato: {media_id}")
     except Exception as exc:
         set_reel_status(conn, r["id"], "failed")
+        # La curiosita' torna disponibile: il reel resta segnato come fallito
+        # ma il suo fact_id lo escluderebbe per sempre dalle generazioni
+        # future, bruciando una curiosita' verificata a ogni errore di rete.
+        conn.execute("UPDATE reels SET fact_id=NULL WHERE id=?", (r["id"],))
+        conn.commit()
         print(f"✗ reel #{r['id']} fallito: {exc}")
         review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
 
