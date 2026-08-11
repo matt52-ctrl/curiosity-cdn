@@ -638,9 +638,18 @@ def cmd_prune(args: argparse.Namespace) -> int:
     Tocca SOLO i contenuti in stato `published`. Quelli ancora in coda hanno
     bisogno del loro URL per essere pubblicati, e cancellarli li romperebbe.
     """
+    from engine.db import alleggerisci_slides
     from engine.hosting import elimina
 
     conn = connect()
+
+    # Il peso vero non e' sul CDN ma nel database, che sta nel repo: ogni post
+    # si porta dentro i propri PNG in base64. Si toglie qui perche' e' lo
+    # stesso lavoro — liberare spazio da cio' che ha gia' fatto il suo giro.
+    if not getattr(args, "dry", False):
+        liberati = alleggerisci_slides(conn)
+        if liberati:
+            print(f"database alleggerito di {liberati/1_048_576:.1f} MB")
 
     prefissi = []
     for r in conn.execute("SELECT id FROM posts WHERE status='published'").fetchall():

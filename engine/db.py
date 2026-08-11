@@ -233,6 +233,51 @@ def mark_published(
         (time.time(), ig_media_id, tiktok_id, post_id),
     )
     conn.commit()
+    alleggerisci_slides(conn)
+
+
+def alleggerisci_slides(conn: sqlite3.Connection) -> int:
+    """Toglie le immagini incorporate dai post che non si ri-renderizzano piu'.
+
+    Ogni slide porta dentro il proprio PNG in base64 — circa 1,3 MB — perche'
+    `rerender` possa rifare la grafica senza riscaricare o rigenerare nulla.
+    Il testo va conservato, l'immagine no: `rerender` lavora solo sui post
+    ancora in revisione, quindi su un post pubblicato quel megabyte non serve
+    piu' a niente.
+
+    Perche' e' urgente e non una pulizia di garbo: il database e' versionato
+    nel repo (e deve esserlo, o su Actions la pipeline ripubblicherebbe tutto
+    da capo). A cinque megabyte per post e due post al giorno, GitHub rifiuta
+    il push in pochi giorni e il ciclo si ferma di colpo.
+
+    Restituisce i byte liberati.
+    """
+    liberati = 0
+    righe = conn.execute(
+        """SELECT id, slides FROM posts
+           WHERE status IN ('published','superseded','failed','rejected')
+             AND slides LIKE '%data:image%'"""
+    ).fetchall()
+    for r in righe:
+        try:
+            slides = json.loads(r["slides"] or "[]")
+        except json.JSONDecodeError:
+            continue
+        prima = len(r["slides"])
+        for s in slides:
+            # Solo le immagini incorporate: un URL normale pesa nulla ed e'
+            # l'unica traccia di che foto era.
+            if isinstance(s.get("image"), str) and s["image"].startswith("data:"):
+                s["image"] = ""
+        dopo = json.dumps(slides)
+        liberati += prima - len(dopo)
+        conn.execute("UPDATE posts SET slides=? WHERE id=?", (dopo, r["id"]))
+    if righe:
+        conn.commit()
+        # Senza questo SQLite tiene le pagine svuotate e il file non cala:
+        # il repo continuerebbe a portarsi dietro gli stessi megabyte.
+        conn.execute("VACUUM")
+    return liberati
 
 
 def get_post(conn: sqlite3.Connection, post_id: int) -> Optional[sqlite3.Row]:
