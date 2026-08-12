@@ -442,16 +442,38 @@ def generate(subject: str) -> Optional[Image]:
     if provider in ("none", "", None):
         return None
 
-    model = cfg.get("visuals.ai_model", "") or _AI_MODELS.get(provider, "")
     prompt = f"{subject}. {_style_suffix()}".strip()
 
-    raw = {
+    generatori = {
         "gemini": _generate_gemini,
         "imagen": _generate_imagen,
         "openai": _generate_openai,
         "pollinations": _generate_pollinations,
         "cloudflare": _generate_cloudflare,
-    }.get(provider, lambda *_: None)(prompt, model)
+    }
+
+    # Catena di ripiego invece di un provider solo. Il margine su Cloudflare e'
+    # sottile: 10.000 neuroni al giorno coprono giusto le dieci immagini dei
+    # due caroselli, e qualunque consumo in piu' — una prova, un giro
+    # ripetuto — esaurisce la quota. Quando succede, senza catena si
+    # ripiegherebbe sulla ricerca stock, che su questa nicchia restituisce
+    # repertorio fuori tema: e' proprio il motivo per cui `prefer_generated`
+    # e' acceso. Meglio un'immagine generata da un secondo provider gratuito
+    # che una foto d'archivio scelta male.
+    catena = [provider]
+    ripiego = cfg.get("visuals.ai_fallback", "") or ""
+    if ripiego and ripiego not in ("none", provider):
+        catena.append(ripiego)
+
+    raw = None
+    for i, nome in enumerate(catena):
+        model = cfg.get("visuals.ai_model", "") or _AI_MODELS.get(nome, "")
+        raw = generatori.get(nome, lambda *_: None)(prompt, model)
+        if raw:
+            if i:
+                print(f"    ripiegato su {nome}")
+            provider = nome        # il credito deve dire chi l'ha davvero fatta
+            break
 
     if not raw:
         return None

@@ -102,6 +102,15 @@ visuals:
   #   none    nessuna generazione: le immagini arrivano solo da Wikimedia/Pexels
   ai_provider: "cloudflare"
 
+  # Secondo provider, usato solo se il primo non produce nulla. Serve perché
+  # il margine su Cloudflare è sottile: 10.000 neuroni al giorno coprono
+  # giusto le dieci immagini dei due caroselli, e una prova in più esaurisce
+  # la quota. Senza questa rete si ripiegherebbe sulla ricerca stock, che su
+  # questa nicchia restituisce repertorio fuori tema — cioè esattamente il
+  # motivo per cui prefer_generated è acceso.
+  # "none" per disattivarla.
+  ai_fallback: "pollinations"
+
   # true  → genera sempre, anche per i soggetti "reali". Giusto per nicchie di
   #         comportamento quotidiano: l'archivio su questi temi restituisce
   #         materiale storico fuori contesto.
