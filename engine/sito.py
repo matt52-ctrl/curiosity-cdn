@@ -192,6 +192,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{_radice()}style.css">
+<link rel="alternate" type="application/rss+xml" title="{nome}" href="{_radice()}feed.xml">
 {dati}
 </head><body>
 <header><div class="guscio">
@@ -242,15 +243,36 @@ def genera(conn: sqlite3.Connection) -> int:
     # cartelle che iniziano per underscore e a volte rimaneggia l'HTML.
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
 
+    # Tutte le verificate, non solo quelle gia' uscite sui social. Il sito e'
+    # un archivio, non un feed: razionare le pagine non ha alcun vantaggio, e
+    # la pipeline verifica piu' in fretta di quanto i social consumino —
+    # quel surplus altrimenti non vedrebbe mai la luce. Le scartate restano
+    # fuori: sono state bocciate dal fact-check, ed e' il punto.
     fatti = conn.execute(
         """SELECT * FROM facts
-           WHERE status IN ('published','rendered') AND hook != ''
+           WHERE status IN ('published','rendered','approved') AND hook != ''
+             AND COALESCE(verdict,'') != 'refuted'
            ORDER BY created_at DESC"""
     ).fetchall()
 
     base = _base_url()
     ig = (cfg.get("brand.handle", "") or "").lstrip("@")
     yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+
+    # Primo passaggio: si contano gli argomenti. Serve prima di scrivere le
+    # pagine perche' ognuna deve sapere quali delle sue etichette avranno una
+    # pagina d'argomento e quali no — un collegamento a una pagina che non
+    # esiste e' peggio di nessun collegamento.
+    conteggio: Dict[str, int] = {}
+    for f in fatti:
+        try:
+            for k in json.loads(f["keywords"] or "[]")[:4]:
+                k = k.strip().lower()
+                conteggio[k] = conteggio.get(k, 0) + 1
+        except json.JSONDecodeError:
+            pass
+    MIN_PER_ARGOMENTO = 3
+    argomenti_validi = {k for k, n in conteggio.items() if n >= MIN_PER_ARGOMENTO}
 
     voci = []
     for f in fatti:
@@ -277,8 +299,18 @@ def genera(conn: sqlite3.Connection) -> int:
         except json.JSONDecodeError:
             chiavi = []
         occhiello = (chiavi[0] if chiavi else "Psychology").replace("-", " ")
-        etichette = ('<div class="etichette">' + "".join(
-            f'<span>{_e(k)}</span>' for k in chiavi[:5]) + "</div>") if chiavi else ""
+        # Le etichette diventano collegamenti solo se la pagina d'argomento
+        # esiste davvero: un collegamento a una pagina inesistente e' peggio
+        # di nessun collegamento.
+        etichette = ""
+        if chiavi:
+            pezzi = []
+            for k in chiavi[:5]:
+                if k.strip().lower() in argomenti_validi:
+                    pezzi.append(f'<a href="{_radice()}t/{_slug(k)}/">{_e(k)}</a>')
+                else:
+                    pezzi.append(f"<span>{_e(k)}</span>")
+            etichette = '<div class="etichette">' + "".join(pezzi) + "</div>"
 
         corpo = f"""<a class="indietro" href="{_radice()}">← all facts</a>
 <div class="occhiello">{_e(occhiello)}</div>
@@ -299,6 +331,48 @@ def genera(conn: sqlite3.Connection) -> int:
         cartella.mkdir(parents=True, exist_ok=True)
         (cartella / "index.html").write_text(
             _pagina(f["hook"], (f["fact"] or "")[:180], corpo, f"f/{slug}/", jsonld),
+            encoding="utf-8",
+        )
+
+    # ── pagine per argomento ──
+    #
+    # Servono a due cose diverse. Per chi legge, sono il modo di continuare
+    # dopo la prima pagina invece di uscire. Per i motori di ricerca, sono
+    # pagine che rispondono a una domanda larga ("psychology of memory")
+    # mentre le singole rispondono a una stretta: senza, il sito compete solo
+    # sulle code lunghe e non ha nulla al centro.
+    per_argomento: Dict[str, list] = {}
+    for s, f in voci:
+        try:
+            for k in json.loads(f["keywords"] or "[]")[:4]:
+                per_argomento.setdefault(k.strip().lower(), []).append((s, f))
+        except json.JSONDecodeError:
+            pass
+
+    # Sotto le tre curiosita' una pagina d'argomento e' piu' vuota che utile,
+    # e Google la tratta come contenuto sottile.
+    argomenti = {k: v for k, v in per_argomento.items() if k in argomenti_validi}
+
+    for arg, elenco_a in sorted(argomenti.items()):
+        sa = _slug(arg)
+        righe = "".join(
+            f'<li><a href="{_radice()}f/{s}/"><div class="titolo">{_e(f["hook"])}</div>'
+            f'<div class="sotto">{_e((f["fact"] or "")[:118])}…</div></a></li>'
+            for s, f in elenco_a
+        )
+        titolo_a = arg[0].upper() + arg[1:]
+        corpo_a = f"""<a class="indietro" href="{_radice()}">← all facts</a>
+<div class="occhiello">{len(elenco_a)} checked facts</div>
+<h1>{_e(titolo_a)}</h1>
+<div class="corpo"><p class="guida">Everything on this site about
+{_e(arg)} — each one naming the study behind it.</p></div>
+<ul class="elenco" style="margin-top:2.5rem">{righe}</ul>"""
+        cartella_a = DOCS / "t" / sa
+        cartella_a.mkdir(parents=True, exist_ok=True)
+        (cartella_a / "index.html").write_text(
+            _pagina(f"{titolo_a} — {len(elenco_a)} checked psychology facts",
+                    f"Checked facts about {arg}, each naming the study behind it.",
+                    corpo_a, f"t/{sa}/"),
             encoding="utf-8",
         )
 
@@ -329,12 +403,53 @@ def genera(conn: sqlite3.Connection) -> int:
         encoding="utf-8",
     )
 
+    # ── feed RSS ──
+    #
+    # È la newsletter senza la newsletter. Chi vuole gli aggiornamenti si
+    # iscrive dal proprio lettore, e non c'è nessun indirizzo email da
+    # raccogliere: niente modulo, niente banca dati, niente consenso da
+    # registrare, niente obblighi da titolare del trattamento. Su un progetto
+    # in Europa quella differenza non è burocratica, è sostanziale.
+    #
+    # E non è un vicolo cieco: quando ci sarà un pubblico vero, i servizi di
+    # newsletter sanno leggere un RSS e trasformarlo in email da soli. Questo
+    # feed è la fondazione di quella, costruita adesso a costo zero.
+    if base:
+        import email.utils as _eu
+
+        elementi = []
+        for s, f in voci[:50]:
+            data = _eu.formatdate(f["created_at"] or 0, usegmt=True)
+            elementi.append(
+                "<item>"
+                f"<title>{_e(f['hook'])}</title>"
+                f"<link>{base}/f/{s}/</link>"
+                f"<guid isPermaLink=\"true\">{base}/f/{s}/</guid>"
+                f"<pubDate>{data}</pubDate>"
+                f"<description>{_e((f['fact'] or '')[:400])}</description>"
+                "</item>"
+            )
+        nome_marchio = _e(cfg.get("brand.name", "Oddly Wired"))
+        (DOCS / "feed.xml").write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
+            f"<title>{nome_marchio}</title>"
+            f"<link>{base}/</link>"
+            "<description>One checked psychology fact a day. "
+            "Every claim names the study behind it.</description>"
+            "<language>en</language>"
+            f'<atom:link href="{base}/feed.xml" rel="self" type="application/rss+xml"/>'
+            + "".join(elementi) +
+            "</channel></rss>",
+            encoding="utf-8",
+        )
+
     # ── sitemap: è ciò che dice a Google che le pagine esistono senza
     #    aspettare che le trovi seguendo i link ──
     if base:
-        url = [f"<url><loc>{base}/</loc></url>"] + [
-            f"<url><loc>{base}/f/{s}/</loc></url>" for s, _ in voci
-        ]
+        url = ([f"<url><loc>{base}/</loc></url>"]
+               + [f"<url><loc>{base}/f/{s}/</loc></url>" for s, _ in voci]
+               + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)])
         (DOCS / "sitemap.xml").write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
