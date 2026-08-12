@@ -10,23 +10,27 @@
 
 name: Curiosity TikTok
 
+# ⚠️  SPENTO. Mattia ha deciso di non fare TikTok per ora — vedi in fondo.
+#
+# Il codice resta al suo posto e funziona: per riaccenderlo basta togliere il
+# commento dagli orari qui sotto e mettere i tre secret TIKTOK_* su GitHub.
+# Senza quei secret il caricamento fallirebbe a ogni giro mandando una mail,
+# ed è il motivo per cui gli orari sono commentati invece che lasciati attivi.
+#
+# Perché è stato sospeso, in breve, per quando lo riprenderai:
+#   · l'automazione COMPLETA su TikTok non è ottenibile gratis. L'audit del
+#     nostro client è precluso (richiede schermate di consenso e l'avatar del
+#     creator: la pipeline non ha interfaccia da mostrare), e i piani gratuiti
+#     dei servizi terzi escludono TikTok proprio perché è il più costoso.
+#   · a pagamento si può: Upload-Post Basic ~16 $/mese, oppure Blotato 29 $.
+#   · ma Upload-Post stesso, nella propria documentazione, sconsiglia la
+#     pubblicazione diretta: dice che pubblicare dall'app rende di più in
+#     copertura organica. Pagare comprerebbe meno lavoro E meno copertura.
+#
+# Quindi la scelta è: o quattro tocchi al giorno sul telefono, o soldi con un
+# probabile costo in copertura. Rivalutabile quando il canale avrà dei numeri.
+
 on:
-  schedule:
-    # UNA bozza alla volta, negli orari di pubblicazione — non cinque all'alba.
-    #
-    # Il motivo non è la comodità: dall'app TikTok non si può programmare, quindi
-    # una bozza si pubblica quando la tocchi. Cinque bozze consegnate insieme
-    # verrebbero pubblicate insieme, e si farebbero concorrenza sullo stesso
-    # pubblico nella stessa ora.
-    #
-    # Consegnandone una per volta, la notifica di TikTok diventa il promemoria:
-    # non devi ricordarti di pubblicare alle 13, alle 13 te lo dice il telefono.
-    # Gli orari sono anticipati di ~45 minuti perché GitHub accoda i lavori
-    # programmati e parte in ritardo, misurato fino a 64 minuti.
-    - cron: "15 6 * * *"     # ~9:00 italiane
-    - cron: "15 11 * * *"    # ~14:00
-    - cron: "15 16 * * *"    # ~19:00 — sfalsato dai reel delle 18:45
-    - cron: "15 20 * * *"    # ~23:00, sera negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
