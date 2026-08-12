@@ -10,6 +10,11 @@ name: Curiosity cycle
 
 on:
   schedule:
+    # Spostati insieme ai reel nella finestra del pubblico anglofono. Erano
+    # alle 11:00 e alle 17:00 italiane, cioe' le 5 del mattino e le 11 a New
+    # York: avevo corretto i reel e lasciato indietro i caroselli.
+    # Sfalsati dai reel (13, 19, 23) per non accavallarsi — condividono il
+    # gruppo di concorrenza, quindi una sovrapposizione mette in coda.
     # Due avvertenze su questi orari.
     #
     # 1. Sono in UTC e non seguono l'ora legale: d'inverno i post escono
@@ -23,8 +28,8 @@ on:
     # desiderata (13:00 e 20:00 italiane): con il ritardo tipico si finisce
     # mediamente dentro. Se un giorno servisse precisione vera, l'unica
     # strada è un VPS con cron proprio.
-    - cron: "15 8 * * *"     # ~11:00 italiane
-    - cron: "15 14 * * *"    # ~17:00 italiane
+    - cron: "15 12 * * *"    # ~15:00 italiane — 9:00 a New York
+    - cron: "15 18 * * *"    # ~21:00 italiane — 15:00 a New York
   # Permette di lanciarlo a mano dalla tab Actions, utile per provare.
   workflow_dispatch:
 
