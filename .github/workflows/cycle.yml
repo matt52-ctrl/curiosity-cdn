@@ -23,8 +23,8 @@ on:
     # desiderata (13:00 e 20:00 italiane): con il ritardo tipico si finisce
     # mediamente dentro. Se un giorno servisse precisione vera, l'unica
     # strada è un VPS con cron proprio.
-    - cron: "15 10 * * *"
-    - cron: "15 17 * * *"
+    - cron: "15 8 * * *"     # ~11:00 italiane
+    - cron: "15 14 * * *"    # ~17:00 italiane
   # Permette di lanciarlo a mano dalla tab Actions, utile per provare.
   workflow_dispatch:
 

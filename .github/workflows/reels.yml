@@ -9,14 +9,26 @@ name: Curiosity reels
 
 on:
   schedule:
-    # Orari italiani desiderati: 8:00, 12:00, 20:00.
+    # Orari italiani desiderati: 13:00, 19:00, 23:00.
     # Sono in UTC (d'estate Italia = UTC+2) e anticipati di 45 minuti, perché
     # GitHub accoda i job schedulati e parte in ritardo — misurato fino a 64
     # minuti. Anticipare è l'unico modo di centrare mediamente la finestra.
-    - cron: "15 5 * * *"     # ~8:00 italiane
-    - cron: "15 9 * * *"     # ~12:00 italiane
-    - cron: "45 16 * * *"    # ~19:30 italiane (sfalsato dai caroselli
-                             #  delle 17:15, che scrivono lo stesso database)
+    #
+    # Perché queste tre e non le 8:00/12:00/20:00 di prima: il canale è in
+    # inglese, e su Shorts l'inglese pesca soprattutto da Stati Uniti e Regno
+    # Unito. Le 7:15 italiane sono l'1:15 a New York e le 11:15 sono le 5:15 —
+    # due uscite su tre finivano nel cuore della notte del pubblico principale.
+    # La finestra utile, in ora italiana, è dalle 18 all'1: copre insieme il
+    # pomeriggio-sera americano e la sera europea.
+    #
+    # Riscontro sui primi cinque video: le due uscite di mezzogiorno hanno
+    # fatto 115 e 117 visualizzazioni, quella delle 19:45 ne ha fatte 497.
+    # Con cinque video non si distingue l'orario dal contenuto — quel video
+    # aveva anche l'aggancio migliore — ma punta nella stessa direzione del
+    # ragionamento sui fusi, che regge da solo.
+    - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA
+    - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
+    - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
