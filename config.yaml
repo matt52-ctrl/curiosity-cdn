@@ -405,3 +405,18 @@ reel:
   # totale, ma con poche curiosità in archivio la divisione darebbe segmenti
   # lunghissimi con una frase ferma sullo schermo.
   long_max_seconds_per_fact: 16.0
+
+# ─── PROVA A/B SUL REGISTRO ───────────────────────────────────────────────────
+# Metà dei video YouTube sono scritti come sempre ("osservazione"), metà con un
+# registro di riconoscimento: non "ecco come funziona la mente" ma "ecco una
+# cosa su di te che credevi un tuo difetto".
+#
+# Ipotesi: la pagina ha like buoni (3,2%) ma pochissime iscrizioni (0,19%).
+# Mancherebbe un motivo per restare. L'indizio: il video più forte dei primi
+# cinque — 497 viste contro 115, e l'unico commento — era l'unico scritto così.
+#
+# Il gruppo di controllo NON va toccato mentre la prova è in corso, o il
+# confronto perde significato.
+esperimento:
+  # Sotto questa soglia per gruppo, la differenza è rumore e non va letta.
+  video_minimi: 6

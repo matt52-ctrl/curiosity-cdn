@@ -53,7 +53,96 @@ LINES_SCHEMA = {
 }
 
 
-def _system() -> str:
+
+# ─── Prova A/B sul registro ───────────────────────────────────────────────────
+#
+# Ipotesi da verificare: la pagina ha like buoni (3,2%) ma pochissime
+# iscrizioni (0,19%). Il sospetto è che manchi un motivo per restare — i video
+# funzionano, la pagina no, perché ogni video si chiude su se stesso.
+#
+# Il solo indizio nei dati: il video più forte dei primi cinque (497 viste
+# contro 115, e l'unico commento del canale) non raccontava come funziona la
+# mente. Raccontava una cosa su di te che ti fa stare meglio: "gli altri ti
+# apprezzano più di quanto tu creda".
+#
+# Quindi si prova a metà: stessa riserva di curiosità, stesse regole, cambia
+# solo il registro. Se dopo una settimana i due gruppi hanno gli stessi
+# numeri, l'ipotesi era sbagliata e si torna indietro — che è il motivo per
+# cui il gruppo di controllo esiste.
+
+VARIANTI = ("osservazione", "riconoscimento")
+
+REGISTRO = {
+    # Gruppo di controllo: nessuna istruzione aggiuntiva, esattamente ciò che
+    # la pagina fa da sempre. Non va "migliorato" mentre la prova è in corso,
+    # o il confronto perde significato.
+    "osservazione": "",
+
+    "riconoscimento": """
+
+REGISTER FOR THIS BATCH — read this before writing
+
+Write these lines as recognition, not as information.
+
+The difference: an observation tells the reader how minds work. A recognition
+tells the reader something about *themselves* that they had been carrying
+alone. The first is interesting. The second is a relief.
+
+  observation:   "Your memory of an event ignores its duration."
+  recognition:   "You are not remembering it wrong. Everyone stores it that
+                  way — the worst minute and the last one."
+
+  observation:   "People underestimate how much strangers like them."
+  recognition:   "They liked you more than you thought. They always do."
+
+What to aim for, in order:
+  1. The reader should think "that is me" before they think "interesting".
+  2. Where the research honestly allows it, let the line absolve rather than
+     accuse. Most of these findings are about something ordinary that people
+     quietly believe is their private defect. Saying "this is not your fault,
+     it is how everyone is built" is both truer and kinder.
+  3. Prefer the findings that touch being judged, being seen, being wrong
+     about yourself in a way that turns out to be forgivable.
+
+WHICH FINDINGS TO PICK
+
+You are given more findings than lines you need. Choose the ones that carry a
+private worry: being judged, being seen, misjudging yourself, believing you are
+the only one. Leave the mechanical curiosities — how perception works, how
+memory encodes — to another day. They are interesting, but nobody recognises
+themselves in them.
+
+If none of the findings offered can carry that weight, write them straight
+rather than forcing warmth onto material that does not have it. A forced
+consolation is more damaging than a dry line: it reads as manipulation, and
+this account cannot afford to sound like it is selling comfort.
+
+What does NOT change:
+  · Still true. Absolution is not permission to overstate — if the research
+    does not support the comfort, pick another fact. A false consolation is
+    worse than a dry observation, because people act on it.
+  · Still no advice, no commands, no motivational register. You are not
+    reassuring the reader, you are telling them a fact that happens to
+    relieve them. The difference is audible.
+  · Still two beats, same lengths, same mood rules.""",
+}
+
+
+def scegli_variante(conn) -> str:
+    """Sceglie il gruppo tenendo la prova bilanciata.
+
+    Non a caso: con pochi video il caso produce facilmente 5 contro 1, e un
+    confronto sbilanciato non si legge. Si guarda quale gruppo ha meno video e
+    si assegna quello.
+    """
+    conteggi = {v: 0 for v in VARIANTI}
+    for r in conn.execute("SELECT variante, COUNT(*) n FROM esperimento GROUP BY variante"):
+        if r["variante"] in conteggi:
+            conteggi[r["variante"]] = r["n"]
+    return min(VARIANTI, key=lambda v: conteggi[v])
+
+
+def _system(variante: str = "osservazione") -> str:
     return f"""You write single lines for {cfg.get('brand.name')} ({cfg.get('brand.handle')}),
 an account about how the human mind actually works.
 
@@ -129,11 +218,12 @@ HASHTAGS
   In 2026 hashtags no longer drive discovery — Instagram uses them to file
   content by topic, not to distribute it. Thirty tags do nothing that five do
   not, and a wall of them reads as spam. So: five narrow, specific tags that
-  describe the actual mechanism, not the field."""
+  describe the actual mechanism, not the field.""" + REGISTRO.get(variante, "")
 
 
 def generate(conn: sqlite3.Connection, count: int,
-             imparato: str = "", canale: str = "instagram") -> List[Dict[str, Any]]:
+             imparato: str = "", canale: str = "instagram",
+             variante: str = "osservazione") -> List[Dict[str, Any]]:
     """Ricava frasi dai fatti verificati, escludendo quelli gia' usati.
 
     L'esclusione avviene sul FATTO, non sulla frase: due reel possono
@@ -185,7 +275,8 @@ Return JSON matching the schema."""
     if imparato:
         user += "\n\n" + imparato
 
-    data = ask_json(_system(), user, LINES_SCHEMA, effort="medium", max_tokens=8000)
+    data = ask_json(_system(variante), user, LINES_SCHEMA,
+                    effort="medium", max_tokens=8000)
     linee = data.get("lines", [])[:count]
 
     pinned = cfg.get("caption.pinned_hashtags", []) or []

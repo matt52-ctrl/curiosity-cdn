@@ -617,7 +617,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     import json as _json
 
     from engine import lines, reel as _reel
-    from engine.db import quanti_liberi, segna_uso_fatto
+    from engine.db import quanti_liberi, segna_uso_fatto, segna_variante
     from engine.publish import youtube
 
     quante = int(cfg.get("publish.youtube.facts_per_video", 3))
@@ -648,7 +648,12 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
         print(f"    ancora {liberi}: salto questo giro invece di ripetermi")
         return
 
-    frasi = lines.generate(conn, quante, imparato=imparato, canale="youtube")
+    # Prova A/B sul registro: il gruppo si sceglie qui, non a caso ma
+    # tenendo il confronto bilanciato. Stessa riserva di curiosita' per
+    # entrambi — cambia solo come sono scritte.
+    variante = lines.scegli_variante(conn)
+    frasi = lines.generate(conn, quante, imparato=imparato, canale="youtube",
+                           variante=variante)
     frasi = [f for f in frasi if f.get("fact_id")][:quante]
     if len(frasi) < quante:
         print(f"    solo {len(frasi)} frasi utilizzabili su {quante}: salto")
@@ -687,7 +692,9 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     # risultare bruciate da un errore di rete.
     for f in frasi:
         segna_uso_fatto(conn, f["fact_id"], "youtube", f"yt-{yt_id}")
-    print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove")
+    segna_variante(conn, yt_id, variante)
+    print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove "
+          f"[{variante}]")
 
 
 def _giro_youtube(conn, imparato: str) -> None:
@@ -1074,6 +1081,43 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     print(f"\n{fatti} bozze inviate. Aprile dall'app TikTok e pubblicale.")
     if len(restanti) - fatti > 0:
         print(f"{len(restanti) - fatti} restano in coda per i prossimi giorni.")
+    return 0
+
+
+def cmd_esperimento(args: argparse.Namespace) -> int:
+    """Come stanno andando i due registri a confronto."""
+    from engine.db import esito_esperimento
+
+    conn = connect()
+    righe = esito_esperimento(conn)
+    if not righe:
+        print("Nessun video ancora assegnato a un gruppo.")
+        print("Il primo parte alla prossima pubblicazione su YouTube.")
+        return 0
+
+    print("\n  PROVA A/B SUL REGISTRO\n")
+    print(f"  {'gruppo':16} {'video':>6} {'viste':>7} {'like':>6} {'like %':>8} "
+          f"{'visione':>8} {'commenti':>9}")
+    print("  " + "-" * 66)
+    for r in righe:
+        viste = r["viste"] or 0
+        like = r["like_tot"] or 0
+        print(f"  {r['variante']:16} {r['video']:>6} {viste:>7} {like:>6} "
+              f"{100 * like / max(viste, 1):>7.1f}% {r['visione_media'] or 0:>7.1f}% "
+              f"{r['commenti'] or 0:>9}")
+
+    minimo = int(cfg.get("esperimento.video_minimi", 6))
+    totale = sum(r["video"] for r in righe)
+    print()
+    if totale < minimo * 2:
+        print(f"  Ancora presto: {totale} video in tutto, ne servono almeno "
+              f"{minimo} per gruppo\n  prima che il confronto voglia dire qualcosa. "
+              f"Con questi numeri la differenza\n  fra i due gruppi è rumore.")
+    else:
+        print("  Le iscrizioni non compaiono qui: YouTube non le espone per video.\n"
+              "  Vanno lette in Studio, e sono il numero che conta di più per\n"
+              "  questa prova — i like dicono se il video piace, le iscrizioni\n"
+              "  se la pagina convince.")
     return 0
 
 
@@ -2194,6 +2238,9 @@ def main() -> int:
     p.add_argument("--quanti", type=int, default=0,
                    help="quante bozze inviare (default e massimo: 5, tetto di TikTok)")
     p.set_defaults(func=cmd_ttcarica)
+
+    p = sub.add_parser("esperimento", help="confronto fra i due registri della prova A/B")
+    p.set_defaults(func=cmd_esperimento)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)

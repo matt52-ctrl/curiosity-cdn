@@ -165,6 +165,16 @@ CREATE TABLE IF NOT EXISTS reel_metrics (
     UNIQUE(reel_id, platform, collected_at)
 );
 CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
+
+-- Prova A/B sul registro delle frasi. Tabella separata di proposito: e' un
+-- esperimento con una fine, e quando sara' concluso si cancella senza toccare
+-- nulla di strutturale.
+CREATE TABLE IF NOT EXISTS esperimento (
+    video_id  TEXT PRIMARY KEY,
+    variante  TEXT NOT NULL,
+    creato    REAL NOT NULL,
+    piattaforma TEXT NOT NULL DEFAULT 'youtube'
+);
 """
 
 
@@ -790,3 +800,42 @@ def quanti_liberi(conn: sqlite3.Connection, canale: str) -> int:
              AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)""",
         (canale,),
     ).fetchone()["n"]
+
+
+def segna_variante(conn: sqlite3.Connection, video_id: str, variante: str,
+                   piattaforma: str = "youtube") -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO esperimento (video_id, variante, creato, piattaforma) "
+        "VALUES (?,?,?,?)",
+        (video_id, variante, time.time(), piattaforma),
+    )
+    conn.commit()
+
+
+def esito_esperimento(conn: sqlite3.Connection) -> List[sqlite3.Row]:
+    """Confronto fra i due gruppi, su cio' che e' misurabile.
+
+    Si guardano insieme visualizzazioni, like e iscritti perche' l'ipotesi
+    riguarda proprio la differenza fra loro: i like dicono se il video piace,
+    le iscrizioni se la pagina convince. Un registro puo' benissimo alzare i
+    primi e lasciare ferme le seconde — sarebbe gia' una risposta.
+    """
+    return conn.execute(
+        """
+        SELECT e.variante,
+               COUNT(DISTINCT e.video_id) AS video,
+               SUM(x.views)  AS viste,
+               SUM(x.likes)  AS like_tot,
+               SUM(x.commenti) AS commenti,
+               AVG(x.pct)    AS visione_media
+        FROM esperimento e
+        LEFT JOIN (
+            SELECT video_id,
+                   MAX(views) AS views, MAX(likes) AS likes,
+                   MAX(comments) AS commenti, MAX(avg_view_pct) AS pct
+            FROM reel_metrics WHERE platform='youtube' AND video_id IS NOT NULL
+            GROUP BY video_id
+        ) x ON x.video_id = e.video_id
+        GROUP BY e.variante
+        """
+    ).fetchall()
