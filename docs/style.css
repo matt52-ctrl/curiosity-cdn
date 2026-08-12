@@ -82,6 +82,22 @@ footer p { margin-bottom:.6rem; }
             text-decoration:none; font-size:.9rem; }
 .indietro:hover { color:var(--oro); }
 
+.fonti .citazione { font-family:'Instrument Serif',Georgia,serif; font-size:1.18rem;
+                    color:var(--oro); line-height:1.35; }
+.fonti .sotto { margin-top:.3rem; }
+
+/* La curiosità del giorno: uguale per tutti, cambia a mezzanotte. È il motivo
+   per tornare che al sito mancava del tutto — chi l'aveva già visto non aveva
+   nessuna ragione di riaprirlo. */
+.oggi { background:var(--carta); border:1px solid var(--bordo); border-radius:14px;
+        padding:1.8rem 1.7rem; margin:2.6rem 0 0; }
+.oggi .occhiello { margin-bottom:.7rem; }
+.oggi h2 { font-family:'Instrument Serif',Georgia,serif; font-weight:400;
+           font-size:1.75rem; line-height:1.18; letter-spacing:-.02em; }
+.oggi p { color:var(--tenue); margin-top:.7rem; font-size:.97rem; }
+.oggi a { text-decoration:none; display:block; }
+.oggi a:hover h2 { color:var(--oro); }
+
 .correlate { margin-top:3rem; padding-top:2rem; border-top:1px solid var(--bordo); }
 .correlate h2 { font-size:.79rem; letter-spacing:.15em; text-transform:uppercase;
                 color:var(--tenue); margin-bottom:.5rem; }

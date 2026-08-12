@@ -145,6 +145,22 @@ footer p { margin-bottom:.6rem; }
             text-decoration:none; font-size:.9rem; }
 .indietro:hover { color:var(--oro); }
 
+.fonti .citazione { font-family:'Instrument Serif',Georgia,serif; font-size:1.18rem;
+                    color:var(--oro); line-height:1.35; }
+.fonti .sotto { margin-top:.3rem; }
+
+/* La curiosità del giorno: uguale per tutti, cambia a mezzanotte. È il motivo
+   per tornare che al sito mancava del tutto — chi l'aveva già visto non aveva
+   nessuna ragione di riaprirlo. */
+.oggi { background:var(--carta); border:1px solid var(--bordo); border-radius:14px;
+        padding:1.8rem 1.7rem; margin:2.6rem 0 0; }
+.oggi .occhiello { margin-bottom:.7rem; }
+.oggi h2 { font-family:'Instrument Serif',Georgia,serif; font-weight:400;
+           font-size:1.75rem; line-height:1.18; letter-spacing:-.02em; }
+.oggi p { color:var(--tenue); margin-top:.7rem; font-size:.97rem; }
+.oggi a { text-decoration:none; display:block; }
+.oggi a:hover h2 { color:var(--oro); }
+
 .correlate { margin-top:3rem; padding-top:2rem; border-top:1px solid var(--bordo); }
 .correlate h2 { font-size:.79rem; letter-spacing:.15em; text-transform:uppercase;
                 color:var(--tenue); margin-bottom:.5rem; }
@@ -218,6 +234,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
   {marchio}
   <a class="nome" href="{_radice()}">{nome}</a>
   <nav>
+    <a href="{_radice()}sources/">Sources</a>
     {f'<a href="https://instagram.com/{ig}" rel="me">Instagram</a>' if ig else ''}
     {f'<a href="https://youtube.com/@{yt}" rel="me">YouTube</a>' if yt else ''}
   </nav>
@@ -429,6 +446,32 @@ def genera(conn: sqlite3.Connection) -> int:
             encoding="utf-8",
         )
 
+    # ── la curiosità del giorno ──
+    #
+    # Scelta dalla data, non a caso: così è la stessa per tutti e cambia a
+    # mezzanotte. Sceglierla a caso a ogni ricarica la renderebbe solo un
+    # secondo bottone «a caso», e soprattutto toglierebbe il motivo per
+    # tornare domani — che è l'unica ragione per cui esiste.
+    #
+    # Si genera qui, staticamente: la data è quella della rigenerazione, e
+    # visto che i cicli girano cinque volte al giorno il sito non resta mai
+    # indietro. Farlo in JavaScript avrebbe significato ricalcolarlo a ogni
+    # visita per lo stesso risultato.
+    oggi_html = ""
+    if voci:
+        import datetime as _dt
+
+        giorno = _dt.date.today()
+        i = (giorno.toordinal() * 2654435761) % len(voci)   # sparpaglia i giorni vicini
+        s_o, f_o = voci[i]
+        oggi_html = f'''<div class="oggi">
+  <a href="{_radice()}f/{s_o}/">
+    <div class="occhiello">Today&rsquo;s fact</div>
+    <h2>{_e(f_o["hook"])}</h2>
+    <p>{_e((f_o["fact"] or "")[:150])}&hellip;</p>
+  </a>
+</div>'''
+
     # ── indice ──
     elenco = "".join(
         f'<li><a href="{_radice()}f/{s}/"><div class="titolo">{_e(f["hook"])}</div>'
@@ -442,6 +485,7 @@ def genera(conn: sqlite3.Connection) -> int:
   study behind it — the authors, the year, and what the check found. If a
   finding is contested, it says so.</p>
 </div>
+{oggi_html}
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">Follow on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
@@ -493,6 +537,50 @@ def genera(conn: sqlite3.Connection) -> int:
         encoding="utf-8",
     )
 
+    # ── pagina delle fonti ──
+    #
+    # È la cosa che questo progetto ha e che nessun altro nella nicchia può
+    # copiare senza rifare il lavoro. Chiunque può aprire una pagina di
+    # curiosità di psicologia; una bibliografia verificabile no. Sta in una
+    # pagina sola, non solo in fondo a ciascuna, perché il messaggio è
+    # cumulativo: sessanta paper insieme dicono una cosa che sessanta
+    # citazioni sparse non dicono.
+    import re as _re
+
+    fonti = []
+    for s, f in voci:
+        sh = (f["source_hint"] or "").strip()
+        if not sh:
+            continue
+        anno = _re.search(r"\b(19|20)\d{2}\b", sh)
+        fonti.append((int(anno.group(0)) if anno else 0, sh, s, f["hook"]))
+    fonti.sort(key=lambda x: (-x[0], x[1]))
+
+    if fonti:
+        righe_f = "".join(
+            f'<li><a href="{_radice()}f/{s}/">'
+            f'<div class="citazione">{_e(sh)}</div>'
+            f'<div class="sotto">{_e(h)}</div></a></li>'
+            for _, sh, s, h in fonti
+        )
+        anni_v = [a for a, _, _, _ in fonti if a]
+        arco = f"{min(anni_v)}-{max(anni_v)}" if anni_v else ""
+        corpo_f = f"""<a class="indietro" href="{_radice()}">back to all facts</a>
+<div class="occhiello">{len(fonti)} studies{f' &middot; {arco}' if arco else ''}</div>
+<h1>Every study behind every claim.</h1>
+<div class="corpo"><p class="guida">Nothing on this site is published without
+a named source. This is the full list &mdash; authors, year, journal &mdash;
+with the finding each one supports. If a claim is contested, its page says so.</p></div>
+<ul class="elenco fonti" style="margin-top:2.5rem">{righe_f}</ul>"""
+        (DOCS / "sources").mkdir(parents=True, exist_ok=True)
+        (DOCS / "sources" / "index.html").write_text(
+            _pagina(f"Sources - {len(fonti)} studies behind every claim",
+                    f"The {len(fonti)} studies cited on this site, "
+                    f"with the finding each one supports.",
+                    corpo_f, "sources/"),
+            encoding="utf-8",
+        )
+
     # ── feed RSS ──
     #
     # È la newsletter senza la newsletter. Chi vuole gli aggiornamenti si
@@ -539,7 +627,8 @@ def genera(conn: sqlite3.Connection) -> int:
     if base:
         url = ([f"<url><loc>{base}/</loc></url>"]
                + [f"<url><loc>{base}/f/{s}/</loc></url>" for s, _ in voci]
-               + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)])
+               + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)]
+               + ([f"<url><loc>{base}/sources/</loc></url>"] if fonti else []))
         (DOCS / "sitemap.xml").write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
