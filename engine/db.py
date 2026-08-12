@@ -112,6 +112,13 @@ MIGRATIONS = [
     # Il solo contatore non basta: a parita' di riusi bisogna sapere QUANDO,
     # o si ripesca quella appena andata in onda.
     "ALTER TABLE reels ADD COLUMN yt_last_used REAL NOT NULL DEFAULT 0",
+    # Identificativo del video YouTube. Serve da quando YouTube e' stato
+    # scollegato da Instagram: i suoi video non nascono piu' da un reel,
+    # quindi `reel_id` per loro e' vuoto e le metriche non avevano dove
+    # agganciarsi. Senza questa colonna la raccolta trovava solo i due video
+    # dell'epoca in cui i due canali erano ancora legati, e il ciclo di
+    # apprendimento restava fermo a quelli per sempre.
+    "ALTER TABLE reel_metrics ADD COLUMN video_id TEXT",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -167,6 +174,7 @@ def connect(path: Optional[Path] = None) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     conn.executescript(REELS_SCHEMA)
     conn.executescript(REEL_METRICS_SCHEMA)
+    _migra_reel_metrics(conn)
     conn.executescript(FACT_USES_SCHEMA)
     _recupera_consumi(conn)
     for statement in MIGRATIONS:
@@ -577,17 +585,106 @@ def facts_used_in_reels(conn: sqlite3.Connection) -> List[int]:
     ]
 
 
-def salva_metriche_reel(conn: sqlite3.Connection, reel_id: int, piattaforma: str,
-                        m: Dict[str, Any]) -> None:
+
+def _migra_reel_metrics(conn: sqlite3.Connection) -> None:
+    """Rende `reel_id` facoltativo, una volta sola.
+
+    Nasceva NOT NULL perche' ogni metrica veniva da un reel. Da quando YouTube
+    e' scollegato da Instagram i suoi video non hanno un reel a cui
+    appartenere, e il vincolo impediva di salvarne le metriche: la raccolta
+    falliva e il ciclo di apprendimento restava fermo ai due video vecchi.
+
+    SQLite non sa togliere un NOT NULL con ALTER, quindi si ricrea la tabella
+    copiando i dati. Si fa una volta: la seconda volta la colonna e' gia'
+    facoltativa e la funzione esce subito.
+    """
+    colonne = {r["name"]: r for r in conn.execute("PRAGMA table_info(reel_metrics)")}
+    if not colonne or not colonne.get("reel_id", {})["notnull"]:
+        return
+
+    conn.executescript("""
+        BEGIN;
+        CREATE TABLE reel_metrics_nuova (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            reel_id       INTEGER REFERENCES reels(id),
+            video_id      TEXT,
+            platform      TEXT NOT NULL,
+            collected_at  REAL NOT NULL,
+            views         INTEGER DEFAULT 0,
+            likes         INTEGER DEFAULT 0,
+            comments      INTEGER DEFAULT 0,
+            avg_view_pct  REAL DEFAULT 0,
+            avg_view_sec  REAL DEFAULT 0,
+            UNIQUE(reel_id, video_id, platform, collected_at)
+        );
+        INSERT INTO reel_metrics_nuova
+            (id, reel_id, video_id, platform, collected_at, views, likes,
+             comments, avg_view_pct, avg_view_sec)
+        SELECT id, reel_id, video_id, platform, collected_at, views, likes,
+               comments, avg_view_pct, avg_view_sec
+        FROM reel_metrics;
+        DROP TABLE reel_metrics;
+        ALTER TABLE reel_metrics_nuova RENAME TO reel_metrics;
+        CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
+        CREATE INDEX IF NOT EXISTS idx_reel_metrics_video ON reel_metrics(video_id, platform);
+        COMMIT;
+    """)
+    print("  · reel_metrics: reel_id ora facoltativo (video YouTube autonomi)")
+
+
+def salva_metriche_reel(conn: sqlite3.Connection, reel_id: Optional[int],
+                        piattaforma: str, m: Dict[str, Any],
+                        video_id: str = "") -> None:
+    """Salva una rilevazione. `reel_id` per i video YouTube autonomi e' None.
+
+    I due identificativi convivono perche' convivono due origini: i reel di
+    Instagram, che nascono da un reel, e i video YouTube, che dopo lo
+    scollegamento nascono direttamente dalle curiosita' e non hanno un reel
+    a cui appartenere.
+    """
     conn.execute(
         """INSERT OR REPLACE INTO reel_metrics
-           (reel_id, platform, collected_at, views, likes, comments,
+           (reel_id, video_id, platform, collected_at, views, likes, comments,
             avg_view_pct, avg_view_sec)
-           VALUES (?,?,?,?,?,?,?,?)""",
-        (reel_id, piattaforma, time.time(), m.get("views", 0), m.get("likes", 0),
-         m.get("comments", 0), m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0)),
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (reel_id, video_id, piattaforma, time.time(), m.get("views", 0),
+         m.get("likes", 0), m.get("comments", 0),
+         m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0)),
     )
     conn.commit()
+
+
+def video_youtube(conn: sqlite3.Connection) -> List[str]:
+    """Gli id dei video YouTube pubblicati, ricavati dal registro dei consumi.
+
+    Non esiste una tabella dei video YouTube e non serve: ogni pubblicazione
+    lascia nel registro una riga per curiosita' con `ref` = "yt-<id>", che e'
+    gia' l'elenco completo e non puo' divergere dalla realta' — se il
+    caricamento fallisce, le righe non vengono scritte.
+    """
+    righe = conn.execute(
+        "SELECT DISTINCT ref FROM fact_uses WHERE channel='youtube' AND ref LIKE 'yt-%'"
+    ).fetchall()
+    ids = [r["ref"][3:] for r in righe if len(r["ref"]) > 3]
+    # I video dell'epoca in cui YouTube nasceva dai reel: quelli stanno ancora
+    # solo in reels.youtube_id e non hanno righe nel registro.
+    vecchi = conn.execute(
+        "SELECT youtube_id FROM reels WHERE youtube_id IS NOT NULL AND youtube_id != ''"
+    ).fetchall()
+    return sorted(set(ids) | {r["youtube_id"] for r in vecchi})
+
+
+def testo_video_youtube(conn: sqlite3.Connection, video_id: str) -> str:
+    """L'aggancio del video: la prima curiosita' che contiene."""
+    r = conn.execute(
+        """SELECT f.hook FROM fact_uses u JOIN facts f ON f.id = u.fact_id
+           WHERE u.channel='youtube' AND u.ref = ? ORDER BY u.rowid LIMIT 1""",
+        (f"yt-{video_id}",),
+    ).fetchone()
+    if r:
+        return r["hook"]
+    r = conn.execute("SELECT line FROM reels WHERE youtube_id = ?", (video_id,)).fetchone()
+    return r["line"] if r else video_id
 
 
 def reel_migliori(conn: sqlite3.Connection, limit: int = 8) -> List[sqlite3.Row]:
@@ -604,15 +701,14 @@ def reel_migliori(conn: sqlite3.Connection, limit: int = 8) -> List[sqlite3.Row]
     """
     return conn.execute(
         """
-        SELECT r.id, r.line, r.mood, r.hashtags,
+        SELECT COALESCE(m.video_id, CAST(m.reel_id AS TEXT)) AS chiave,
                MAX(m.views) AS views,
                MAX(m.avg_view_pct) AS pct,
                MAX(m.avg_view_sec) AS secondi,
                MAX(m.likes) AS likes
         FROM reel_metrics m
-        JOIN reels r ON r.id = m.reel_id
         WHERE m.platform = 'youtube'
-        GROUP BY r.id
+        GROUP BY chiave
         HAVING views >= 25
         ORDER BY pct DESC
         LIMIT ?

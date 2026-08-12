@@ -110,20 +110,33 @@ def raccogli_youtube(conn: sqlite3.Connection) -> int:
     """Aggiorna le metriche dei reel usciti su YouTube. Ritorna quanti aggiornati."""
     from .publish import youtube as yt
 
-    righe = conn.execute(
-        "SELECT id, youtube_id FROM reels WHERE youtube_id IS NOT NULL AND youtube_id != ''"
-    ).fetchall()
-    if not righe:
+    from .db import video_youtube
+
+    # L'elenco arriva dal registro dei consumi, non da `reels.youtube_id`:
+    # da quando YouTube e' scollegato da Instagram i suoi video non nascono
+    # piu' da un reel, e quella colonna resta vuota. Leggendo solo li' la
+    # raccolta trovava i due video dell'epoca in cui i canali erano legati e
+    # ignorava tutti gli altri — silenziosamente.
+    elenco = video_youtube(conn)
+    if not elenco:
         return 0
 
-    per_video = {r["youtube_id"]: r["id"] for r in righe}
+    # Per i video vecchi si conserva il collegamento al reel, cosi' le
+    # rilevazioni gia' salvate restano coerenti.
+    per_reel = {
+        r["youtube_id"]: r["id"]
+        for r in conn.execute(
+            "SELECT id, youtube_id FROM reels "
+            "WHERE youtube_id IS NOT NULL AND youtube_id != ''"
+        ).fetchall()
+    }
 
     # Due fonti, unite: le statistiche pubbliche danno like e commenti, che
     # l'API delle analytics non espone; le analytics danno la percentuale di
     # visione, che è l'unica a spiegare *perché* un video è andato bene.
     dati: dict = {}
     try:
-        for vid, m in yt.statistiche(list(per_video)).items():
+        for vid, m in yt.statistiche(elenco).items():
             dati.setdefault(vid, {}).update(m)
     except yt.PermessoMancante as exc:
         print(f"    statistiche YouTube non leggibili: {exc}")
@@ -140,29 +153,35 @@ def raccogli_youtube(conn: sqlite3.Connection) -> int:
 
     n = 0
     for vid, m in dati.items():
-        if vid in per_video:
-            salva_metriche_reel(conn, per_video[vid], "youtube", m)
-            n += 1
+        salva_metriche_reel(conn, per_reel.get(vid), "youtube", m, video_id=vid)
+        n += 1
     if n:
-        print(f"    {n} reel aggiornati da YouTube")
+        print(f"    {n} video aggiornati da YouTube")
     return n
 
 
 def rapporto_youtube(conn: sqlite3.Connection, limit: int = 12) -> str:
+    from .db import testo_video_youtube
+
+    # Si raggruppa per video, non per reel: dopo lo scollegamento i video
+    # YouTube non hanno un reel, e agganciarsi a quello ne mostrava due su
+    # cinque senza dire che ne mancavano tre.
     righe = conn.execute(
-        """SELECT r.id, r.line, MAX(m.views) v, MAX(m.avg_view_pct) p,
+        """SELECT COALESCE(m.video_id, CAST(m.reel_id AS TEXT)) k,
+                  MAX(m.views) v, MAX(m.avg_view_pct) p,
                   MAX(m.avg_view_sec) s, MAX(m.likes) l
-           FROM reel_metrics m JOIN reels r ON r.id = m.reel_id
-           WHERE m.platform='youtube' GROUP BY r.id ORDER BY v DESC LIMIT ?""",
+           FROM reel_metrics m WHERE m.platform='youtube'
+           GROUP BY k ORDER BY v DESC LIMIT ?""",
         (limit,),
     ).fetchall()
     if not righe:
         return ("Nessuna statistica YouTube. Se il canale ha già dei video, "
                 "manca il permesso: python3 setup_youtube.py")
 
-    out = ["", "  viste   visione   sec   like   frase", "  " + "─" * 68]
+    out = ["", "  viste   visione   sec   like   aggancio", "  " + "─" * 68]
     for r in righe:
-        out.append(f"  {r['v']:5d}   {r['p']:6.1f}%  {r['s']:4.0f}  {r['l']:5d}   {r['line'][:38]}")
+        testo = testo_video_youtube(conn, r["k"])
+        out.append(f"  {r['v']:5d}   {r['p']:6.1f}%  {r['s']:4.0f}  {r['l']:5d}   {testo[:38]}")
     return "\n".join(out)
 
 
@@ -183,9 +202,12 @@ def brief_youtube(conn: sqlite3.Connection, limit: int = 6) -> str:
     if len(righe) < 3:
         return ""
 
+    from .db import testo_video_youtube
+
     def elenca(gruppo):
         return "\n".join(
-            f'  - "{r["line"][:110]}" — {r["pct"]:.0f}% ({r["views"]} views)'
+            f'  - "{testo_video_youtube(conn, r["chiave"])[:110]}" '
+            f'— {r["pct"]:.0f}% ({r["views"]} views)'
             for r in gruppo
         )
 
