@@ -123,12 +123,20 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python run.py comments
 
+      # Il sito si rigenera a ogni giro: è statico, costa un secondo, e
+      # rifarlo sempre evita di doversi ricordare quando serve. Le pagine
+      # nuove finiscono nello stesso commit dello stato, quindi non c'è un
+      # momento in cui il database conosce una curiosità e il sito no.
+      - name: Rigenera il sito
+        if: always()
+        run: python run.py sito
+
       - name: Salva lo stato
         if: always()
         run: |
           git config user.name  "curiosity-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/engine.db data/footage_usate.json
+          git add data/engine.db data/footage_usate.json docs
           git diff --staged --quiet && exit 0
           git commit -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
           for i in 1 2 3 4 5; do
@@ -147,7 +155,7 @@ jobs:
             # esce è il remoto più il nostro database, che è l'unico ad aver
             # registrato le pubblicazioni appena fatte.
             git reset -q origin/main
-            git add data/engine.db data/footage_usate.json
+            git add data/engine.db data/footage_usate.json docs
             if git diff --staged --quiet; then
               echo "nulla da salvare"; exit 0
             fi

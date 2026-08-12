@@ -1121,6 +1121,22 @@ def cmd_esperimento(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sito(args: argparse.Namespace) -> int:
+    """Rigenera il sito statico da tutte le curiosita' pubblicate."""
+    from engine import sito
+
+    conn = connect()
+    n = sito.genera(conn)
+    print(f"  {n} pagine di curiosita' + indice → {sito.DOCS}")
+    base = sito._base_url()
+    if base:
+        print(f"  indirizzo pubblico: {base}")
+    print("\n  Se e' la prima volta, va acceso GitHub Pages una sola volta:")
+    print("  repo → Settings → Pages → Source: Deploy from a branch")
+    print("                            Branch: main   Folder: /docs")
+    return 0
+
+
 def cmd_reels(args: argparse.Namespace) -> int:
     """Ciclo dei reel, completamente separato da quello dei post.
 
@@ -2241,6 +2257,9 @@ def main() -> int:
 
     p = sub.add_parser("esperimento", help="confronto fra i due registri della prova A/B")
     p.set_defaults(func=cmd_esperimento)
+
+    p = sub.add_parser("sito", help="rigenera il sito statico in docs/")
+    p.set_defaults(func=cmd_sito)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)

@@ -79,6 +79,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python run.py cycle
 
+      # Il sito si rigenera a ogni giro: è statico, costa un secondo, e
+      # rifarlo sempre evita di doversi ricordare quando serve. Le pagine
+      # nuove finiscono nello stesso commit dello stato, quindi non c'è un
+      # momento in cui il database conosce una curiosità e il sito no.
+      - name: Rigenera il sito
+        if: always()
+        run: python run.py sito
+
       - name: Salva lo stato
         # `always()`: se il ciclo fallisce a metà, quello che ha già fatto va
         # comunque salvato, o al giro dopo lo rifarebbe da capo.
@@ -86,7 +94,7 @@ jobs:
         run: |
           git config user.name  "curiosity-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/engine.db
+          git add data/engine.db docs
           git diff --staged --quiet && exit 0
           git commit -m "stato: $(date -u '+%Y-%m-%d %H:%M UTC')"
 
@@ -111,7 +119,7 @@ jobs:
             # esce è il remoto più il nostro database, che è l'unico ad aver
             # registrato le pubblicazioni appena fatte.
             git reset -q origin/main
-            git add data/engine.db
+            git add data/engine.db docs
             if git diff --staged --quiet; then
               echo "nulla da salvare"; exit 0
             fi

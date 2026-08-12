@@ -420,3 +420,14 @@ reel:
 esperimento:
   # Sotto questa soglia per gruppo, la differenza è rumore e non va letta.
   video_minimi: 6
+
+# ─── SITO ─────────────────────────────────────────────────────────────────────
+# Una pagina per curiosità, servita da GitHub Pages: gratis, senza hosting e
+# senza approvazioni. È l'unico prodotto che si accumula — un reel muore in due
+# giorni, una pagina resta indicizzata per anni — e l'unico che nessuna
+# piattaforma può spegnere.
+sito:
+  # Vuoto = si ricava dal repo (utente.github.io/nome-repo). Metti qui un
+  # dominio tuo se ne compri uno: serve alle URL canoniche e alla sitemap,
+  # e senza quelle Google indicizza l'indirizzo sbagliato.
+  url: ""
