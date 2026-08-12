@@ -81,3 +81,22 @@ footer p { margin-bottom:.6rem; }
 .indietro { display:inline-block; margin-bottom:2rem; color:var(--tenue);
             text-decoration:none; font-size:.9rem; }
 .indietro:hover { color:var(--oro); }
+
+.correlate { margin-top:3rem; padding-top:2rem; border-top:1px solid var(--bordo); }
+.correlate h2 { font-size:.79rem; letter-spacing:.15em; text-transform:uppercase;
+                color:var(--tenue); margin-bottom:.5rem; }
+.correlate .titolo { font-size:1.2rem; }
+.correlate .elenco a { padding:1.05rem 0; }
+
+/* Ricerca e caso: le due funzioni per chi arriva senza sapere cosa cerca. */
+.strumenti { display:flex; gap:.7rem; margin:2.2rem 0 1rem; }
+#cerca { flex:1; background:var(--carta); border:1px solid var(--bordo);
+         border-radius:10px; padding:.8rem 1rem; color:var(--testo); font:inherit;
+         font-size:.98rem; }
+#cerca:focus { outline:none; border-color:var(--oro); }
+#cerca::placeholder { color:var(--tenue); }
+#caso { background:var(--carta); border:1px solid var(--bordo); border-radius:10px;
+        padding:.8rem 1.15rem; color:var(--testo); font:inherit; font-size:.94rem;
+        cursor:pointer; white-space:nowrap; }
+#caso:hover { border-color:var(--oro); color:var(--oro); }
+.vuoto { color:var(--tenue); padding:2rem 0; display:none; }

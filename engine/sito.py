@@ -144,6 +144,25 @@ footer p { margin-bottom:.6rem; }
 .indietro { display:inline-block; margin-bottom:2rem; color:var(--tenue);
             text-decoration:none; font-size:.9rem; }
 .indietro:hover { color:var(--oro); }
+
+.correlate { margin-top:3rem; padding-top:2rem; border-top:1px solid var(--bordo); }
+.correlate h2 { font-size:.79rem; letter-spacing:.15em; text-transform:uppercase;
+                color:var(--tenue); margin-bottom:.5rem; }
+.correlate .titolo { font-size:1.2rem; }
+.correlate .elenco a { padding:1.05rem 0; }
+
+/* Ricerca e caso: le due funzioni per chi arriva senza sapere cosa cerca. */
+.strumenti { display:flex; gap:.7rem; margin:2.2rem 0 1rem; }
+#cerca { flex:1; background:var(--carta); border:1px solid var(--bordo);
+         border-radius:10px; padding:.8rem 1rem; color:var(--testo); font:inherit;
+         font-size:.98rem; }
+#cerca:focus { outline:none; border-color:var(--oro); }
+#cerca::placeholder { color:var(--tenue); }
+#caso { background:var(--carta); border:1px solid var(--bordo); border-radius:10px;
+        padding:.8rem 1.15rem; color:var(--testo); font:inherit; font-size:.94rem;
+        cursor:pointer; white-space:nowrap; }
+#caso:hover { border-color:var(--oro); color:var(--oro); }
+.vuoto { color:var(--tenue); padding:2rem 0; display:none; }
 """
 
 
@@ -274,6 +293,10 @@ def genera(conn: sqlite3.Connection) -> int:
     MIN_PER_ARGOMENTO = 3
     argomenti_validi = {k for k, n in conteggio.items() if n >= MIN_PER_ARGOMENTO}
 
+    # Serve l'elenco completo con gli slug PRIMA di scrivere le pagine, o le
+    # correlate potrebbero puntare solo all'indietro.
+    indice_fatti = [(_slug(f["hook"]), f) for f in fatti]
+
     voci = []
     for f in fatti:
         slug = _slug(f["hook"])
@@ -312,6 +335,35 @@ def genera(conn: sqlite3.Connection) -> int:
                     pezzi.append(f"<span>{_e(k)}</span>")
             etichette = '<div class="etichette">' + "".join(pezzi) + "</div>"
 
+        # Correlate: e' la leva piu' forte contro l'uscita dopo una pagina
+        # sola. Chi arriva da un link nella bio ha gia' dimostrato interesse
+        # per un argomento; offrirgliene altri tre dello stesso tema costa
+        # nulla e cambia completamente quanto resta.
+        vicine = []
+        if chiavi:
+            insieme = {k.strip().lower() for k in chiavi}
+            punteggi = []
+            for s2, f2 in indice_fatti:
+                if f2["id"] == f["id"]:
+                    continue
+                try:
+                    c2 = {k.strip().lower() for k in json.loads(f2["keywords"] or "[]")}
+                except json.JSONDecodeError:
+                    continue
+                comuni = len(insieme & c2)
+                if comuni:
+                    punteggi.append((comuni, s2, f2))
+            punteggi.sort(key=lambda x: -x[0])
+            vicine = punteggi[:3]
+        correlate = ""
+        if vicine:
+            righe_v = "".join(
+                f'<li><a href="{_radice()}f/{s2}/"><div class="titolo">{_e(f2["hook"])}</div></a></li>'
+                for _, s2, f2 in vicine
+            )
+            correlate = ('<section class="correlate"><h2>Related</h2>'
+                         f'<ul class="elenco">{righe_v}</ul></section>')
+
         corpo = f"""<a class="indietro" href="{_radice()}">← all facts</a>
 <div class="occhiello">{_e(occhiello)}</div>
 <h1>{_e(f["hook"])}</h1>
@@ -322,6 +374,7 @@ def genera(conn: sqlite3.Connection) -> int:
 {f'<p class="morale">{_e(f["kicker"])}</p>' if f["kicker"] else ''}
 {_scheda_verifica(f)}
 {etichette}
+{correlate}
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">One a day on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
@@ -393,7 +446,44 @@ def genera(conn: sqlite3.Connection) -> int:
   {f'<a href="https://instagram.com/{ig}">Follow on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
 </div>
-<ul class="elenco" style="margin-top:3rem">{elenco}</ul>"""
+<div class="strumenti">
+  <input id="cerca" type="search" placeholder="Search {len(voci)} checked facts…"
+         autocomplete="off" aria-label="Search">
+  <button id="caso" type="button">Surprise me</button>
+</div>
+<p class="vuoto" id="vuoto">Nothing matches that. Try a single word — memory, regret, effort.</p>
+<ul class="elenco" id="elenco">{elenco}</ul>
+<script>
+// Ricerca lato browser: nessun server, nessuna chiamata, funziona anche
+// offline. Con qualche centinaio di pagine il filtro su testo già presente
+// nella pagina è istantaneo, e costa zero da mantenere.
+(function () {{
+  var campo = document.getElementById('cerca');
+  var lista = document.getElementById('elenco');
+  var vuoto = document.getElementById('vuoto');
+  var voci = [].slice.call(lista.children);
+  voci.forEach(function (v) {{ v.dataset.t = v.textContent.toLowerCase(); }});
+
+  campo.addEventListener('input', function () {{
+    var q = campo.value.trim().toLowerCase();
+    var visti = 0;
+    voci.forEach(function (v) {{
+      var ok = !q || v.dataset.t.indexOf(q) !== -1;
+      v.style.display = ok ? '' : 'none';
+      if (ok) visti++;
+    }});
+    vuoto.style.display = visti ? 'none' : 'block';
+  }});
+
+  // "A caso" è il modo di navigare di chi arriva da un video: non cerca
+  // niente di preciso, vuole un'altra cosa interessante.
+  document.getElementById('caso').addEventListener('click', function () {{
+    var v = voci[Math.floor(Math.random() * voci.length)];
+    var a = v.querySelector('a');
+    if (a) location.href = a.getAttribute('href');
+  }});
+}})();
+</script>"""
     (DOCS / "index.html").write_text(
         _pagina(
             f"{cfg.get('brand.name')} — why people do what they do",
