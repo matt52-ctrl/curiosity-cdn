@@ -1,0 +1,101 @@
+# Episodio lungo settimanale per YouTube.
+#
+# Perché settimanale e non giornaliero: il vincolo economico e quello
+# editoriale portano allo stesso numero, il che capita di rado.
+#
+#   · Produzione misurata: 12,4 curiosità verificate al giorno. Gli Short ne
+#     consumano 9, quindi restano 3,4 al giorno = 24 a settimana. Un episodio
+#     ne vuole 10. A due a settimana si sta appena in pari, a tre l'archivio
+#     comincia a svuotarsi e a uno al giorno crolla.
+#   · Editorialmente, sul formato lungo la frequenza conta molto meno della
+#     percentuale di visione: un video a settimana visto al 60% batte sette
+#     visti al 25%. Il consiglio corrente per un canale nuovo è 1-2 a
+#     settimana, non di più.
+#
+# Sabato perché è il giorno in cui la gente ha tempo per guardare cinque
+# minuti invece di scorrere, e alle 18:00 italiane sono le 12:00 a New York e
+# le 17:00 a Londra: mezzogiorno del weekend su entrambe le sponde.
+
+name: Curiosity episodio lungo
+
+on:
+  schedule:
+    # ~18:00 italiane del sabato. Anticipato di 45 minuti perché GitHub accoda
+    # i lavori programmati e parte in ritardo, misurato fino a 64 minuti.
+    - cron: "15 15 * * 6"
+  workflow_dispatch:
+    inputs:
+      prova:
+        description: "Prova a vuoto: monta l'episodio ma non lo pubblica"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # STESSO gruppo degli altri: scrivono tutti lo stesso database, e due
+  # esecuzioni sovrapposte lo corromperebbero o perderebbero uno stato.
+  group: curiosity-state
+  cancel-in-progress: false
+
+jobs:
+  episodio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60      # dieci segmenti con narrazione: ~5 minuti veri
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Scarica font e musica
+        run: |
+          python setup_fonts.py
+          python setup_music.py
+
+      - name: Monta e pubblica l'episodio
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py lungo ${{ inputs.prova && '--no-publish' || '' }}
+
+      - name: Salva lo stato
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db data/footage_usate.json
+          git diff --staged --quiet && exit 0
+          git commit -m "episodio: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            git rebase origin/main -X ours || {
+              git rebase --abort
+              git reset --soft origin/main
+              git add data/engine.db data/footage_usate.json
+              git commit -m "episodio: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            }
+            sleep 5
+          done
+          echo "::error::stato NON salvato: rischio di ripubblicazione"
+          exit 1

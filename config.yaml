@@ -448,3 +448,37 @@ sito:
   # pubblicazione del sito fallisce il resto continua a girare.
   # Serve il secret SITE_TOKEN con permesso Contents: Read and write.
   repo: "oddlywired/oddlywired.github.io"
+
+# ─── EPISODIO LUNGO (YouTube) ─────────────────────────────────────────────────
+# Settimanale, ~8 minuti, dieci curiosità legate da un tema.
+#
+# Perché esiste: gli Short portano visualizzazioni ma non iscritti — chi scorre
+# non si affeziona a nove secondi. Chi guarda otto minuti ha già investito, e
+# si iscrive. Sono due algoritmi separati con due funzioni diverse: gli Short
+# fanno trovare la pagina, il formato lungo la fa seguire.
+#
+# Non consuma curiosità nuove: riusa quelle già uscite negli Short, che per il
+# pubblico del formato lungo sono comunque inedite.
+lungo:
+  enabled: true
+
+  # Voce della narrazione (Edge TTS: gratuita, senza chiave, neurale).
+  # Scelta ascoltando sei voci maschili sullo stesso testo: l'accento
+  # britannico su contenuto scientifico suona da documentario, che è il
+  # registro della pagina. Valutate anche en-GB-ThomasNeural (più pacato),
+  # en-US-BrianNeural (caldo), en-US-RogerNeural (maturo), en-US-EricNeural
+  # (asciutto), en-AU-WilliamNeural. Si cambia qui, è una riga.
+  voce: "en-GB-RyanNeural"
+
+  # Rallentata di proposito: la cadenza predefinita di questi motori è da
+  # notiziario, e su una pagina che si presenta come pacata suona sbagliata
+  # prima ancora che si capisca cosa dice.
+  velocita: "-8%"
+
+  # Quante curiosità per episodio. Dieci per ~45 secondi l'una danno gli otto
+  # minuti che servono a sbloccare le interruzioni pubblicitarie.
+  curiosita: 10
+
+  # La musica sta molto sotto la voce: qui non accompagna, riempie il silenzio
+  # fra una frase e l'altra. Sopra 0.15 comincia a contendere il parlato.
+  volume_musica: 0.10

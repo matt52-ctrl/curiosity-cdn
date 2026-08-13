@@ -123,7 +123,8 @@ def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
     return None
 
 
-def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
+def cerca(query: str, evita_usate: bool = True,
+          orientamento: str = "portrait") -> Optional[Dict]:
     """Cerca una clip verticale. None se nessuna fonte ha nulla di nuovo."""
     usate = _usate() if evita_usate else {}
 
@@ -139,7 +140,7 @@ def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
             headers={"Authorization": key},
             params={
                 "query": query,
-                "orientation": "portrait",
+                "orientation": orientamento,
                 "per_page": 15,
                 "size": "medium",
             },
@@ -159,7 +160,12 @@ def cerca(query: str, evita_usate: bool = True) -> Optional[Dict]:
             continue
         file_hd = [
             f for f in v.get("video_files", [])
-            if f.get("height", 0) >= 1080 and f.get("width", 0) >= 600
+            # Il lato lungo deve arrivare a 1080: in verticale e' l'altezza,
+            # in orizzontale la larghezza. Chiedere 1080 di altezza a un
+            # filmato panoramico scartava quasi tutto il catalogo.
+            if (f.get("height", 0) >= 1080 and f.get("width", 0) >= 600
+                    if orientamento == "portrait"
+                    else f.get("width", 0) >= 1920 and f.get("height", 0) >= 720)
         ]
         if not file_hd:
             continue
@@ -236,7 +242,7 @@ def si_vede(video: Path) -> bool:
     return True
 
 
-def per_frase(mood: str, frase: str) -> Optional[Path]:
+def per_frase(mood: str, frase: str, orientamento: str = "portrait") -> Optional[Path]:
     """Dal tono della frase al file video, provando più scene.
 
     Se una scena non dà risultati nuovi si passa alla successiva invece di
@@ -249,7 +255,7 @@ def per_frase(mood: str, frase: str) -> Optional[Path]:
 
     ripiego = None
     for scena in opzioni[:5]:
-        clip = cerca(scena)
+        clip = cerca(scena, orientamento=orientamento)
         if not clip:
             continue
         path = scarica(clip)

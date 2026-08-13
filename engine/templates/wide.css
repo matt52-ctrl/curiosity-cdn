@@ -1,0 +1,96 @@
+/* WIDE — sovrimpressione per il formato lungo, 1920×1080.
+   Trasparente: ffmpeg mette sotto il filmato, come per i reel.
+
+   Differenza sostanziale dal verticale: qui c'è una voce che racconta. Il testo
+   non deve più portare tutto il contenuto — se lo facesse, lo spettatore
+   leggerebbe e smetterebbe di ascoltare, e otto minuti di lettura non li fa
+   nessuno. Quindi a schermo va solo l'ancora: l'affermazione, e la fonte.
+   Il resto lo dice la voce. */
+
+body { background: transparent; }
+
+.slide {
+  background: transparent;
+  color: #ffffff;
+  padding: 0;
+}
+
+/* Velatura diagonale invece che centrale: il testo sta in basso a sinistra,
+   come in un documentario, e lasciare libero il resto del quadro fa respirare
+   il filmato invece di soffocarlo con una banda che attraversa tutto. */
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(75deg,
+      rgba(0,0,0,.82) 0%, rgba(0,0,0,.66) 34%,
+      rgba(0,0,0,.18) 62%, rgba(0,0,0,.30) 100%),
+    linear-gradient(0deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 30%);
+}
+
+.grain { display: none; }
+.top, .index, .nav, .credit, .kicker { display: none; }
+
+/* Il blocco di testo sta in basso a sinistra e occupa poco più di metà
+   larghezza: su 1920 una riga a tutta pagina diventa illeggibile, perché
+   l'occhio perde il capo della riga successiva. */
+.stage {
+  position: absolute;
+  left: 120px;
+  bottom: 150px;
+  width: 1020px;
+  display: block;
+}
+
+.headline {
+  font-family: 'Display', Georgia, serif;
+  line-height: 1.04;
+  letter-spacing: -.022em;
+  color: #ffffff;
+  text-align: left;
+  max-width: 100%;
+  text-shadow:
+    0 2px 14px rgba(0,0,0,.9),
+    0 8px 60px rgba(0,0,0,.7);
+}
+
+.fit-xl { font-size: 104px; }
+.fit-lg { font-size: 92px; }
+.fit-md { font-size: 80px; }
+.fit-sm { font-size: 66px; line-height: 1.08; }
+
+/* La citazione dello studio. È il pezzo che questa pagina ha e gli altri no,
+   e mostrarla mentre la voce racconta è ciò che rende visibile la differenza
+   senza doverla dichiarare. */
+.body {
+  display: block;
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 32px;
+  line-height: 1.4;
+  color: #e8c07a;
+  text-align: left;
+  max-width: 100%;
+  margin: 38px 0 0;
+  letter-spacing: .01em;
+  text-shadow: 0 2px 12px rgba(0,0,0,.9);
+}
+
+/* La firma sta in alto a SINISTRA, non a destra: la velatura è diagonale e
+   copre il lato sinistro, mentre a destra il filmato resta in chiaro. Su un
+   cielo bianco misurava 184 di luminosità su 255 — bianco su bianco, cioè
+   invisibile. A sinistra sta sotto i 60. */
+.bottom {
+  position: absolute;
+  top: 68px; left: 120px;
+  right: auto; bottom: auto;
+  justify-content: flex-start;
+}
+
+.mark {
+  color: #ffffff;
+  opacity: .62;
+  font-size: 30px;
+  letter-spacing: .12em;
+  text-shadow: 0 2px 16px rgba(0,0,0,.9);
+}

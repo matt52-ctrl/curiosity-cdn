@@ -1145,6 +1145,109 @@ def cmd_sito(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_lungo(args: argparse.Namespace) -> int:
+    """Costruisce e carica l'episodio settimanale su YouTube.
+
+    Il tema non si sceglie a caso: si prende l'argomento con piu' curiosita'
+    mai finite in un episodio. Cosi' gli episodi non si somigliano fra loro e
+    l'argomento piu' ricco esce per primo, che e' anche quello con piu'
+    probabilita' di funzionare.
+
+    Le curiosita' sono le stesse gia' uscite negli Short — per il pubblico del
+    formato lungo sono comunque inedite, e generarne di nuove apposta
+    raddoppierebbe il carico senza aggiungere nulla.
+    """
+    import collections
+    import hashlib as _h
+    import json as _j
+
+    from engine import lungo
+    from engine.db import segna_uso_fatto
+    from engine.publish import youtube
+
+    if not cfg.get("lungo.enabled", False):
+        print("lungo.enabled e' false in config.yaml")
+        return 0
+
+    conn = connect()
+    quante = int(cfg.get("lungo.curiosita", 10))
+
+    # Curiosita' verificate mai usate in un episodio lungo.
+    righe = conn.execute("""
+        SELECT * FROM facts
+         WHERE status IN ('published','rendered','approved')
+           AND hook != '' AND COALESCE(source_hint,'') != ''
+           AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel='yt_lungo')
+    """).fetchall()
+    if len(righe) < quante:
+        print(f"servono {quante} curiosita' mai usate in un episodio, "
+              f"ce ne sono {len(righe)}")
+        return 1
+
+    # Raggruppamento per argomento
+    per_tema = collections.defaultdict(list)
+    for r in righe:
+        try:
+            for k in _j.loads(r["keywords"] or "[]")[:4]:
+                per_tema[k.strip().lower()].append(r)
+        except _j.JSONDecodeError:
+            pass
+
+    validi = {k: v for k, v in per_tema.items() if len(v) >= quante}
+    if not validi:
+        migliore = max(per_tema.items(), key=lambda x: len(x[1])) if per_tema else None
+        n = len(migliore[1]) if migliore else 0
+        print(f"nessun argomento ha {quante} curiosita' libere "
+              f"(il piu' ricco ne ha {n}). Salto: un episodio senza un tema "
+              f"vero e' una raccolta di cose scollegate.")
+        return 1
+
+    tema = max(validi, key=lambda k: len(validi[k]))
+    fatti = [dict(r) for r in validi[tema][:quante]]
+    for f in fatti:
+        f["mood"] = "reflective"
+
+    titolo_tema = tema[0].upper() + tema[1:]
+    print(f"tema: {titolo_tema}  ({len(validi[tema])} curiosita' disponibili)\n")
+
+    nome = _h.sha1(f"{tema}{fatti[0]['id']}".encode()).hexdigest()[:10]
+    r = lungo.costruisci(fatti, titolo_tema, nome)
+    if not r:
+        return 1
+    video, capitoli = r
+
+    if getattr(args, "no_publish", False):
+        print(f"\n--no-publish: episodio pronto in {video}")
+        return 0
+
+    # Il titolo promette il numero e l'argomento: sul formato lungo la ricerca
+    # conta quanto la home, e "10 things your memory does" e' una query che
+    # qualcuno digita davvero.
+    titolo = f"{len(capitoli)} things your {tema} does without asking you"
+    if len(titolo) > 95:
+        titolo = f"{len(capitoli)} strange things about {tema}"
+
+    try:
+        yt_id = youtube.publish(
+            video, titolo,
+            lungo.descrizione(titolo_tema, capitoli, fatti),
+            tags=[tema, "psychology", "human behaviour", "cognitive bias"],
+        )
+    except Exception as exc:
+        print(f"✗ caricamento fallito: {exc}")
+        if allarme.critico(exc):
+            allarme.segnala("YouTube lungo", exc)
+        return 1
+
+    # Registrato DOPO il caricamento: se YouTube rifiuta, le curiosita' devono
+    # restare disponibili per la settimana dopo invece di risultare bruciate.
+    for f in fatti:
+        segna_uso_fatto(conn, f["id"], "yt_lungo", f"lungo-{yt_id}")
+    print(f"\n✓ episodio pubblicato: youtu.be/{yt_id}")
+    print(f"  {titolo}")
+    return 0
+
+
 def cmd_reels(args: argparse.Namespace) -> int:
     """Ciclo dei reel, completamente separato da quello dei post.
 
@@ -2265,6 +2368,11 @@ def main() -> int:
 
     p = sub.add_parser("esperimento", help="confronto fra i due registri della prova A/B")
     p.set_defaults(func=cmd_esperimento)
+
+    p = sub.add_parser("lungo", help="episodio settimanale da ~8 minuti per YouTube")
+    p.add_argument("--no-publish", action="store_true",
+                   help="monta l'episodio senza caricarlo")
+    p.set_defaults(func=cmd_lungo)
 
     p = sub.add_parser("sito", help="rigenera il sito statico in docs/")
     p.add_argument("--pubblica", action="store_true",
