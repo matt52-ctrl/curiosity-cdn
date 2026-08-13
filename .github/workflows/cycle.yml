@@ -104,7 +104,7 @@ jobs:
         run: |
           git config user.name  "curiosity-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/engine.db docs
+          git add data/engine.db
           git diff --staged --quiet && exit 0
           git commit -m "stato: $(date -u '+%Y-%m-%d %H:%M UTC')"
 
@@ -129,7 +129,7 @@ jobs:
             # esce è il remoto più il nostro database, che è l'unico ad aver
             # registrato le pubblicazioni appena fatte.
             git reset -q origin/main
-            git add data/engine.db docs
+            git add data/engine.db
             if git diff --staged --quiet; then
               echo "nulla da salvare"; exit 0
             fi

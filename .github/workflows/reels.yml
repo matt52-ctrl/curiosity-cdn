@@ -141,7 +141,7 @@ jobs:
         run: |
           git config user.name  "curiosity-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add data/engine.db data/footage_usate.json docs
+          git add data/engine.db data/footage_usate.json
           git diff --staged --quiet && exit 0
           git commit -m "reel: $(date -u '+%Y-%m-%d %H:%M UTC')"
           for i in 1 2 3 4 5; do
@@ -160,7 +160,7 @@ jobs:
             # esce è il remoto più il nostro database, che è l'unico ad aver
             # registrato le pubblicazioni appena fatte.
             git reset -q origin/main
-            git add data/engine.db data/footage_usate.json docs
+            git add data/engine.db data/footage_usate.json
             if git diff --staged --quiet; then
               echo "nulla da salvare"; exit 0
             fi

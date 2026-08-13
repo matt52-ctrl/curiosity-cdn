@@ -28,3 +28,9 @@ assets/music/
 # Versionarlo permetterebbe a chiunque legga il repo di caricare video sul
 # canale. GitHub blocca il push se ci finisce dentro — giustamente.
 data/youtube_token.json
+
+# Il sito generato. Non va versionato qui: ha un repo suo
+# (oddlywired/oddlywired.github.io) dove la pipeline lo spinge a ogni ciclo.
+# Tenerlo anche qui significava rigenerare 78 file a ogni giro e collidere con
+# le esecuzioni su GitHub — che è esattamente quello che è successo.
+docs/
