@@ -88,9 +88,14 @@ jobs:
       # rifarlo sempre evita di doversi ricordare quando serve. Le pagine
       # nuove finiscono nello stesso commit dello stato, quindi non c'è un
       # momento in cui il database conosce una curiosità e il sito no.
-      - name: Rigenera il sito
+      - name: Rigenera il sito e pubblicalo
         if: always()
-        run: python run.py sito
+        env:
+          SITE_TOKEN: ${{ secrets.SITE_TOKEN }}
+        # Se il token manca o la pubblicazione fallisce, il comando lo dice e
+        # basta: il sito resta indietro di un giro, ma la pipeline non si
+        # ferma. È il motivo per cui il sito sta in un repo suo.
+        run: python run.py sito --pubblica
 
       - name: Salva lo stato
         # `always()`: se il ciclo fallisce a metà, quello che ha già fatto va

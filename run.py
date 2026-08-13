@@ -1128,6 +1128,14 @@ def cmd_sito(args: argparse.Namespace) -> int:
     conn = connect()
     n = sito.genera(conn)
     print(f"  {n} pagine di curiosita' + indice → {sito.DOCS}")
+
+    if getattr(args, "pubblica", False):
+        caricati = sito.pubblica()
+        if caricati:
+            print(f"  ✓ {caricati} file pubblicati su {cfg.get('sito.repo')}")
+        else:
+            print("  · pubblicazione saltata (vedi sopra)")
+        return 0
     base = sito._base_url()
     if base:
         print(f"  indirizzo pubblico: {base}")
@@ -2259,6 +2267,8 @@ def main() -> int:
     p.set_defaults(func=cmd_esperimento)
 
     p = sub.add_parser("sito", help="rigenera il sito statico in docs/")
+    p.add_argument("--pubblica", action="store_true",
+                   help="spingi anche sul repo del sito (serve SITE_TOKEN)")
     p.set_defaults(func=cmd_sito)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")

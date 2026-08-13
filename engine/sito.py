@@ -639,3 +639,85 @@ with the finding each one supports. If a claim is contested, its page says so.</
             f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n", encoding="utf-8"
         )
     return len(voci)
+
+
+# ─── Pubblicazione sul repo del sito ──────────────────────────────────────────
+
+def pubblica(messaggio: str = "") -> int:
+    """Spinge il contenuto di docs/ nel repo dedicato al sito.
+
+    Perche' un secondo repo invece di trasferire quello esistente: nel repo del
+    motore vivono il database, il CDN dei media e undici secret, e i secret non
+    si trasferiscono. Spostarlo per un indirizzo piu' bello avrebbe messo a
+    rischio tutto cio' che funziona. Cosi' invece e' additivo: se questo passo
+    fallisce, la pipeline continua a pubblicare come sempre e cambia solo che
+    il sito resta indietro di un giro.
+
+    Ritorna quanti file sono stati aggiornati.
+    """
+    import base64
+    import hashlib
+    import time
+
+    import httpx
+
+    from .config import env
+
+    token = env("SITE_TOKEN")
+    repo = cfg.get("sito.repo", "") or ""
+    if not (token and repo):
+        print("    sito: SITE_TOKEN o sito.repo mancanti, salto la pubblicazione")
+        return 0
+
+    api = f"https://api.github.com/repos/{repo}"
+    h = {"Authorization": f"Bearer {token}",
+         "Accept": "application/vnd.github+json"}
+
+    with httpx.Client(headers=h, timeout=90) as cl:
+        # Si lavora sull'albero git invece che file per file: il sito e' oltre
+        # ottanta pagine, e ottanta chiamate separate sarebbero lente e
+        # lascerebbero il sito incoerente se una fallisse a meta'.
+        r = cl.get(f"{api}/git/ref/heads/main")
+        if r.status_code != 200:
+            print(f"    sito: ramo main non trovato ({r.status_code})")
+            return 0
+        base_sha = r.json()["object"]["sha"]
+        commit = cl.get(f"{api}/git/commits/{base_sha}").json()
+
+        elementi = []
+        n = 0
+        for f in sorted(DOCS.rglob("*")):
+            if not f.is_file():
+                continue
+            dati = f.read_bytes()
+            b = cl.post(f"{api}/git/blobs",
+                        json={"content": base64.b64encode(dati).decode(),
+                              "encoding": "base64"})
+            if b.status_code >= 300:
+                print(f"    sito: caricamento fallito per {f.name} ({b.status_code})")
+                return 0
+            elementi.append({"path": str(f.relative_to(DOCS)), "mode": "100644",
+                             "type": "blob", "sha": b.json()["sha"]})
+            n += 1
+
+        albero = cl.post(f"{api}/git/trees",
+                         json={"tree": elementi})     # senza base_tree: sostituisce
+        if albero.status_code >= 300:
+            print(f"    sito: albero rifiutato ({albero.status_code})")
+            return 0
+
+        msg = messaggio or f"sito: {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime())}"
+        nuovo = cl.post(f"{api}/git/commits",
+                        json={"message": msg, "tree": albero.json()["sha"],
+                              "parents": [base_sha]})
+        if nuovo.status_code >= 300:
+            print(f"    sito: commit rifiutato ({nuovo.status_code})")
+            return 0
+
+        u = cl.patch(f"{api}/git/refs/heads/main",
+                     json={"sha": nuovo.json()["sha"]})
+        if u.status_code >= 300:
+            print(f"    sito: aggiornamento del ramo fallito ({u.status_code})")
+            return 0
+
+    return n

@@ -439,4 +439,12 @@ sito:
   # Vuoto = si ricava dal repo (utente.github.io/nome-repo). Metti qui un
   # dominio tuo se ne compri uno: serve alle URL canoniche e alla sitemap,
   # e senza quelle Google indicizza l'indirizzo sbagliato.
-  url: ""
+  url: "https://oddlywired.github.io"
+
+  # Repo dedicato al solo sito. Separato da quello del motore di proposito:
+  # lì vivono il database, il CDN dei media e undici secret — e i secret non
+  # si trasferiscono. Spostare tutto per avere un indirizzo più bello avrebbe
+  # messo a rischio ciò che funziona; così invece è additivo, e se la
+  # pubblicazione del sito fallisce il resto continua a girare.
+  # Serve il secret SITE_TOKEN con permesso Contents: Read and write.
+  repo: "oddlywired/oddlywired.github.io"
