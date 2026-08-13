@@ -40,7 +40,19 @@ LINES_SCHEMA = {
                     "hook": {"type": "string"},
                     "reveal": {"type": "string"},
                     "mood": {"type": "string", "enum": list(MOODS)},
-                    "caption": {"type": "string"},
+                    # A pezzi, non come stringa: chiedere di formattare con
+                    # righe vuote dentro una stringa non funziona — il
+                    # modello le comprime, e la didascalia esce come blocco
+                    # unico con la fonte sepolta. Si assembla in codice.
+                    "caption": {
+                        "type": "object",
+                        "properties": {
+                            "apertura": {"type": "string"},
+                            "prova": {"type": "string"},
+                        },
+                        "required": ["apertura", "prova"],
+                        "additionalProperties": False,
+                    },
                     "hashtags": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["source_index", "hook", "reveal", "mood", "caption", "hashtags"],
@@ -206,11 +218,25 @@ MOOD — decides the music and the footage, so it must be honest
   Choosing the wrong mood ruins the video more than a weak line would:
   cheerful music under a bleak sentence reads as a mistake.
 
-CAPTION
-  Two or three sentences that give the line its evidence — the study, the
-  year, what was measured. People who stop on a reel and want to know if it
-  is real look here, and finding a real source is what converts a viewer into
-  a follower. End with the CTA: "{cfg.get('caption.cta')}"
+CAPTION — the first line decides whether the rest is ever seen
+
+  Instagram shows roughly the first line in the feed and hides the rest behind
+  "more". Most people never expand it. So the caption does NOT open with the
+  study: sixteen posts opened with "In a 1985 study, Richard Thaler found…"
+  and between them collected four likes. A citation is what a reader scrolls
+  past, however good the finding is.
+
+  Two separate fields. Do not format them, do not join them: they are
+  assembled with blank lines in code, and the CTA is added there too.
+
+  apertura  What it means for the reader. A complete thought, under 90
+            characters, that stands on its own. Not a run-up to a point made
+            later, and not the on-screen line repeated word for word — the
+            same idea from another angle.
+  prova     One or two sentences with the study, the year, what was measured.
+            This is what a sceptical reader looks for, and finding a real
+            source is what turns a viewer into a follower. It belongs after
+            the reason to keep reading, not before it.
 
 HASHTAGS
   Exactly 5, lowercase, no "#".
@@ -325,7 +351,19 @@ Return JSON matching the schema."""
 
 def full_caption(line: Dict[str, Any]) -> str:
     tags = " ".join("#" + t for t in line["hashtags"])
-    pezzi = [line["caption"].strip()]
+    # La didascalia arriva a pezzi e si unisce qui con le righe vuote: prima
+    # si chiedeva al modello di formattarla e la comprimeva in un blocco solo,
+    # con la fonte e la CTA sepolte dietro il "altro" di Instagram.
+    grezza = line["caption"]
+    if isinstance(grezza, dict):
+        pezzi = [x.strip() for x in (grezza.get("apertura"), grezza.get("prova"))
+                 if x and x.strip()]
+        cta = cfg.get("caption.cta", "")
+        if cta:
+            pezzi.append(cta)
+    else:
+        # I reel gia' in coda hanno la didascalia come stringa unica.
+        pezzi = [str(grezza).strip()]
     # Rimando al canale YouTube, prima degli hashtag: dopo non lo legge
     # nessuno. Instagram non rende cliccabili i link in didascalia, quindi si
     # scrive il nome del canale, che si puo' cercare, invece di un URL.

@@ -33,7 +33,22 @@ COPY_SCHEMA = {
                 "additionalProperties": False,
             },
         },
-        "caption": {"type": "string"},
+        # La didascalia arriva a pezzi, non come stringa unica. Chiedere al
+        # modello di formattare con righe vuote dentro una stringa non
+        # funziona: le comprime, e sedici post sono usciti come un blocco
+        # solo — senza righe vuote e senza la domanda finale, che e' proprio
+        # il pezzo da cui nascono i commenti. Le parti si assemblano in
+        # codice, cosi' la struttura e' garantita invece che richiesta.
+        "caption": {
+            "type": "object",
+            "properties": {
+                "apertura": {"type": "string"},
+                "prova": {"type": "string"},
+                "domanda": {"type": "string"},
+            },
+            "required": ["apertura", "prova", "domanda"],
+            "additionalProperties": False,
+        },
         "hashtags": {"type": "array", "items": {"type": "string"}},
         "alt_text": {"type": "string"},
     },
@@ -205,27 +220,24 @@ IMAGE KIND — decides whether the picture is generated or photographed.
 The last slide is the close: it states the implication and invites a follow.
 Do not put a hashtag or an @ inside slide text.
 
-CAPTION SHAPE — return the caption with BLANK LINES between its parts, like
-this, and never as one block:
+CAPTION — three separate parts. Do not format them, do not join them, do not
+repeat one inside another. They are assembled with blank lines in code.
 
-    <first line — see below>
+  apertura   The ONLY line guaranteed to be read: Instagram hides everything
+             after roughly 125 characters behind "more", and most people
+             never expand it.
+             A complete thought, under 100 characters, that stands alone.
+             It must NOT open with the study, the year or the researcher —
+             a citation is what a reader scrolls past. Lead with what it
+             means for them; the evidence has its own field below.
+             Do not repeat the hook word for word: same idea, other angle.
 
-    <the fact, with its source, one or two sentences>
+  prova      One or two sentences with the study, the year, what was
+             measured. This is what a sceptical reader looks for, and
+             finding a real source is what turns a viewer into a follower.
 
-    <the closing question>
+  domanda    The closing question — see below.
 
-    {c['cta']}
-
-  Instagram collapses a caption after roughly 125 characters and hides the
-  rest behind "more". Most people never expand it. So:
-
-  - The FIRST LINE is the only part guaranteed to be read. Make it a complete
-    thought under 100 characters that works alone — not a run-up to a point
-    made later. Do not repeat the hook word for word; say the same thing from
-    a different angle.
-  - A caption written as one paragraph loses the question at the bottom,
-    which is where the comments come from. The blank lines are not cosmetic.
-  - Under {c['max_chars']} characters overall, hashtags excluded.
 
 THE CLOSING QUESTION — this is what decides whether anyone comments
 
@@ -354,22 +366,21 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
     contatto. Sulle slide il credito è già stampato; questa riga copre chi
     legge la caption senza guardare le immagini.
     """
-    testo = copy["caption"].strip()
+    grezza = copy["caption"]
 
-    # Rete di sicurezza: se il modello ha ignorato le righe vuote e ha
-    # restituito un unico blocco, la domanda finale e la CTA finiscono
-    # nascoste dietro il "altro" di Instagram. Si separa almeno la chiusura.
-    if "\n" not in testo:
-        cta = cfg.get("caption.cta", "")
-        if cta and cta in testo:
-            testo = testo.replace(cta, "\n\n" + cta).strip()
-        # E la domanda, che è ciò che genera i commenti.
-        pos = testo.rfind("? ")
-        if pos > 0:
-            testo = testo[: pos + 1] + "\n\n" + testo[pos + 2 :]
-        pos = testo.find(". ")
-        if 0 < pos < 160:
-            testo = testo[: pos + 1] + "\n\n" + testo[pos + 2 :]
+    # Le tre parti si uniscono qui con le righe vuote. Prima si chiedeva al
+    # modello di formattare dentro la stringa e le comprimeva: sedici post
+    # sono usciti come un blocco unico, con la domanda finale sepolta dietro
+    # il "altro" di Instagram — cioe' proprio il pezzo da cui nascono i
+    # commenti. Assemblarlo in codice rende la struttura garantita.
+    if isinstance(grezza, dict):
+        pezzi = [grezza.get("apertura", ""), grezza.get("prova", ""),
+                 grezza.get("domanda", "")]
+        testo = "\n\n".join(x.strip() for x in pezzi if x and x.strip())
+    else:
+        # I post gia' in magazzino hanno la didascalia come stringa unica.
+        testo = str(grezza).strip()
+
 
     parts = [testo]
 
