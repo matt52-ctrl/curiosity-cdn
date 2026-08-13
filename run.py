@@ -1282,6 +1282,52 @@ def cmd_lungo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_didascalie(args: argparse.Namespace) -> int:
+    """Riscrive le didascalie dei contenuti in coda, senza rifare i video.
+
+    Serve dopo un cambio alla specifica: cio' che e' gia' in magazzino se la
+    porta dietro quella vecchia, e uscirebbe con l'apertura sbagliata giorni
+    dopo la correzione. Rifare il montaggio per due righe di testo sarebbe
+    uno spreco — il video va bene, e' la didascalia a essere sbagliata.
+    """
+    import json as _j
+
+    from engine import lines
+
+    conn = connect()
+    fatti = 0
+
+    reels = conn.execute("""
+        SELECT r.id, r.line, r.caption, r.hashtags, f.fact, f.source_hint
+        FROM reels r LEFT JOIN facts f ON f.id = r.fact_id
+        WHERE r.status = 'approved'""").fetchall()
+
+    for r in reels:
+        pezzi = r["line"].split(". ", 1)
+        hook, reveal = pezzi[0], (pezzi[1] if len(pezzi) > 1 else "")
+        prima = (r["caption"] or "").split("\n")[0][:64]
+        print(f"  reel #{r['id']}")
+        print(f"    prima: {prima}…")
+
+        d = lines.riscrivi_didascalia(hook, reveal, r["fact"] or r["line"],
+                                      r["source_hint"] or "")
+        if not d:
+            continue
+        nuova = lines.full_caption({"caption": d,
+                                    "hashtags": _j.loads(r["hashtags"] or "[]")})
+        if getattr(args, "dry", False):
+            print(f"    dopo : {d['apertura']}")
+            continue
+        conn.execute("UPDATE reels SET caption=? WHERE id=?", (nuova, r["id"]))
+        conn.commit()
+        fatti += 1
+        print(f"    dopo : {d['apertura']}")
+
+    print(f"\n{fatti} didascalie riscritte"
+          + (" (prova a vuoto, niente salvato)" if getattr(args, "dry", False) else ""))
+    return 0
+
+
 def cmd_reels(args: argparse.Namespace) -> int:
     """Ciclo dei reel, completamente separato da quello dei post.
 
@@ -2402,6 +2448,11 @@ def main() -> int:
 
     p = sub.add_parser("esperimento", help="confronto fra i due registri della prova A/B")
     p.set_defaults(func=cmd_esperimento)
+
+    p = sub.add_parser("didascalie",
+                       help="riscrivi le didascalie dei contenuti in coda")
+    p.add_argument("--dry", action="store_true", help="mostra senza salvare")
+    p.set_defaults(func=cmd_didascalie)
 
     p = sub.add_parser("lungo", help="episodio settimanale da ~8 minuti per YouTube")
     p.add_argument("--no-publish", action="store_true",

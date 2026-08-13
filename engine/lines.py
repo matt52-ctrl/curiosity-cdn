@@ -372,3 +372,58 @@ def full_caption(line: Dict[str, Any]) -> str:
         pezzi.append(ponte)
     pezzi.append(tags)
     return "\n\n".join(pezzi)
+
+
+# ─── Riscrittura delle didascalie in coda ─────────────────────────────────────
+
+DIDASCALIA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "apertura": {"type": "string"},
+        "prova": {"type": "string"},
+    },
+    "required": ["apertura", "prova"],
+    "additionalProperties": False,
+}
+
+
+def riscrivi_didascalia(hook: str, reveal: str, fatto: str,
+                        fonte: str = "") -> Optional[Dict[str, str]]:
+    """Rifà la didascalia di un reel gia' montato, senza rifare il video.
+
+    Serve perche' la vecchia specifica faceva aprire con lo studio, e i
+    contenuti gia' in coda se la portano dietro. Rifare il video per cambiare
+    due righe di testo sarebbe uno spreco: il montaggio va bene, e' la
+    didascalia a essere sbagliata.
+    """
+    sistema = f"""You write the Instagram caption for a short video from
+{cfg.get('brand.name')}.
+
+VOICE
+{cfg.get('voice.guide')}
+
+Instagram shows roughly the first line in the feed and hides the rest behind
+"more". Most people never expand it. So the caption must NOT open with the
+study: a citation is what a reader scrolls past, however good the finding is.
+
+Two separate fields, not formatted and not joined — they are assembled in code.
+
+  apertura  What it means for the reader. A complete thought, under 90
+            characters, standing on its own. NOT the on-screen line repeated
+            word for word: the same idea from another angle.
+  prova     One or two sentences with the study, the year, what was measured.
+            After the reason to keep reading, not before it."""
+
+    try:
+        return ask_json(
+            sistema,
+            f"The video shows these two lines on screen:\n"
+            f"  1. {hook}\n  2. {reveal}\n\n"
+            f"The verified finding behind it:\n{fatto}\n"
+            + (f"Source: {fonte}\n" if fonte else "")
+            + "\nWrite the caption.",
+            DIDASCALIA_SCHEMA, effort="medium", max_tokens=1500,
+        )
+    except Exception as exc:
+        print(f"    riscrittura fallita: {str(exc)[:90]}")
+        return None
