@@ -1,0 +1,101 @@
+/* THUMB — miniatura per il formato lungo, 1280×720.
+   Non trasparente: qui il fondo è l'immagine.
+
+   Vincolo che decide tutto: la miniatura viene vista a 210×118 pixel nel feed,
+   su un telefono, in mezzo a venti altre. Le regole che ne discendono non sono
+   estetiche ma di leggibilità a quella dimensione:
+     · tre parole al massimo — a 210 px una quarta parola diventa un segno
+     · contrasto violento, niente mezzetinte
+     · un soggetto solo: chi mette due cose non ne fa leggere nessuna
+
+   Non abbiamo un volto, e i volti prendono il 20-30% di clic in più. Non è
+   aggirabile: si compete sulla tipografia, che è l'unica leva rimasta. Per
+   questo il testo è enorme e occupa quasi tutto il quadro. */
+
+body { background: #0d0c0b; }
+
+.slide {
+  background: #0d0c0b;
+  color: #fdfbf7;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Il filmato di sfondo, molto scurito: serve a dare atmosfera, non a essere
+   guardato. A 210 px un'immagine leggibile competerebbe col testo, e
+   perderebbero entrambi. */
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,.80) 100%),
+    radial-gradient(120% 90% at 22% 12%, #241d15 0%, #0d0c0b 100%);
+}
+
+.grain { display: none; }
+/* L'occhiello vive dentro `.top`: nascondere il contenitore nascondeva anche
+   lui. Si nasconde solo cio' che non serve. */
+.index, .nav, .credit, .body { display: none; }
+.top { position: static; }
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 88px;
+}
+
+/* Grottesco pesante, non il serif del marchio: a 210 px le grazie spariscono
+   e diventano sporcizia. La coerenza col marchio la tiene il colore. */
+.headline {
+  font-family: 'Impact', 'Archivo Black', 'Helvetica Neue', sans-serif;
+  font-weight: 900;
+  line-height: .92;
+  letter-spacing: -.03em;
+  text-transform: uppercase;
+  color: #fdfbf7;
+  text-align: left;
+  max-width: 100%;
+  text-shadow: 0 6px 40px rgba(0,0,0,.9);
+}
+
+/* Corpi enormi: tre parole devono riempire il quadro. Sotto i 130 px a piena
+   risoluzione, a 210 px non si leggono più. */
+/* Tarati su 1280 di larghezza, non sui 1080 delle slide: tre parole devono
+   riempire il quadro senza uscirne. Provati misurando il testo reso, non a
+   occhio — "YOU ARE PREDICTABLE" a 190px sbordava di duecento pixel. */
+.fit-xl { font-size: 128px; }
+.fit-lg { font-size: 112px; }
+.fit-md { font-size: 96px; }
+.fit-sm { font-size: 82px; }
+
+/* Niente parola colorata: il renderer scherma l'HTML, quindi un <em> nel testo
+   uscirebbe stampato com'e'. Il punto di fuoco lo dà l'occhiello in oro, e
+   "un solo messaggio" è comunque la regola che conta a questa dimensione. */
+
+.kicker {
+  position: absolute;
+  top: 54px; left: 88px;
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 26px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #e8c07a;
+  opacity: .85;
+}
+
+.bottom {
+  position: absolute;
+  left: 88px; right: auto; bottom: 52px;
+  justify-content: flex-start;
+}
+
+.mark {
+  color: #fdfbf7;
+  opacity: .5;
+  font-size: 25px;
+  letter-spacing: .14em;
+}

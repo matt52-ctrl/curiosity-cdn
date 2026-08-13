@@ -406,9 +406,16 @@ def run_batch(
         try:
             v = verify(idea)
         except Exception as exc:  # rete, rifiuto, parsing
-            set_verification(conn, fact_id, "unclear", 0.0, f"errore verifica: {exc}")
-            stats["rejected"] += 1
-            print(f"  ✗ [{fact_id}] verifica fallita: {exc}")
+            # Un guasto tecnico non e' un verdetto. Prima queste finivano
+            # marcate "unclear" e quindi scartate per sempre, pur non essendo
+            # mai state valutate: sei curiosita' ottime sono andate perse cosi'
+            # per una quota Gemini esaurita. Restano in 'new' e il giro dopo
+            # ci riprova.
+            conn.execute("UPDATE facts SET status='new', verify_note=? WHERE id=?",
+                         (f"verifica rimandata: {str(exc)[:160]}", fact_id))
+            conn.commit()
+            stats["rimandati"] = stats.get("rimandati", 0) + 1
+            print(f"  · [{fact_id}] verifica rimandata al prossimo giro: {str(exc)[:70]}")
             continue
 
         verdict = v["verdict"]

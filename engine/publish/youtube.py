@@ -458,3 +458,32 @@ def aggiungi_a_playlist(playlist: str, video_id: str) -> bool:
         print(f"    non aggiunto alla playlist: {r.status_code} {r.text[:110]}")
         return False
     return True
+
+
+def imposta_miniatura(video_id: str, immagine: "Path") -> bool:
+    """Carica la miniatura personalizzata.
+
+    ⚠️ Richiede il canale VERIFICATO (verifica telefonica su youtube.com/verify).
+    Senza, YouTube risponde 403 e resta il fotogramma estratto automaticamente —
+    che su un video lungo è quasi sempre una dissolvenza, cioè il peggior
+    biglietto da visita possibile.
+    """
+    from pathlib import Path as _P
+
+    immagine = _P(immagine)
+    if not immagine.exists():
+        return False
+    r = httpx.post(
+        "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+        params={"videoId": video_id},
+        headers={**_intestazioni(), "Content-Type": "image/jpeg"},
+        content=immagine.read_bytes(), timeout=120,
+    )
+    if r.status_code == 403:
+        print("    miniatura rifiutata: il canale non è verificato "
+              "(youtube.com/verify, due minuti, una volta sola)")
+        return False
+    if r.status_code >= 300:
+        print(f"    miniatura rifiutata: {r.status_code} {r.text[:110]}")
+        return False
+    return True

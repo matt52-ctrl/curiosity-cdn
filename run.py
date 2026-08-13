@@ -1220,12 +1220,14 @@ def cmd_lungo(args: argparse.Namespace) -> int:
         print(f"\n--no-publish: episodio pronto in {video}")
         return 0
 
-    # Il titolo promette il numero e l'argomento: sul formato lungo la ricerca
-    # conta quanto la home, e "10 things your memory does" e' una query che
-    # qualcuno digita davvero.
-    titolo = f"{len(capitoli)} things your {tema} does without asking you"
-    if len(titolo) > 95:
-        titolo = f"{len(capitoli)} strange things about {tema}"
+    # Titolo e miniatura si generano insieme: la miniatura apre una domanda,
+    # il titolo da' il contesto, e non devono mai ripetersi. Generati
+    # separatamente direbbero due volte la stessa cosa, che e' lo spreco piu'
+    # comune su YouTube.
+    copertina = lungo.titolo_e_miniatura(tema, fatti)
+    titolo = copertina["titolo"]
+    print(f"  titolo    : {titolo}")
+    print(f"  miniatura : {copertina['miniatura']}")
 
     try:
         yt_id = youtube.publish(
@@ -1238,6 +1240,17 @@ def cmd_lungo(args: argparse.Namespace) -> int:
         if allarme.critico(exc):
             allarme.segnala("YouTube lungo", exc)
         return 1
+
+    # Miniatura: sul formato lungo e' meta' del motivo per cui uno clicca. Se
+    # il canale non e' verificato viene rifiutata e resta il fotogramma
+    # automatico, che su un video lungo e' quasi sempre una dissolvenza.
+    try:
+        thumb = lungo.miniatura(copertina["miniatura"], copertina["occhiello"],
+                                None, video)
+        if thumb and youtube.imposta_miniatura(yt_id, thumb):
+            print("  · miniatura personalizzata caricata")
+    except Exception as exc:
+        print(f"  · miniatura saltata: {str(exc)[:80]}")
 
     # Playlist: un episodio isolato finisce quando finisce e lo spettatore
     # torna al feed generale. Dentro una playlist YouTube propone il

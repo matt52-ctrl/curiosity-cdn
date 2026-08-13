@@ -274,3 +274,97 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
         righe.append(f"Shorts  https://youtube.com/@{yt}/shorts")
 
     return "\n".join(righe)
+
+
+# ─── Titolo e miniatura ───────────────────────────────────────────────────────
+#
+# Si generano nella STESSA chiamata, e non è un risparmio: la regola che conta
+# è che miniatura e titolo funzionino come un'unità sola — la miniatura apre
+# una domanda, il titolo dà il contesto, e non devono mai ripetersi. Generati
+# separatamente direbbero due volte la stessa cosa, che è lo spreco più comune
+# su YouTube.
+#
+# ⚠️ Non abbiamo un volto, e i volti prendono il 20-30% di clic in più. Non è
+# aggirabile senza cambiare natura al canale: si compete sulla tipografia.
+
+COPERTINA_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "titolo": {"type": "string"},
+        "miniatura": {"type": "string"},
+        "occhiello": {"type": "string"},
+    },
+    "required": ["titolo", "miniatura", "occhiello"],
+    "additionalProperties": False,
+}
+
+
+def titolo_e_miniatura(tema: str, fatti: List[Dict]) -> Dict[str, str]:
+    """Titolo del video e testo della miniatura, progettati insieme."""
+    from .llm import ask_json
+
+    elenco = "\n".join(f"- {f['hook']}" for f in fatti[:10])
+    sistema = f"""You write the title and thumbnail for a YouTube episode of
+{cfg.get('brand.name')}, a channel about how the human mind actually works.
+
+VOICE
+{cfg.get('voice.guide')}
+
+The title and the thumbnail are ONE unit. The thumbnail opens a gap; the title
+tells the viewer what they are getting. They must never say the same thing —
+that wastes the only two pieces of real estate you have.
+
+THUMBNAIL TEXT
+  Three words. Not four. At the size this is actually seen — 210 pixels wide,
+  on a phone, between twenty other thumbnails — a fourth word becomes a smudge.
+  Blunt and a little accusatory. It should feel like an accusation the viewer
+  privately suspects is true.
+  Good: "YOU CHOSE WRONG" · "IT WASN'T LUCK" · "YOU REMEMBER WRONG"
+  Bad: "PSYCHOLOGY FACTS" (no gap) · "10 AMAZING FACTS" (hype, and it is what
+  the title already says)
+
+TITLE
+  Under 60 characters. Say concretely what is inside — the thumbnail already
+  did the provoking. A number helps because it promises an end.
+  Never: "you won't believe", "shocking", "this will blow your mind".
+
+EYEBROW
+  Two or three words, the topic. Appears small above the thumbnail text."""
+
+    try:
+        d = ask_json(
+            sistema,
+            f"Topic: {tema}\n\nThe episode covers these findings:\n{elenco}\n\n"
+            f"Write the title, the thumbnail text, and the eyebrow.",
+            COPERTINA_SCHEMA, effort="medium", max_tokens=1200,
+        )
+    except Exception as exc:
+        print(f"    titolo generato in automatico ({str(exc)[:60]})")
+        return {"titolo": f"{len(fatti)} things your {tema} does without asking",
+                "miniatura": "YOU DECIDE WRONG", "occhiello": tema}
+
+    d["miniatura"] = " ".join((d.get("miniatura") or "").split()[:3]).upper()
+    return d
+
+
+def miniatura(testo: str, occhiello: str, sfondo: Optional[Path],
+              out: Path) -> Optional[Path]:
+    """Disegna la miniatura 1280×720.
+
+    Il punto di fuoco è l'occhiello in oro sopra al testo: il renderer scherma
+    l'HTML, quindi colorare una singola parola avrebbe stampato il tag.
+    """
+    from . import render
+
+    slide = {"kicker": occhiello, "headline": testo, "body": "",
+             "image_query": "", "image_kind": "concept"}
+    try:
+        png = render.render_slides([slide], f"thumb-{out.stem}", "thumb",
+                                   size=(1280, 720))[0]
+    except Exception as exc:
+        print(f"    miniatura non disegnata: {str(exc)[:80]}")
+        return None
+    dest = out.parent / "thumb.jpg"
+    subprocess.run(["ffmpeg", "-y", "-i", str(png), "-q:v", "2", str(dest)],
+                   check=False, capture_output=True)
+    return dest if dest.exists() else png
