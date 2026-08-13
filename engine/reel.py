@@ -409,7 +409,18 @@ def build_multi(voci: List[Dict], name: str,
     massimo = float(massimo if massimo is not None
                     else cfg.get("reel.long_max_seconds_per_fact", 16.0))
     per_voce = min(massimo, totale / max(1, len(voci)))
-    stacco = per_voce * 0.4          # quando l'aggancio lascia il posto
+    # Quando l'aggancio lascia il posto alla rivelazione. Era il 40% della
+    # durata — 4,4 secondi su 11 — ma un aggancio di sette parole si legge in
+    # due. Restavano oltre due secondi in cui lo spettatore aveva gia' letto
+    # tutto e non succedeva piu' niente: e' li' che il pollice scorre, ed e'
+    # la spiegazione piu' semplice del 61% che se ne andava.
+    #
+    # Ora si calcola sul testo: tempo di lettura piu' un respiro. Un aggancio
+    # corto cede prima, uno lungo ha il tempo che gli serve.
+    parole = len((voci[0].get("hook") or "").split()) if voci else 7
+    lettura = parole / float(cfg.get("reel.parole_al_secondo", 3.5))
+    respiro = float(cfg.get("reel.respiro", 0.7))
+    stacco = min(per_voce * 0.55, max(1.6, lettura + respiro))
     print(f"    {len(voci)} curiosita' x {per_voce:.1f}s = {per_voce*len(voci):.0f}s")
 
     out_dir = OUTPUT_DIR / f"yt-{name}"
@@ -438,6 +449,10 @@ def build_multi(voci: List[Dict], name: str,
 
         seg = tmp / f"{i:02d}.mp4"
         filtro = (
+            # Niente carrellata qui, e non per dimenticanza: provata e misurata
+            # sullo STESSO filmato, con e senza. Riduce il movimento invece di
+            # aumentarlo (3,63 → 2,59 su 255): lo scala-e-riscala sfoca il
+            # dettaglio fine, e lo zoom e' troppo lento per compensare.
             f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
             f"crop={w}:{h},{_gradazione()}format=yuv420p[bg];"
             f"[1:v]format=rgba,fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"

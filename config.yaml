@@ -409,6 +409,16 @@ reel:
   # una notturna passava da 18 a 5 di luminosità media, cioè nero.
   grade_highlights: true
 
+  # Velocità di lettura su schermo piccolo. Serve a decidere quando
+  # l'aggancio lascia il posto alla rivelazione: prima era una frazione fissa
+  # della durata, e su un aggancio corto lasciava secondi di attesa a vuoto —
+  # il momento esatto in cui si scorre via.
+  parole_al_secondo: 3.5
+  # Pausa dopo che si è finito di leggere, prima della rivelazione. Serve a
+  # far registrare la frase: senza, la rivelazione arriva addosso all'ultima
+  # parola e si perdono entrambe.
+  respiro: 0.7
+
   long_target_seconds: 33.0
   # Tetto per singola curiosità: la durata di ciascuna si ricava dividendo il
   # totale, ma con poche curiosità in archivio la divisione darebbe segmenti
