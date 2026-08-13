@@ -229,10 +229,27 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
     """
     from .config import cfg as _c
 
-    righe = [f"{tema}\n"]
-    righe.append("Every claim in this video names the study behind it. "
-                 "Sources and the full archive: "
-                 f"{_c.get('sito.url', '')}\n")
+    ig = (_c.get("brand.handle", "") or "").lstrip("@")
+    sito = (_c.get("sito.url", "") or "").rstrip("/")
+
+    # Le prime due o tre righe sono le uniche che YouTube mostra prima di
+    # «Altro»: se i collegamenti stanno solo in fondo li vede chi ha gia'
+    # deciso di cercarli. Vanno in alto, e ripetuti in fondo per chi scorre
+    # fino alla fine — sono due comportamenti diversi, non lo stesso due volte.
+    #
+    # Qui gli indirizzi sono per esteso, non chiocciole: sui video lunghi
+    # YouTube rende i link cliccabili (a differenza degli Short, dove non lo
+    # fa mai). Serve pero' il canale verificato, altrimenti restano testo.
+    righe = [
+        f"{tema} — ten things your mind does without asking you.",
+        "Every claim here names the study behind it.",
+        "",
+    ]
+    if sito:
+        righe.append(f"Full archive and sources: {sito}")
+    if ig:
+        righe.append(f"One of these every day: https://instagram.com/{ig}")
+    righe.append("")
 
     if len(capitoli) >= 3:
         righe.append("Chapters")
@@ -247,7 +264,13 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
         righe += [f"· {x}" for x in fonti]
         righe.append("")
 
-    ig = (_c.get("brand.handle", "") or "").lstrip("@")
+    righe.append("─────")
+    if sito:
+        righe.append(f"Website  {sito}")
     if ig:
-        righe.append(f"One of these every day on Instagram: @{ig}")
+        righe.append(f"Instagram  https://instagram.com/{ig}")
+    yt = (_c.get("brand.youtube", "") or "").lstrip("@")
+    if yt:
+        righe.append(f"Shorts  https://youtube.com/@{yt}/shorts")
+
     return "\n".join(righe)
