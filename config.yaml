@@ -482,3 +482,10 @@ lungo:
   # La musica sta molto sotto la voce: qui non accompagna, riempie il silenzio
   # fra una frase e l'altra. Sopra 0.15 comincia a contendere il parlato.
   volume_musica: 0.10
+
+  # Playlist in cui finiscono gli episodi. Un episodio isolato finisce quando
+  # finisce e lo spettatore torna al feed generale; dentro una playlist YouTube
+  # propone il successivo e la sessione resta sul canale. Il tempo di sessione
+  # è uno dei segnali con cui YouTube decide chi spingere, ed è l'unico
+  # migliorabile senza toccare il contenuto.
+  playlist: "Oddly Wired — full episodes"

@@ -145,6 +145,20 @@ footer p { margin-bottom:.6rem; }
             text-decoration:none; font-size:.9rem; }
 .indietro:hover { color:var(--oro); }
 
+/* Il video incorporato: rapporto fisso 16:9 perché senza, l'iframe collassa a
+   150 px di altezza sui telefoni. */
+.video { position:relative; padding-bottom:56.25%; height:0; margin:2rem 0;
+         border-radius:12px; overflow:hidden; background:var(--carta); }
+.video iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+
+.capitoli { list-style:none; }
+.capitoli li { border-bottom:1px solid var(--bordo); }
+.capitoli a { display:flex; gap:1rem; padding:.9rem 0; text-decoration:none;
+              align-items:baseline; }
+.capitoli a:hover { color:var(--oro); }
+.capitoli .tempo { color:var(--oro); font-variant-numeric:tabular-nums;
+                   font-size:.9rem; flex:none; min-width:2.6rem; }
+
 .fonti .citazione { font-family:'Instrument Serif',Georgia,serif; font-size:1.18rem;
                     color:var(--oro); line-height:1.35; }
 .fonti .sotto { margin-top:.3rem; }
@@ -537,6 +551,48 @@ def genera(conn: sqlite3.Connection) -> int:
         encoding="utf-8",
     )
 
+    # ── episodi lunghi ──
+    #
+    # Un episodio su YouTube vive finche' YouTube lo propone; una pagina resta.
+    # E il video incorporato porta tempo di visione a YouTube da fuori YouTube,
+    # che e' l'unico traffico che il canale non deve contendersi con nessuno.
+    episodi = []
+    try:
+        episodi = conn.execute(
+            "SELECT * FROM episodi ORDER BY creato DESC"
+        ).fetchall()
+    except Exception:
+        pass
+
+    for e in episodi:
+        try:
+            cap = json.loads(e["capitoli"] or "[]")
+        except json.JSONDecodeError:
+            cap = []
+        # I capitoli diventano un indice cliccabile: ogni voce salta al punto
+        # esatto del video. È la stessa cosa che fa YouTube, ma qui la si vede
+        # prima di decidere se guardare.
+        indice = "".join(
+            f'<li><a href="https://youtu.be/{e["video_id"]}?t={int(c["secondi"])}">'
+            f'<span class="tempo">{int(c["secondi"])//60}:{int(c["secondi"])%60:02d}</span>'
+            f'{_e(c["titolo"])}</a></li>'
+            for c in cap
+        )
+        corpo_e = f"""<a class="indietro" href="{_radice()}">back to all facts</a>
+<div class="occhiello">{_e(e["tema"])} &middot; full episode</div>
+<h1>{_e(e["titolo"])}</h1>
+<div class="video"><iframe src="https://www.youtube.com/embed/{e["video_id"]}"
+  title="{_e(e["titolo"])}" frameborder="0" allowfullscreen
+  loading="lazy"></iframe></div>
+<ol class="capitoli">{indice}</ol>"""
+        d = DOCS / "e" / e["video_id"]
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "index.html").write_text(
+            _pagina(e["titolo"], f"{len(cap)} checked facts about {e['tema']}, "
+                    f"each naming the study behind it.", corpo_e,
+                    f"e/{e['video_id']}/"),
+            encoding="utf-8")
+
     # ── pagina delle fonti ──
     #
     # È la cosa che questo progetto ha e che nessun altro nella nicchia può
@@ -628,7 +684,8 @@ with the finding each one supports. If a claim is contested, its page says so.</
         url = ([f"<url><loc>{base}/</loc></url>"]
                + [f"<url><loc>{base}/f/{s}/</loc></url>" for s, _ in voci]
                + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)]
-               + ([f"<url><loc>{base}/sources/</loc></url>"] if fonti else []))
+               + ([f"<url><loc>{base}/sources/</loc></url>"] if fonti else [])
+               + [f"<url><loc>{base}/e/{e['video_id']}/</loc></url>" for e in episodi])
         (DOCS / "sitemap.xml").write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

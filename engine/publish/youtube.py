@@ -404,3 +404,57 @@ def ritenzione(giorni: int = 30) -> Dict[str, Dict]:
             "avg_view_sec": float(v.get("averageViewDuration", 0) or 0),
         }
     return fuori
+
+
+# ─── Playlist ─────────────────────────────────────────────────────────────────
+#
+# Perché serve: un episodio isolato finisce quando finisce, e lo spettatore
+# torna al feed generale. Dentro una playlist YouTube propone il successivo, e
+# la sessione continua sul nostro canale invece che su un altro. Il tempo di
+# sessione è uno dei segnali con cui YouTube decide chi spingere, ed è l'unico
+# che si può migliorare senza toccare il contenuto.
+
+def playlist_id(titolo: str, descrizione: str = "") -> Optional[str]:
+    """Trova la playlist per titolo, o la crea. Ritorna l'id.
+
+    Cercarla per titolo invece di salvarne l'id: se qualcuno la cancella a
+    mano da Studio, al giro dopo viene semplicemente ricreata invece di
+    fallire per un id che non esiste piu'.
+    """
+    h = _intestazioni()
+    r = httpx.get(f"{API}/playlists",
+                  params={"part": "snippet", "mine": "true", "maxResults": 50},
+                  headers=h, timeout=40)
+    if r.status_code == 200:
+        for x in r.json().get("items", []):
+            if x["snippet"]["title"].strip().lower() == titolo.strip().lower():
+                return x["id"]
+    elif r.status_code == 403:
+        raise PermessoMancante("il token non permette di leggere le playlist")
+
+    c = httpx.post(
+        f"{API}/playlists", params={"part": "snippet,status"},
+        headers={**h, "Content-Type": "application/json"},
+        json={"snippet": {"title": titolo, "description": descrizione},
+              "status": {"privacyStatus": "public"}},
+        timeout=40,
+    )
+    if c.status_code >= 300:
+        print(f"    playlist non creata: {c.status_code} {c.text[:130]}")
+        return None
+    return c.json().get("id")
+
+
+def aggiungi_a_playlist(playlist: str, video_id: str) -> bool:
+    r = httpx.post(
+        f"{API}/playlistItems", params={"part": "snippet"},
+        headers={**_intestazioni(), "Content-Type": "application/json"},
+        json={"snippet": {"playlistId": playlist,
+                          "resourceId": {"kind": "youtube#video",
+                                         "videoId": video_id}}},
+        timeout=40,
+    )
+    if r.status_code >= 300:
+        print(f"    non aggiunto alla playlist: {r.status_code} {r.text[:110]}")
+        return False
+    return True

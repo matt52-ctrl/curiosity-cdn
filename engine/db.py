@@ -169,6 +169,17 @@ CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
 -- Prova A/B sul registro delle frasi. Tabella separata di proposito: e' un
 -- esperimento con una fine, e quando sara' concluso si cancella senza toccare
 -- nulla di strutturale.
+-- Gli episodi lunghi. Serve al sito, che li mostra incorporati insieme alle
+-- curiosita' che contengono: un episodio su YouTube dura finche' YouTube lo
+-- propone, una pagina resta.
+CREATE TABLE IF NOT EXISTS episodi (
+    video_id  TEXT PRIMARY KEY,
+    tema      TEXT NOT NULL,
+    titolo    TEXT NOT NULL,
+    capitoli  TEXT NOT NULL DEFAULT '[]',
+    creato    REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS esperimento (
     video_id  TEXT PRIMARY KEY,
     variante  TEXT NOT NULL,

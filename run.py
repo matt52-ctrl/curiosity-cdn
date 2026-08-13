@@ -1239,10 +1239,31 @@ def cmd_lungo(args: argparse.Namespace) -> int:
             allarme.segnala("YouTube lungo", exc)
         return 1
 
+    # Playlist: un episodio isolato finisce quando finisce e lo spettatore
+    # torna al feed generale. Dentro una playlist YouTube propone il
+    # successivo, e la sessione continua sul nostro canale. Non e' critico —
+    # se fallisce l'episodio resta pubblicato — quindi non blocca nulla.
+    try:
+        pid = youtube.playlist_id(
+            cfg.get("lungo.playlist", "Oddly Wired — full episodes"),
+            "One theme, ten checked facts, every Saturday. "
+            "Every claim names the study behind it.",
+        )
+        if pid and youtube.aggiungi_a_playlist(pid, yt_id):
+            print(f"  · aggiunto alla playlist")
+    except Exception as exc:
+        print(f"  · playlist saltata: {str(exc)[:80]}")
+
     # Registrato DOPO il caricamento: se YouTube rifiuta, le curiosita' devono
     # restare disponibili per la settimana dopo invece di risultare bruciate.
     for f in fatti:
         segna_uso_fatto(conn, f["id"], "yt_lungo", f"lungo-{yt_id}")
+    conn.execute(
+        "INSERT OR REPLACE INTO episodi (video_id, tema, titolo, capitoli, creato) "
+        "VALUES (?,?,?,?,?)",
+        (yt_id, tema, titolo, _j.dumps(capitoli), time.time()),
+    )
+    conn.commit()
     print(f"\n✓ episodio pubblicato: youtu.be/{yt_id}")
     print(f"  {titolo}")
     return 0
