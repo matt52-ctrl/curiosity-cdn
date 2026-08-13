@@ -127,8 +127,12 @@ def componi_metadati(hook: str, reveal: str, caption: str, tags: list,
     # Su YouTube i link nella descrizione SONO cliccabili, al contrario di
     # Instagram: qui conviene l'URL completo, non il solo nome.
     handle = (cfg.get("brand.handle", "") or "").lstrip("@")
-    ponte = (f"\n\nOne of these every day on Instagram too:\n"
-             f"https://instagram.com/{handle}") if handle else ""
+    # Chiocciola e non indirizzo: nelle descrizioni degli Short YouTube NON
+    # rende cliccabili i link, per scelta anti-spam. Un URL che non si clicca
+    # sembra rotto; una chiocciola si legge come un nome e si cerca — che è
+    # l'unica azione davvero possibile lì.
+    ponte = (f"\n\nOne of these every day on Instagram too: @{handle}"
+             if handle else "")
 
     descrizione = caption.strip()
 
