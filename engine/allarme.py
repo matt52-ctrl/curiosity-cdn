@@ -58,7 +58,36 @@ def critico(exc: Exception) -> bool:
     return any(s in t for s in spie)
 
 
-def silenzio(conn, ore: float = 24.0) -> None:
+# Ogni canale ha il suo ritmo, quindi ognuno ha la sua soglia: una sola
+# soglia buona per tutti sarebbe troppo stretta per l'episodio settimanale o
+# troppo larga per i reel, e in entrambi i casi inutile. La regola con cui
+# sono scelte: circa tre uscite mancate di fila. Meno sarebbe rumore — una
+# rete storta, un giro perso — e le mail che arrivano per nulla si smettono
+# di leggere proprio quando servono.
+CANALI = (
+    # nome            ore    query
+    ("Instagram reel", 24.0,
+     "SELECT MAX(published_at) FROM reels WHERE status = 'published'"),
+    ("Instagram post", 30.0,
+     "SELECT MAX(published_at) FROM posts WHERE status = 'published'"),
+    ("YouTube Short",  24.0,
+     "SELECT MAX(used_at) FROM fact_uses WHERE channel = 'youtube'"),
+    # L'episodio esce il sabato: si allarma dopo tre settimane saltate, non
+    # dopo un giorno.
+    ("YouTube episodio", 24.0 * 22,
+     "SELECT MAX(creato) FROM episodi"),
+)
+
+# Se un canale non ha MAI pubblicato, `MAX(...)` non restituisce niente e non
+# c'e' nessuna data da confrontare — cioe' il caso peggiore, un canale che non
+# ha mai funzionato, sarebbe l'unico a non allarmare mai. Si prende allora come
+# riferimento il momento in cui il sistema ha dato il primo segno di vita: se
+# gira da tre settimane e quel canale non ha prodotto nulla, non e' che deve
+# ancora cominciare, e' che non parte.
+_PRIMA_VITA = "SELECT MIN(published_at) FROM reels WHERE status = 'published'"
+
+
+def silenzio(conn, ore: float | None = None) -> None:
     """Segnala i canali che non pubblicano da troppo tempo.
 
     Nasce da un guasto vero: un mio errore faceva arrivare la didascalia come
@@ -73,26 +102,36 @@ def silenzio(conn, ore: float = 24.0) -> None:
     qualcosa. Un controllo sull'esito vale tutti quelli sulle cause messi
     insieme, perche' copre anche i guasti che non sono ancora stati inventati.
 
-    Ventiquattro ore, non meno: i reel escono tre volte al giorno, quindi un
-    buco cosi' sono almeno tre giri saltati di fila. Un solo giro perso puo'
-    essere una rete storta e non merita una mail — se le mail arrivano per
-    nulla, si smette di leggerle proprio quando servono.
+    Le soglie stanno in `CANALI`, una per canale. `ore` serve solo alle prove,
+    per abbassarle tutte insieme e vedere se il controllo scatta davvero.
     """
     import time
 
-    limite = time.time() - ore * 3600
-    for nome, sql in (
-        ("Instagram",
-         "SELECT MAX(published_at) FROM reels WHERE status = 'published'"),
-        ("YouTube",
-         "SELECT MAX(used_at) FROM fact_uses WHERE channel = 'youtube'"),
-    ):
+    adesso = time.time()
+    try:
+        nascita = conn.execute(_PRIMA_VITA).fetchone()[0]
+    except Exception:
+        nascita = None
+
+    for nome, soglia, sql in CANALI:
+        if ore is not None:
+            soglia = ore
         try:
             ultimo = conn.execute(sql).fetchone()[0]
         except Exception:
             continue          # tabella non ancora creata: non e' un guasto
-        if ultimo and ultimo < limite:
-            fermo = (time.time() - ultimo) / 3600
+
+        mai = ultimo is None
+        riferimento = nascita if mai else ultimo
+        if not riferimento or riferimento >= adesso - soglia * 3600:
+            continue
+
+        fermo = (adesso - riferimento) / 3600
+        if mai:
+            segnala(nome, f"non ha MAI pubblicato, e il sistema gira da "
+                          f"{fermo / 24:.0f} giorni. Non deve cominciare: "
+                          f"non parte.")
+        else:
             segnala(nome, f"nessuna pubblicazione da {fermo:.0f} ore. "
                           f"Il giro gira ma non esce niente: guardare i log.")
 
