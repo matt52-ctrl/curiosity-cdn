@@ -328,9 +328,16 @@ def _live_checks() -> None:
         try:
             from engine import visuals
 
-            print("  ✓ immagini AI     Cloudflare configurato"
-                  if visuals.generate("a single grey stone on white") else
-                  "  ⚠ immagini AI     nessuna immagine restituita")
+            # Si prova Cloudflare da solo, non la catena. Prima si chiamava
+            # `generate()`, che al primo fallimento ripiega e restituisce
+            # comunque un'immagine: la spunta restava verde mentre Cloudflare
+            # rifiutava tutto e le slide uscivano dal ripiego, a risoluzione
+            # più bassa. Un controllo che non può fallire non è un controllo.
+            if visuals._generate_cloudflare("a single grey stone on white", ""):
+                print("  ✓ immagini AI     Cloudflare risponde")
+            else:
+                print("  ⚠ immagini AI     Cloudflare NON risponde: le slide "
+                      "escono dal ripiego, a risoluzione più bassa")
         except Exception as exc:
             print(f"  ✗ immagini AI     {str(exc)[:96]}")
 
@@ -1250,7 +1257,7 @@ def cmd_lungo(args: argparse.Namespace) -> int:
     # automatico, che su un video lungo e' quasi sempre una dissolvenza.
     try:
         thumb = lungo.miniatura(copertina["miniatura"], copertina["occhiello"],
-                                None, video)
+                                video)
         if thumb and youtube.imposta_miniatura(yt_id, thumb):
             print("  · miniatura personalizzata caricata")
     except Exception as exc:

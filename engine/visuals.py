@@ -370,14 +370,17 @@ def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
 
     model = model or "@cf/black-forest-labs/flux-1-schnell"
 
-    # FLUX pretende dimensioni multiple di 8: 1350 non lo è, 1352 sì. Generare
-    # già in verticale evita che il cover-crop tagli via metà composizione.
-    def _mul8(n: int) -> int:
-        return max(8, round(n / 8) * 8)
-
-    width = _mul8(int(cfg.get("format.width", 1080)))
-    height = _mul8(int(cfg.get("format.height", 1350)))
-
+    # Niente width/height. Lo schema del modello non li prevede più e li
+    # rifiuta con un 400: "Additional or unevaluated properties '/width,
+    # /height' at '/' not allowed". Il cambio è stato distribuito a scaglioni,
+    # e questo lo rendeva quasi invisibile — su sei richieste identiche cinque
+    # venivano respinte e una passava. Non si vedeva come un guasto ma come
+    # immagini che ogni tanto uscivano peggiori: Cloudflare falliva, la catena
+    # ripiegava in silenzio su pollinations, e nessuno lo diceva.
+    #
+    # Si perde il verticale nativo: esce 1024×1024 e il ritaglio a 4:5 toglie
+    # un quinto della larghezza. Resta comunque il provider migliore — 818 px
+    # di base dopo il ritaglio contro i 686 di pollinations.
     try:
         with httpx.Client(timeout=180) as client:
             resp = client.post(
@@ -389,8 +392,6 @@ def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
                     # il rifiuto fa fallire l'intera immagine: va limitato qui
                     # invece di fidarsi della configurazione.
                     "steps": max(1, min(8, int(cfg.get("visuals.steps", 8)))),
-                    "width": width,
-                    "height": height,
                 },
             )
             resp.raise_for_status()
