@@ -27,10 +27,11 @@ on:
     # aveva anche l'aggancio migliore — ma punta nella stessa direzione del
     # ragionamento sui fusi, che regge da solo.
     # Gli Short non escono più quando parte il job: vengono caricati tutti e
-    # tre qui, alle 7:45, e programmati su YouTube per le 11:00, 17:00 e 21:00
-    # UTC. Questo giro non tocca Instagram — i reel non si possono programmare
-    # e alle 9:45 italiane sarebbero fuori dalla finestra scelta. Tre ore di
-    # margine sulla prima fascia perché GitHub parte in ritardo.
+    # tre qui e programmati su YouTube per le 13:00, 19:00 e 23:00 italiane
+    # (publish.youtube.orari). Questo giro non tocca Instagram — i reel non si
+    # possono programmare e alle 9:45 italiane sarebbero fuori dalla finestra
+    # scelta. Oltre tre ore di margine sulla prima fascia, perché GitHub parte
+    # in ritardo fino a un'ora.
     - cron: "45 7 * * *"     # carica e programma la giornata YouTube
     - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA
     - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA

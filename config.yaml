@@ -268,19 +268,26 @@ publish:
     # distribuito e pubblicarne troppi significa togliersi spazio da soli.
     max_per_day: 3
 
-    # Orari di uscita, in UTC. Non sono gli orari in cui gira il workflow: il
-    # primo giro della giornata carica tutti e tre i video e li programma per
-    # queste ore, poi ci pensa YouTube. Due conseguenze volute.
+    # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
+    # workflow: il primo giro della giornata carica tutti e tre i video e li
+    # programma per queste ore, poi ci pensa YouTube. Due conseguenze volute.
     #
     # 1. L'ora è esatta. I cron di GitHub partono in ritardo — misurato fino a
     #    64 minuti — quindi finora l'orario di uscita era quello che capitava.
     # 2. La giornata si vede tutta la mattina. Se manca un video lo si nota
     #    subito in YouTube Studio, invece di scoprirlo a sera.
     #
-    # Corrispondono alle 13:00, 19:00 e 23:00 italiane d'estate: pomeriggio e
-    # sera negli Stati Uniti, sera in Europa. D'inverno slittano di un'ora,
-    # esattamente come i cron dei workflow.
-    orari: ["11:00", "17:00", "21:00"]
+    # Sono in ora italiana e non in UTC perché così restano davvero fissi:
+    # scritti in UTC sembrerebbero fissi ma slitterebbero di un'ora l'ultima
+    # domenica di ottobre, quando finisce l'ora legale. La conversione la fa
+    # il programma ogni giorno.
+    #
+    # Perché queste tre: il canale è in inglese e su Shorts l'inglese pesca
+    # soprattutto da Stati Uniti e Regno Unito. Le 19:00 e le 23:00 italiane
+    # sono il pomeriggio e la sera americani; le 13:00 prendono il pranzo
+    # europeo e la mattina della costa est.
+    orari: ["13:00", "19:00", "23:00"]
+    fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come
     # spalla in un altro video. Senza, quella appena uscita ricompare nel

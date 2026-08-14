@@ -612,24 +612,48 @@ def _rifornisci(conn) -> None:
             return
 
 
+def _fuso():
+    from zoneinfo import ZoneInfo
+    return ZoneInfo(cfg.get("publish.youtube.fuso", "Europe/Rome"))
+
+
 def _fasce_di_oggi() -> List[float]:
     """Gli orari di uscita previsti per oggi, in epoch UTC.
 
-    Sono in UTC come i cron dei workflow, quindi d'inverno le uscite italiane
-    slittano di un'ora. E' la stessa scelta gia' fatta per i cron: seguire
-    l'ora legale richiederebbe un fuso vero in tutte e due i posti, e la
-    finestra utile e' larga qualche ora, non qualche minuto.
+    Gli orari in configurazione sono in ora italiana, non in UTC, e la
+    conversione avviene qui ogni giorno. E' l'unico modo perche' restino
+    davvero fissi: scritti in UTC sembrano fissi ma slittano di un'ora
+    all'ultima domenica di ottobre, quando l'Italia lascia l'ora legale e le
+    23:00 diventano le 22:00. I cron dei workflow quel difetto ce l'hanno
+    ancora — GitHub accetta solo UTC — ma li' non conta, perche' da quando gli
+    Short si programmano l'ora del cron non e' piu' l'ora di uscita.
     """
     import datetime as _dt
 
-    orari = cfg.get("publish.youtube.orari", ["11:00", "17:00", "21:00"])
-    oggi = _dt.datetime.now(_dt.timezone.utc).date()
+    fuso = _fuso()
+    orari = cfg.get("publish.youtube.orari", ["13:00", "19:00", "23:00"])
+    oggi = _dt.datetime.now(fuso).date()
     fasce = []
     for o in orari:
         ore, minuti = (int(x) for x in str(o).split(":"))
         fasce.append(_dt.datetime.combine(
-            oggi, _dt.time(ore, minuti), _dt.timezone.utc).timestamp())
+            oggi, _dt.time(ore, minuti), fuso).timestamp())
     return sorted(fasce)
+
+
+def _giornata_locale() -> tuple:
+    """Inizio e fine di oggi in epoch, secondo il fuso delle uscite.
+
+    Non si puo' usare la mezzanotte UTC: con le uscite in ora italiana una
+    fascia serale d'inverno cadrebbe nel giorno UTC successivo, e le fasce
+    coperte verrebbero contate nel giorno sbagliato.
+    """
+    import datetime as _dt
+
+    fuso = _fuso()
+    oggi = _dt.datetime.now(fuso).date()
+    inizio = _dt.datetime.combine(oggi, _dt.time(0, 0), fuso)
+    return inizio.timestamp(), (inizio + _dt.timedelta(days=1)).timestamp()
 
 
 def _pubblica_youtube(conn, imparato: str = "") -> str:
@@ -652,9 +676,8 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
 
     adesso = time.time()
     tetto = int(cfg.get("publish.youtube.max_per_day", 3))
-    # Mezzanotte UTC: lo stesso confine che usano i cron.
-    inizio = adesso - (adesso % 86400)
-    coperte = fasce_coperte(conn, inizio, inizio + 86400)
+    inizio, fine = _giornata_locale()
+    coperte = fasce_coperte(conn, inizio, fine)
 
     # Un margine perche' il caricamento non e' istantaneo: programmare per fra
     # due minuti significa arrivare tardi e vedersi rifiutare il publishAt.
@@ -670,10 +693,10 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
 
     import datetime as _dt
     quando_leggibili = ", ".join(
-        _dt.datetime.fromtimestamp(f, _dt.timezone.utc).strftime("%H:%M")
+        _dt.datetime.fromtimestamp(f, _fuso()).strftime("%H:%M")
         for f in da_coprire)
     print(f"  · YouTube: programmo {len(da_coprire)} Short per oggi "
-          f"({quando_leggibili} UTC)")
+          f"({quando_leggibili} italiane)")
 
     for quando in da_coprire:
         motivo = _uno_short(conn, imparato, quando)
@@ -788,7 +811,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
         segna_fascia(conn, yt_id, quando)
     import datetime as _dt
     orario = (" — esce alle " + _dt.datetime.fromtimestamp(
-        quando, _dt.timezone.utc).strftime("%H:%M UTC")) if quando else ""
+        quando, _fuso()).strftime("%H:%M italiane")) if quando else ""
     print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove "
           f"[{variante}]{orario}")
     return ""
