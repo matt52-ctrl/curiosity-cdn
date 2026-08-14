@@ -181,6 +181,13 @@ RITMO = (
      "SELECT COUNT(*) FROM reels WHERE status = 'published' "
      "AND published_at > ?",
      "SELECT MIN(published_at) FROM reels WHERE status = 'published'"),
+    # Due al giorno: il workflow dei caroselli gira in due fasce e ognuna
+    # pubblica un post. Mancava da questa tabella, ed era proprio il formato
+    # rimasto indietro senza che nessuno se ne accorgesse.
+    ("Carosello Instagram", 2,
+     "SELECT COUNT(*) FROM posts WHERE status = 'published' "
+     "AND published_at > ?",
+     "SELECT MIN(published_at) FROM posts WHERE status = 'published'"),
 )
 
 # Tre giorni, non uno. La finestra e' stata scelta misurando, non a occhio:

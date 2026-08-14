@@ -2145,6 +2145,7 @@ def _publish_one(conn, post) -> bool:
 
     paths = [Path(p) for p in json.loads(post["image_paths"])]
     urls: List[str] = json.loads(post["image_urls"] or "[]")
+    ig_media_id = None
 
     try:
         if not urls:
@@ -2164,12 +2165,14 @@ def _publish_one(conn, post) -> bool:
             urls = upload(paths, prefix=str(post_id))
             set_post_urls(conn, post_id, urls)
 
-        ig_media_id = None
         if cfg.get("publish.instagram.enabled", True):
             ig_media_id = instagram.publish(
                 urls, post["caption"], alt_text=post["alt_text"] or ""
             )
             print(f"  ✓ Instagram: {ig_media_id}")
+            # Registrato subito. Da questa riga in poi il carosello e' pubblico
+            # davvero, e nulla a valle deve poterlo far risultare fallito.
+            mark_published(conn, post_id, ig_media_id)
 
         tiktok_id = None
         if cfg.get("publish.tiktok.enabled", False):
@@ -2179,8 +2182,13 @@ def _publish_one(conn, post) -> bool:
                 mode = cfg.get("publish.tiktok.mode", "inbox")
                 note = " (bozza in inbox — pubblica dall'app)" if mode == "inbox" else ""
                 print(f"  ✓ TikTok: {tiktok_id}{note}")
-            except tiktok.TikTokError as exc:
+            except Exception as exc:
                 # TikTok che fallisce non deve far fallire un post IG riuscito.
+                # Qui c'era `except TikTokError`, e non bastava: il modulo
+                # chiede il token con require_env, che alza un RuntimeError
+                # normale. L'11 e il 12 agosto due caroselli sono usciti su
+                # Instagram e sono finiti a "failed", con la curiosita'
+                # rimessa in coda pronta per uscire una seconda volta.
                 print(f"  ⚠ TikTok saltato: {exc}")
 
         mark_published(conn, post_id, ig_media_id, tiktok_id)
@@ -2198,6 +2206,14 @@ def _publish_one(conn, post) -> bool:
         return True
 
     except Exception as exc:
+        if ig_media_id:
+            # Il carosello e' gia' su Instagram: qualunque cosa sia successa
+            # dopo, rimetterlo in coda lo farebbe uscire due volte.
+            mark_published(conn, post_id, ig_media_id)
+            print(f"  ⚠ post #{post_id} pubblicato, ma il seguito è fallito: {exc}")
+            allarme.segnala("Carosello Instagram", exc)
+            return True
+
         set_post_status(conn, post_id, "failed")
         # Il fatto era passato a "rendered" alla costruzione: senza rimetterlo
         # in coda resterebbe consumato per sempre, e una curiosità verificata
@@ -2465,6 +2481,11 @@ def cmd_cycle(args: argparse.Namespace) -> int:
         # `review.notify` qui sopra non manda niente se non è configurato, e
         # finora era l'unico avviso previsto.
         allarme.segnala("ciclo", f"nessuna pubblicazione — {problems[0]}")
+
+    # Controlli sull'esito. Erano solo nel giro dei reel, e infatti il calo dei
+    # caroselli e' passato inosservato per tre giorni.
+    allarme.silenzio(conn)
+    allarme.cadenza(conn)
 
     return 1 if allarme.riepiloga("caroselli") else 0
 
