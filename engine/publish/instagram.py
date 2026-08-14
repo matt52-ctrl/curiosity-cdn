@@ -153,11 +153,38 @@ def publish_reel(video_url: str, caption: str, cover_url: str = "") -> str:
         if cover_url and "?" not in cover_url:
             data["cover_url"] = cover_url
 
-        container = _post(client, f"{user_id}/media", data)["id"]
-        # I video richiedono un'attesa molto più lunga delle immagini: con il
-        # timeout predefinito la pubblicazione fallirebbe su un container che
-        # era solo lento, non rotto.
-        _wait_ready(client, container, token, timeout=600)
+        # Un secondo tentativo, e non di piu'. Instagram ha respinto un reel
+        # perfettamente valido con "Media upload has failed" (2207085): stesso
+        # file, stesso URL, ripubblicato due minuti dopo senza cambiare nulla,
+        # accettato. E' un inciampo di Meta mentre scarica il video, non un
+        # difetto del video — ma chi lo riceve butta via un reel gia' montato e
+        # libera la curiosita', quindi costa una pubblicazione ogni volta.
+        #
+        # Due tentativi, non cinque: un file davvero malformato viene respinto
+        # anche al secondo giro, e insistere vorrebbe dire solo aspettare dieci
+        # minuti per arrivare allo stesso errore.
+        ultimo = None
+        for tentativo in range(2):
+            if tentativo:
+                print(f"  · Instagram ha respinto il video ({ultimo}): "
+                      f"riprovo una volta fra 60s")
+                time.sleep(60)
+            try:
+                container = _post(client, f"{user_id}/media", data)["id"]
+                # I video richiedono un'attesa molto più lunga delle immagini:
+                # con il timeout predefinito la pubblicazione fallirebbe su un
+                # container che era solo lento, non rotto.
+                _wait_ready(client, container, token, timeout=600)
+                break
+            except Exception as exc:
+                # Solo l'inciampo in fase di scaricamento si riprova. Un
+                # formato rifiutato o un token scaduto danno lo stesso errore
+                # anche al secondo giro: riprovarli e' solo tempo perso.
+                if "2207085" not in str(exc):
+                    raise
+                ultimo = exc
+        else:
+            raise ultimo
 
         published = _post(
             client,
