@@ -603,12 +603,16 @@ def _rifornisci(conn) -> None:
             ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
         except Exception as exc:
             print(f"generazione curiosita' fallita: {exc}")
-            if allarme.critico(exc):
+            # `serio` e non `critico`: questa e' la linea di rifornimento di
+            # tutto il resto. Se smette, i canali non si fermano subito — si
+            # svuotano piano, e il primo segno visibile e' uno Short in meno
+            # al giorno qualche giorno dopo, quando la causa e' gia' lontana.
+            if allarme.serio(exc):
                 allarme.segnala("generazione", exc)
             return
 
 
-def _pubblica_youtube(conn, imparato: str = "") -> None:
+def _pubblica_youtube(conn, imparato: str = "") -> str:
     """Costruisce e pubblica un video YouTube con curiosita' tutte nuove.
 
     Indipendente da Instagram di proposito. Le due piattaforme hanno pubblici
@@ -620,6 +624,19 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     e' che oltre i due-tre Short al giorno la spinta per video cala, perche'
     ognuno viene provato su un piccolo pubblico prima di essere distribuito e
     pubblicarne troppi significa togliersi spazio da soli.
+
+    Restituisce la stringa vuota quando non c'e' niente da segnalare — cioe' ha
+    pubblicato, oppure il tetto era gia' raggiunto. Altrimenti restituisce cosa
+    e' mancato, e chi chiama ne fa un allarme.
+
+    Perche' un valore di ritorno e non un'eccezione: qui sotto ci sono cinque
+    modi di finire il giro senza pubblicare, e nessuno di questi e' un errore
+    del programma — scorte finite, frasi scartate, montaggio a vuoto. Prima
+    erano cinque `return` muti: stampavano una riga e il giro restava verde,
+    mentre la fascia oraria di quello Short era persa per sempre. Tre fasce al
+    giorno e nessun recupero: un `return` silenzioso vale un terzo della resa
+    quotidiana del canale, ed e' esattamente cosi' che si pubblica un video al
+    giorno invece di tre credendo che vada tutto bene.
     """
     import json as _json
 
@@ -637,7 +654,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     ).fetchone()["n"]
     if usciti >= tetto * quante:
         print(f"  · YouTube: gia' {usciti // quante} video nelle ultime 24 ore, tetto {tetto}")
-        return
+        return ""          # il tetto e' una scelta, non un guasto
 
     # Scorte. Il video si costruisce solo se ci sono abbastanza curiosita'
     # mai uscite su YouTube: meglio saltare un giro che montare un video con
@@ -653,7 +670,9 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
         liberi = quanti_liberi(conn, "youtube")
     if liberi < quante:
         print(f"    ancora {liberi}: salto questo giro invece di ripetermi")
-        return
+        return (f"scorte esaurite: {liberi} curiosita' mai uscite su YouTube, "
+                f"ne servono {quante}. La generazione non sta reintegrando: "
+                f"finche' resta cosi' non esce piu' nessuno Short.")
 
     # Prova A/B sul registro: il gruppo si sceglie qui, non a caso ma
     # tenendo il confronto bilanciato. Stessa riserva di curiosita' per
@@ -664,7 +683,8 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     frasi = [f for f in frasi if f.get("fact_id")][:quante]
     if len(frasi) < quante:
         print(f"    solo {len(frasi)} frasi utilizzabili su {quante}: salto")
-        return
+        return (f"lo scrittore ha reso {len(frasi)} frasi utilizzabili su "
+                f"{quante}: in questa fascia non esce nessuno Short.")
 
     # I filmati NON si cercano qui: ci pensa build_multi. Cercarli prima per
     # sapere se ci sono significa scaricarli due volte — quota Pexels doppia e
@@ -677,14 +697,16 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     video, montate = _reel.build_multi(voci, nome)
     if not video:
         print("    montaggio fallito")
-        return
+        return ("montaggio a vuoto: le frasi c'erano, il video non e' nato. "
+                "Di solito ffmpeg o i filmati di Pexels.")
 
     # Solo le curiosita' davvero finite nel video: se un filmato mancava, quel
     # segmento e' saltato e annunciarla nella descrizione sarebbe una bugia.
     frasi = [v["_frase"] for v in montate]
     if not frasi:
         print("    nessun segmento montato")
-        return
+        return ("nessun segmento montato: nessuna delle frasi ha trovato un "
+                "filmato utilizzabile.")
 
     meta = youtube.componi_metadati(
         frasi[0]["hook"], frasi[0]["reveal"],
@@ -703,6 +725,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
     segna_variante(conn, yt_id, variante)
     print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove "
           f"[{variante}]")
+    return ""
 
 
 def _giro_youtube(conn, imparato: str) -> None:
@@ -716,7 +739,7 @@ def _giro_youtube(conn, imparato: str) -> None:
     if not cfg.get("publish.youtube.enabled", False):
         return
     try:
-        _pubblica_youtube(conn, imparato)
+        motivo = _pubblica_youtube(conn, imparato)
     except Exception as exc:
         print(f"  ⚠ YouTube saltato: {exc}")
         # Un singhiozzo di rete non merita una mail. Tutto il resto si': qui
@@ -726,6 +749,14 @@ def _giro_youtube(conn, imparato: str) -> None:
         # tenuto fermo il canale per venti ore non era fra quelle.
         if allarme.serio(exc):
             allarme.segnala("YouTube Short", exc)
+        return
+
+    # Nessuna eccezione, e comunque niente pubblicato. E' il caso piu'
+    # insidioso dei due: non c'e' un errore da leggere, solo un giro che si e'
+    # comportato bene e non ha prodotto nulla. Va detto uguale — una fascia
+    # oraria saltata non si recupera, e tre fasce sono tutta la giornata.
+    if motivo:
+        allarme.segnala("YouTube Short", motivo)
 
 
 def cmd_tiktok(args: argparse.Namespace) -> int:
@@ -1473,6 +1504,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
         print("nessun reel da pubblicare per Instagram")
         _giro_youtube(conn, imparato)      # YouTube non dipende da Instagram
         allarme.silenzio(conn)
+        allarme.cadenza(conn)
         return 1 if allarme.riepiloga("reel") else 0
 
     # In prova si costruisce e basta. Pubblicare un reel di collaudo lo mette
@@ -1536,15 +1568,21 @@ def cmd_reels(args: argparse.Namespace) -> int:
         conn.commit()
         print(f"✗ reel #{r['id']} fallito: {exc}")
         review.notify(f"⚠️ Reel #{r['id']} fallito:\n<code>{exc}</code>")
-        if allarme.critico(exc):
+        # Qui fallire vuol dire che il reel di questa fascia non e' uscito:
+        # vale la stessa regola di YouTube, si tace solo per i guasti che si
+        # riconoscono come passeggeri.
+        if allarme.serio(exc):
             allarme.segnala("Instagram reel", exc)
 
     # Fuori dal try: un reel Instagram fallito non deve tenere fermo YouTube.
     _giro_youtube(conn, imparato)
 
-    # Ultimo controllo, sull'esito e non sulle cause: se da un giorno non esce
+    # Ultimi controlli, sull'esito e non sulle cause: se da un giorno non esce
     # niente, il giro deve fallire anche se ogni singolo passo sembrava andato.
+    # E subito dopo la domanda piu' fine, che al primo controllo sfugge: non
+    # "esce qualcosa", ma "ne esce quanto dovrebbe".
     allarme.silenzio(conn)
+    allarme.cadenza(conn)
     return 1 if allarme.riepiloga("reel") else 0
 
 

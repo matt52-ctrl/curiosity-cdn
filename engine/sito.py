@@ -224,6 +224,16 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
     nome = _e(cfg.get("brand.name", "Oddly Wired"))
 
     dati = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>' if jsonld else ""
+
+    # Misura del traffico, se e' stata configurata. `defer` e non un caricamento
+    # normale: lo script non serve a disegnare la pagina, e metterlo davanti al
+    # contenuto ritarderebbe cio' per cui la gente e' arrivata. Se il campo e'
+    # vuoto non viene emesso nulla — nessuno script, nessuna richiesta a terzi.
+    misura = ""
+    if token := (cfg.get("sito.analytics", "") or "").strip():
+        misura = ('<script defer src="https://static.cloudflareinsights.com/'
+                  f'beacon.min.js" data-cf-beacon=\'{{"token": "{_e(token)}"}}\'>'
+                  '</script>')
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -243,6 +253,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 <link rel="stylesheet" href="{_radice()}style.css">
 <link rel="alternate" type="application/rss+xml" title="{nome}" href="{_radice()}feed.xml">
 {dati}
+{misura}
 </head><body>
 <header><div class="guscio">
   {marchio}

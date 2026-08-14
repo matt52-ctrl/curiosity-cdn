@@ -167,6 +167,83 @@ def silenzio(conn, ore: float | None = None) -> None:
                           f"Il giro gira ma non esce niente: guardare i log.")
 
 
+# Uscite attese al giorno, canale per canale, piu' la query che conta quelle
+# vere e quella che dice da quando il canale esiste. Tre al giorno perche' il
+# workflow dei reel gira in tre fasce e ognuna pubblica al massimo un reel e
+# uno Short.
+RITMO = (
+    ("YouTube Short", 3,
+     "SELECT COUNT(DISTINCT ref) FROM fact_uses "
+     "WHERE channel = 'youtube' AND ref LIKE 'yt-%' AND used_at > ?",
+     "SELECT MIN(used_at) FROM fact_uses "
+     "WHERE channel = 'youtube' AND ref LIKE 'yt-%'"),
+    ("Instagram reel", 3,
+     "SELECT COUNT(*) FROM reels WHERE status = 'published' "
+     "AND published_at > ?",
+     "SELECT MIN(published_at) FROM reels WHERE status = 'published'"),
+)
+
+# Tre giorni, non uno. La finestra e' stata scelta misurando, non a occhio:
+# rigiocando il controllo sui quattro giri realmente eseguiti durante la
+# giornata in cui il canale era guasto, la finestra di 24 ore dava sempre e
+# solo "2 su 3" — mai abbastanza per far scattare una soglia che non sia
+# rumorosa — mentre quella di 72 ore dava 4, 5, 5 e 6 su 9. Il motivo e' che
+# una finestra mobile di un giorno prende sempre un pezzo del giorno prima e
+# ci spalma dentro la giornata storta; su tre giorni il calo resta visibile.
+_FINESTRA_ORE = 72.0
+
+
+def cadenza(conn, ore: float = _FINESTRA_ORE) -> None:
+    """Segnala i canali che pubblicano, ma molto meno di quanto dovrebbero.
+
+    `silenzio()` sopra risponde a "esce ancora qualcosa?". Questo risponde a
+    una domanda piu' fine: "ne esce quanto dovrebbe?". La differenza non e'
+    accademica, e' successa. Su tre fasce orarie due non hanno prodotto nulla e
+    una si': per `silenzio()` il canale era vivo — una pubblicazione nelle
+    ultime ventiquattr'ore c'era — mentre aveva perso due terzi della resa.
+
+    Ogni fascia saltata e' persa per sempre: non si recupera al giro dopo, ed
+    e' una scelta. Due Short pubblicati a pochi minuti l'uno dall'altro entrano
+    insieme nella stessa prova di pubblico e si tolgono spazio a vicenda, per
+    cui recuperare renderebbe meno che accettare il buco. Ma proprio perche'
+    non si recupera, il numero di uscite *e'* il risultato del sistema.
+
+    La soglia sta a due terzi dell'atteso. Sotto quella, il canale non sta
+    avendo una giornata storta: sta rendendo stabilmente meno di quanto e'
+    costruito per rendere. Una fascia persa ogni tanto resta sotto silenzio di
+    proposito — dipendiamo da cinque servizi esterni e da un programmatore che
+    parte con un'ora di ritardo, segnalarla vorrebbe dire una mail quasi ogni
+    giorno, e le mail che arrivano quasi ogni giorno non si leggono piu'.
+    """
+    import time
+
+    limite = time.time() - ore * 3600
+
+    for nome, al_giorno, sql, sql_prima in RITMO:
+        try:
+            uscite = conn.execute(sql, (limite,)).fetchone()[0] or 0
+            prima = conn.execute(sql_prima).fetchone()[0]
+        except Exception:
+            continue          # tabella non ancora creata: non e' un guasto
+
+        # Un canale piu' giovane della finestra ha pochi numeri perche' e'
+        # appena nato, non perche' e' rotto. Senza questa riga ogni canale
+        # nuovo manderebbe una mail il primo giorno — cioe' il controllo
+        # direbbe "guasto" proprio quando tutto sta andando come previsto.
+        if not prima or prima > limite:
+            continue
+
+        # Il canale del tutto muto e' gia' compito di `silenzio()`, che sa
+        # anche distinguere "si e' fermato" da "non ha mai iniziato". Qui si
+        # guarda solo cio' che a quello sfugge: pubblica, ma troppo poco.
+        atteso_finestra = al_giorno * ore / 24.0
+        if uscite and uscite < atteso_finestra * 2 / 3:
+            segnala(nome, f"{uscite} uscite in {ore / 24:.0f} giorni invece di "
+                          f"{atteso_finestra:.0f}. Il canale non e' fermo, ma "
+                          f"rende sotto i due terzi: guardare quali giri non "
+                          f"hanno prodotto e perche'.")
+
+
 def riepiloga(contesto: str = "") -> int:
     """Stampa i guasti raccolti e dice quanti erano. Zero = tutto a posto.
 

@@ -459,6 +459,21 @@ sito:
   # Serve il secret SITE_TOKEN con permesso Contents: Read and write.
   repo: "oddlywired/oddlywired.github.io"
 
+  # Misura del traffico. Vuoto = nessuno script, nessuna richiesta a terzi:
+  # finché questo campo è vuoto le pagine restano identiche a prima.
+  #
+  # Il token si prende da Cloudflare → Web Analytics → Add a site, e si
+  # incolla qui. Cloudflare e non Google Analytics per tre motivi concreti:
+  # l'account c'è già (lo stesso che genera le immagini), è gratis senza
+  # limiti di pagine viste, e non usa cookie — quindi niente banner di
+  # consenso, che su un sito di poche pagine costerebbe più visite di quante
+  # ne misuri. In cambio dà meno dettaglio di GA: pagine viste, provenienza,
+  # paese e poco altro. Per sapere se il sito cresce basta.
+  #
+  # Misura le visite, non le ricerche. Per sapere COSA cerca chi arriva serve
+  # Search Console, che è un'altra cosa e si attiva a parte.
+  analytics: ""
+
 # ─── EPISODIO LUNGO (YouTube) ─────────────────────────────────────────────────
 # Settimanale, ~8 minuti, dieci curiosità legate da un tema.
 #
