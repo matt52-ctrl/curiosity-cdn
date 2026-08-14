@@ -102,10 +102,10 @@ jobs:
         # non pubblica su Instagram. Gli altri tre trovano le fasce già
         # coperte e non ricaricano nulla — restano la rete di sicurezza se
         # questo fallisce.
-        run: |
-          python run.py reels \
-            ${{ inputs.prova && '--no-publish' || '' }} \
-            ${{ github.event.schedule == '45 7 * * *' && '--solo-youtube' || '' }}
+        # Su una riga sola: con le continuazioni, un'espansione vuota lascia una
+        # riga di soli spazi e un backslash, e basta uno spazio di troppo dopo
+        # il backslash perché il comando si spezzi in due.
+        run: python run.py reels ${{ inputs.prova && '--no-publish' || '' }} ${{ github.event.schedule == '45 7 * * *' && '--solo-youtube' || '' }}
 
       # I commenti girano in coda alla pubblicazione, non in un workflow loro:
       # rispondere entro la prima ora è ciò che conta, e la prima ora è questa.
