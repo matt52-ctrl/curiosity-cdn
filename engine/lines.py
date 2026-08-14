@@ -349,12 +349,27 @@ Return JSON matching the schema."""
     return [l for l in linee if not l.get("_doppione")]
 
 
-def full_caption(line: Dict[str, Any]) -> str:
-    tags = " ".join("#" + t for t in line["hashtags"])
+def corpo_didascalia(line: Dict[str, Any], ponte: bool = True) -> str:
+    """La didascalia senza hashtag.
+
+    Sta separata da `full_caption` perche' i due usi vogliono cose diverse e
+    confonderli e' gia' costato due volte. Nel database il reel salva SOLO il
+    corpo: gli hashtag vengono riletti dalla colonna dedicata e aggiunti al
+    momento della pubblicazione. Chi salva qui la versione completa se li
+    ritrova stampati due volte sotto al video.
+
+    Il dict va convertito PRIMA di toccare il database: sqlite non sa legare un
+    dict e la generazione dei reel moriva li', in silenzio, una riga per volta.
+
+    `ponte=False` toglie il rimando al canale YouTube. Serve su YouTube stesso,
+    dove quella riga invitava a cercare il canale che si sta gia' guardando —
+    e nella stessa descrizione compariva due righe sotto il rimando opposto,
+    verso Instagram. Il richiamo incrociato ha senso solo verso l'altra parte.
+    """
     # La didascalia arriva a pezzi e si unisce qui con le righe vuote: prima
     # si chiedeva al modello di formattarla e la comprimeva in un blocco solo,
     # con la fonte e la CTA sepolte dietro il "altro" di Instagram.
-    grezza = line["caption"]
+    grezza = line.get("caption", "")
     if isinstance(grezza, dict):
         pezzi = [x.strip() for x in (grezza.get("apertura"), grezza.get("prova"))
                  if x and x.strip()]
@@ -367,11 +382,17 @@ def full_caption(line: Dict[str, Any]) -> str:
     # Rimando al canale YouTube, prima degli hashtag: dopo non lo legge
     # nessuno. Instagram non rende cliccabili i link in didascalia, quindi si
     # scrive il nome del canale, che si puo' cercare, invece di un URL.
-    ponte = cfg.get("caption.cross_promo", "")
-    if ponte:
-        pezzi.append(ponte)
-    pezzi.append(tags)
+    rimando = cfg.get("caption.cross_promo", "") if ponte else ""
+    if rimando:
+        pezzi.append(rimando)
     return "\n\n".join(pezzi)
+
+
+def full_caption(line: Dict[str, Any]) -> str:
+    """Corpo piu' hashtag: la forma da mandare a Instagram, non da salvare."""
+    corpo = corpo_didascalia(line)
+    tags = " ".join("#" + t for t in line.get("hashtags") or [])
+    return "\n\n".join(x for x in (corpo, tags) if x)
 
 
 # ─── Riscrittura delle didascalie in coda ─────────────────────────────────────

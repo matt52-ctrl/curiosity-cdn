@@ -680,7 +680,8 @@ def _pubblica_youtube(conn, imparato: str = "") -> None:
         return
 
     meta = youtube.componi_metadati(
-        frasi[0]["hook"], frasi[0]["reveal"], frasi[0].get("caption", ""),
+        frasi[0]["hook"], frasi[0]["reveal"],
+        lines.corpo_didascalia(frasi[0], ponte=False),
         frasi[0].get("hashtags", []),
         altre=[f["line"] for f in frasi[1:]],
     )
@@ -1313,8 +1314,9 @@ def cmd_didascalie(args: argparse.Namespace) -> int:
                                       r["source_hint"] or "")
         if not d:
             continue
-        nuova = lines.full_caption({"caption": d,
-                                    "hashtags": _j.loads(r["hashtags"] or "[]")})
+        # Corpo senza hashtag: la colonna `hashtags` esiste gia' e li riattacca
+        # la pubblicazione. Salvarli anche qui li faceva uscire in doppio.
+        nuova = lines.corpo_didascalia({"caption": d})
         if getattr(args, "dry", False):
             print(f"    dopo : {d['apertura']}")
             continue
@@ -1420,6 +1422,11 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 )
                 print(f"    formato: {'frase singola' if singolo else 'due tempi'}")
                 l["video_path"] = video
+                # La didascalia arriva a pezzi dal modello: va composta prima
+                # di scendere nel database, che sa scrivere solo testo. Senza
+                # questa riga sqlite rifiuta la riga intera e il reel non nasce
+                # — ed e' esattamente cosi' che la coda si e' svuotata.
+                l["caption"] = lines.corpo_didascalia(l)
                 rid = insert_reel(conn, l)
                 # Caricamento immediato, come per i post: il reel costruito
                 # oggi può essere pubblicato da un'altra macchina domani, e su
@@ -1439,6 +1446,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
     if not pronti:
         print("nessun reel da pubblicare per Instagram")
         _giro_youtube(conn, imparato)      # YouTube non dipende da Instagram
+        allarme.silenzio(conn)
         return 1 if allarme.riepiloga("reel") else 0
 
     # In prova si costruisce e basta. Pubblicare un reel di collaudo lo mette
@@ -1508,6 +1516,9 @@ def cmd_reels(args: argparse.Namespace) -> int:
     # Fuori dal try: un reel Instagram fallito non deve tenere fermo YouTube.
     _giro_youtube(conn, imparato)
 
+    # Ultimo controllo, sull'esito e non sulle cause: se da un giorno non esce
+    # niente, il giro deve fallire anche se ogni singolo passo sembrava andato.
+    allarme.silenzio(conn)
     return 1 if allarme.riepiloga("reel") else 0
 
 

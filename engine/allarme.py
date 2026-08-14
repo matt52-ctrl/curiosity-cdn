@@ -58,6 +58,45 @@ def critico(exc: Exception) -> bool:
     return any(s in t for s in spie)
 
 
+def silenzio(conn, ore: float = 24.0) -> None:
+    """Segnala i canali che non pubblicano da troppo tempo.
+
+    Nasce da un guasto vero: un mio errore faceva arrivare la didascalia come
+    dizionario invece che come testo, sqlite rifiutava la riga e il reel non
+    veniva creato. Nessuna credenziale scaduta, nessuna quota finita — quindi
+    `critico()` non riconosceva niente, i giri restavano verdi e il canale e'
+    stato fermo un giorno intero senza che nulla lo dicesse.
+
+    La lezione: non si puo' elencare in anticipo l'insieme dei modi in cui un
+    sistema si rompe. Si puo' pero' controllare l'unica cosa che conta davvero,
+    che e' sempre la stessa qualunque sia la causa — se sta ancora uscendo
+    qualcosa. Un controllo sull'esito vale tutti quelli sulle cause messi
+    insieme, perche' copre anche i guasti che non sono ancora stati inventati.
+
+    Ventiquattro ore, non meno: i reel escono tre volte al giorno, quindi un
+    buco cosi' sono almeno tre giri saltati di fila. Un solo giro perso puo'
+    essere una rete storta e non merita una mail — se le mail arrivano per
+    nulla, si smette di leggerle proprio quando servono.
+    """
+    import time
+
+    limite = time.time() - ore * 3600
+    for nome, sql in (
+        ("Instagram",
+         "SELECT MAX(published_at) FROM reels WHERE status = 'published'"),
+        ("YouTube",
+         "SELECT MAX(used_at) FROM fact_uses WHERE channel = 'youtube'"),
+    ):
+        try:
+            ultimo = conn.execute(sql).fetchone()[0]
+        except Exception:
+            continue          # tabella non ancora creata: non e' un guasto
+        if ultimo and ultimo < limite:
+            fermo = (time.time() - ultimo) / 3600
+            segnala(nome, f"nessuna pubblicazione da {fermo:.0f} ore. "
+                          f"Il giro gira ma non esce niente: guardare i log.")
+
+
 def riepiloga(contesto: str = "") -> int:
     """Stampa i guasti raccolti e dice quanti erano. Zero = tutto a posto.
 

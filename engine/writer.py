@@ -376,6 +376,13 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
     if isinstance(grezza, dict):
         pezzi = [grezza.get("apertura", ""), grezza.get("prova", ""),
                  grezza.get("domanda", "")]
+        # La CTA la aggiunge il codice. Prima la scriveva il modello dentro la
+        # stringa; passando allo schema a pezzi il campo non esisteva piu' e
+        # l'invito a seguire era sparito dai caroselli senza che nulla
+        # segnalasse l'assenza.
+        cta = cfg.get("caption.cta", "")
+        if cta:
+            pezzi.append(cta)
         testo = "\n\n".join(x.strip() for x in pezzi if x and x.strip())
     else:
         # I post gia' in magazzino hanno la didascalia come stringa unica.
