@@ -21,9 +21,23 @@ body { background: #0d0c0b; }
   overflow: hidden;
 }
 
-/* Il filmato di sfondo, molto scurito: serve a dare atmosfera, non a essere
-   guardato. A 210 px un'immagine leggibile competerebbe col testo, e
-   perderebbero entrambi. */
+/* Fondo a gradiente, non un fotogramma del filmato. Scelta misurata, non
+   pigrizia: rese le due versioni e confrontate a 210×118 su sei filmati.
+
+     · scurito quanto basta a non disturbare il testo, il fotogramma cambia la
+       miniatura di 2/255 di luminanza media — cioè non si vede. Costo zero,
+       guadagno zero, in cambio di una chiamata a ffmpeg che può fallire.
+     · schiarito fino a vedersi, il contrasto del testo cala: −0,09 di
+       Michelson a velatura media, −0,23 a velatura leggera.
+     · e diventa una lotteria. Le clip le pesca il mood a caso: a velatura
+       leggera il contrasto andava da 0,89 su una ripresa scura a 0,63 su una
+       spiaggia con cielo bianco. Un fondo un po' spento ma sempre uguale vale
+       più di uno che a volte è buono e a volte mangia il testo.
+
+   C'è anche un dettaglio pratico: il fotogramma più a portata di mano sarebbe
+   quello dell'episodio finito, che però ha già il testo impresso sopra. Testo
+   sotto testo è esattamente il "due cose e non se ne legge nessuna" di qui
+   sopra. */
 .canvas {
   display: block;
   position: absolute;

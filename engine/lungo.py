@@ -347,12 +347,14 @@ EYEBROW
     return d
 
 
-def miniatura(testo: str, occhiello: str, sfondo: Optional[Path],
-              out: Path) -> Optional[Path]:
-    """Disegna la miniatura 1280×720.
+def miniatura(testo: str, occhiello: str, out: Path) -> Optional[Path]:
+    """Disegna la miniatura 1280×720: fondo a gradiente e testo, niente foto.
 
     Il punto di fuoco è l'occhiello in oro sopra al testo: il renderer scherma
     l'HTML, quindi colorare una singola parola avrebbe stampato il tag.
+
+    Non prende un fotogramma del filmato, e la scelta è misurata — il perché sta
+    in `templates/thumb.css`, sopra `.canvas`.
     """
     from . import render
 
