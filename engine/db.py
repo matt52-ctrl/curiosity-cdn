@@ -186,6 +186,16 @@ CREATE TABLE IF NOT EXISTS esperimento (
     creato    REAL NOT NULL,
     piattaforma TEXT NOT NULL DEFAULT 'youtube'
 );
+
+-- Fasce YouTube gia' coperte. Serve a sapere quali uscite di oggi esistono
+-- gia', senza doverlo chiedere a YouTube a ogni giro: la domanda costerebbe
+-- quota e aggiungerebbe una dipendenza di rete a un controllo che deve poter
+-- rispondere anche quando la rete non va.
+CREATE TABLE IF NOT EXISTS yt_fasce (
+    video_id  TEXT PRIMARY KEY,
+    quando    REAL NOT NULL,
+    caricato  REAL NOT NULL
+);
 """
 
 
@@ -821,6 +831,20 @@ def segna_variante(conn: sqlite3.Connection, video_id: str, variante: str,
         (video_id, variante, time.time(), piattaforma),
     )
     conn.commit()
+
+
+def segna_fascia(conn: sqlite3.Connection, video_id: str, quando: float) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO yt_fasce (video_id, quando, caricato) VALUES (?,?,?)",
+        (video_id, quando, time.time()),
+    )
+    conn.commit()
+
+
+def fasce_coperte(conn: sqlite3.Connection, da: float, a: float) -> List[float]:
+    """Gli orari di uscita gia' coperti in un intervallo."""
+    return [r[0] for r in conn.execute(
+        "SELECT quando FROM yt_fasce WHERE quando >= ? AND quando < ?", (da, a))]
 
 
 def esito_esperimento(conn: sqlite3.Connection) -> List[sqlite3.Row]:

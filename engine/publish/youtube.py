@@ -20,6 +20,7 @@ token non scade più. È il singolo errore che fa fallire questa integrazione.
 """
 from __future__ import annotations
 
+import datetime
 import json
 from pathlib import Path
 from typing import Dict, Optional
@@ -161,8 +162,16 @@ def publish(
     description: str,
     tags: Optional[list] = None,
     privacy: str = "public",
+    quando: Optional[float] = None,
 ) -> str:
-    """Carica un video come Short pubblico. Restituisce l'id del video."""
+    """Carica un video come Short pubblico. Restituisce l'id del video.
+
+    Con `quando` (epoch UTC) il video viene caricato privato e reso pubblico da
+    YouTube all'ora indicata. Due vantaggi rispetto a caricare al momento
+    giusto: l'ora di uscita e' esatta, mentre il programmatore di GitHub parte
+    con ritardi misurati fino a 64 minuti; e l'intera giornata si vede gia'
+    caricata la mattina, quindi un guasto si nota subito invece che a sera.
+    """
     if not video.exists():
         raise YouTubeError(f"file non trovato: {video}")
 
@@ -182,10 +191,17 @@ def publish(
         "status": {
             # `private` serve alle prove: permette di verificare che l'intera
             # catena funzioni senza mettere nulla davanti al pubblico.
-            "privacyStatus": privacy,
+            # E' anche l'unico stato che YouTube accetta insieme a publishAt:
+            # un video gia' pubblico non si puo' programmare.
+            "privacyStatus": "private" if quando else privacy,
             "selfDeclaredMadeForKids": False,
         },
     }
+    if quando:
+        metadata["status"]["publishAt"] = (
+            datetime.datetime.fromtimestamp(quando, datetime.timezone.utc)
+            .isoformat().replace("+00:00", "Z")
+        )
 
     # Caricamento in due passi: prima i metadati, poi il file. L'endpoint
     # "resumable" è l'unico che regge file grandi senza timeout.

@@ -612,7 +612,80 @@ def _rifornisci(conn) -> None:
             return
 
 
+def _fasce_di_oggi() -> List[float]:
+    """Gli orari di uscita previsti per oggi, in epoch UTC.
+
+    Sono in UTC come i cron dei workflow, quindi d'inverno le uscite italiane
+    slittano di un'ora. E' la stessa scelta gia' fatta per i cron: seguire
+    l'ora legale richiederebbe un fuso vero in tutte e due i posti, e la
+    finestra utile e' larga qualche ora, non qualche minuto.
+    """
+    import datetime as _dt
+
+    orari = cfg.get("publish.youtube.orari", ["11:00", "17:00", "21:00"])
+    oggi = _dt.datetime.now(_dt.timezone.utc).date()
+    fasce = []
+    for o in orari:
+        ore, minuti = (int(x) for x in str(o).split(":"))
+        fasce.append(_dt.datetime.combine(
+            oggi, _dt.time(ore, minuti), _dt.timezone.utc).timestamp())
+    return sorted(fasce)
+
+
 def _pubblica_youtube(conn, imparato: str = "") -> str:
+    """Copre le fasce di oggi non ancora coperte, programmandole su YouTube.
+
+    Prima ogni giro caricava un video e lo rendeva pubblico subito: l'ora di
+    uscita era quella in cui GitHub si degnava di far partire il job, con
+    ritardi misurati fino a 64 minuti, e per sapere se la giornata era a posto
+    bisognava aspettare sera. Ora il primo giro carica tutti i video del giorno
+    e lascia a YouTube il compito di pubblicarli all'ora esatta.
+
+    I giri successivi non ricaricano nulla se le fasce sono gia' coperte, ma
+    restano la rete di sicurezza: se il primo si rompe, il secondo copre le
+    fasce che mancano. Quelle gia' passate si perdono di proposito — due Short
+    a pochi minuti l'uno dall'altro entrano nella stessa prova di pubblico e si
+    tolgono spazio a vicenda, quindi recuperare renderebbe meno che accettare
+    il buco.
+    """
+    from engine.db import fasce_coperte
+
+    adesso = time.time()
+    tetto = int(cfg.get("publish.youtube.max_per_day", 3))
+    # Mezzanotte UTC: lo stesso confine che usano i cron.
+    inizio = adesso - (adesso % 86400)
+    coperte = fasce_coperte(conn, inizio, inizio + 86400)
+
+    # Un margine perche' il caricamento non e' istantaneo: programmare per fra
+    # due minuti significa arrivare tardi e vedersi rifiutare il publishAt.
+    da_coprire = [
+        f for f in _fasce_di_oggi()
+        if f > adesso + 600 and not any(abs(f - c) < 60 for c in coperte)
+    ][: max(0, tetto - len(coperte))]
+
+    if not da_coprire:
+        print(f"  · YouTube: {len(coperte)} fasce di oggi gia' coperte, "
+              f"nessuna da programmare")
+        return ""
+
+    import datetime as _dt
+    quando_leggibili = ", ".join(
+        _dt.datetime.fromtimestamp(f, _dt.timezone.utc).strftime("%H:%M")
+        for f in da_coprire)
+    print(f"  · YouTube: programmo {len(da_coprire)} Short per oggi "
+          f"({quando_leggibili} UTC)")
+
+    for quando in da_coprire:
+        motivo = _uno_short(conn, imparato, quando)
+        if motivo:
+            # Il primo intoppo ferma il lotto: le cause sono comuni a tutti i
+            # video (scorte, scrittore, ffmpeg), quindi insistere sui
+            # successivi ripeterebbe lo stesso errore piu' volte.
+            return motivo
+    return ""
+
+
+def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
     """Costruisce e pubblica un video YouTube con curiosita' tutte nuove.
 
     Indipendente da Instagram di proposito. Le due piattaforme hanno pubblici
@@ -620,14 +693,11 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
     normale e voluto — ma il registro dei consumi e' separato, quindi su
     YouTube nessuna torna una seconda volta.
 
-    Il tetto giornaliero non e' la quota API (sei caricamenti, ne servono tre):
-    e' che oltre i due-tre Short al giorno la spinta per video cala, perche'
-    ognuno viene provato su un piccolo pubblico prima di essere distribuito e
-    pubblicarne troppi significa togliersi spazio da soli.
+    Con `quando` il video non esce subito: viene caricato privato e YouTube lo
+    rende pubblico a quell'ora. Senza, esce appena caricato.
 
-    Restituisce la stringa vuota quando non c'e' niente da segnalare — cioe' ha
-    pubblicato, oppure il tetto era gia' raggiunto. Altrimenti restituisce cosa
-    e' mancato, e chi chiama ne fa un allarme.
+    Restituisce la stringa vuota quando ha pubblicato. Altrimenti restituisce
+    cosa e' mancato, e chi chiama ne fa un allarme.
 
     Perche' un valore di ritorno e non un'eccezione: qui sotto ci sono cinque
     modi di finire il giro senza pubblicare, e nessuno di questi e' un errore
@@ -641,20 +711,11 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
     import json as _json
 
     from engine import lines, reel as _reel
-    from engine.db import quanti_liberi, segna_uso_fatto, segna_variante
+    from engine.db import (quanti_liberi, segna_fascia, segna_uso_fatto,
+                           segna_variante)
     from engine.publish import youtube
 
     quante = int(cfg.get("publish.youtube.facts_per_video", 3))
-    tetto = int(cfg.get("publish.youtube.max_per_day", 3))
-
-    usciti = conn.execute(
-        """SELECT COUNT(*) n FROM fact_uses
-           WHERE channel='youtube' AND used_at > ?""",
-        (time.time() - 86400,),
-    ).fetchone()["n"]
-    if usciti >= tetto * quante:
-        print(f"  · YouTube: gia' {usciti // quante} video nelle ultime 24 ore, tetto {tetto}")
-        return ""          # il tetto e' una scelta, non un guasto
 
     # Scorte. Il video si costruisce solo se ci sono abbastanza curiosita'
     # mai uscite su YouTube: meglio saltare un giro che montare un video con
@@ -715,7 +776,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
         altre=[f["line"] for f in frasi[1:]],
     )
     yt_id = youtube.publish(video, meta["title"], meta["description"],
-                            tags=meta["tags"])
+                            tags=meta["tags"], quando=quando)
 
     # Si registra DOPO il caricamento riuscito: se YouTube rifiuta, le
     # curiosita' devono restare disponibili per il giro dopo invece di
@@ -723,8 +784,13 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
     for f in frasi:
         segna_uso_fatto(conn, f["fact_id"], "youtube", f"yt-{yt_id}")
     segna_variante(conn, yt_id, variante)
+    if quando:
+        segna_fascia(conn, yt_id, quando)
+    import datetime as _dt
+    orario = (" — esce alle " + _dt.datetime.fromtimestamp(
+        quando, _dt.timezone.utc).strftime("%H:%M UTC")) if quando else ""
     print(f"  ✓ YouTube: youtu.be/{yt_id} — {len(frasi)} curiosita' nuove "
-          f"[{variante}]")
+          f"[{variante}]{orario}")
     return ""
 
 
@@ -1405,6 +1471,17 @@ def cmd_reels(args: argparse.Namespace) -> int:
     imparato = analytics.brief_youtube(conn)
     if imparato:
         print("→ genero tenendo conto di cosa ha trattenuto di piu'")
+
+    # Giro di solo YouTube. Serve al primo innesco della giornata, che parte
+    # presto per avere margine sulla prima fascia: i reel di Instagram non si
+    # possono programmare, quindi pubblicarne uno a quell'ora vorrebbe dire
+    # metterlo fuori dalla finestra scelta per il pubblico anglofono.
+    if getattr(args, "solo_youtube", False):
+        _rifornisci(conn)
+        _giro_youtube(conn, imparato)
+        allarme.silenzio(conn)
+        allarme.cadenza(conn)
+        return 1 if allarme.riepiloga("reel") else 0
 
     # 0. I reel consumano curiosita' ma non ne producono: solo il ciclo dei
     #    caroselli genera fatti nuovi, e lo fa in base alle SUE scorte. Senza
@@ -2524,6 +2601,11 @@ def main() -> int:
         "--no-publish",
         action="store_true",
         help="costruisce i reel ma non li pubblica — da usare per le prove",
+    )
+    p.add_argument(
+        "--solo-youtube",
+        action="store_true",
+        help="programma gli Short della giornata senza toccare Instagram",
     )
     p.set_defaults(func=cmd_reels)
 
