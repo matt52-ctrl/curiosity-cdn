@@ -58,6 +58,37 @@ def critico(exc: Exception) -> bool:
     return any(s in t for s in spie)
 
 
+# L'elenco opposto: i guasti che passano da soli e non meritano una mail.
+_PASSEGGERI = (
+    "timeout", "timed out",
+    "connection", "connessione",
+    "temporarily", "try again",
+    "502", "503", "504",
+    "read operation",       # httpx quando la rete cade a metà scaricamento
+    "nessun filmato",       # Pexels non aveva clip per quell'umore
+)
+
+
+def serio(exc: Exception) -> bool:
+    """Come `critico`, ma al contrario: serio finché non si dimostra passeggero.
+
+    `critico()` elenca le cause note — token scaduti, quote finite — e tace su
+    tutto il resto. Sembra prudente e invece è il contrario: un elenco di cause
+    è sempre incompleto, e ciò che non è nell'elenco passa inosservato proprio
+    perché è nuovo. È andata così con la didascalia arrivata come dizionario:
+    nessuna parola dell'elenco compariva nel messaggio, YouTube veniva saltato
+    a ogni giro e il workflow restava verde per venti ore.
+
+    Qui l'onere della prova è rovesciato. Si tace solo per i guasti che si
+    riconoscono come passeggeri — una rete caduta, un 503, un filmato non
+    trovato — e si segnala tutto il resto, compreso quello che non è ancora
+    stato inventato. Un elenco di eccezioni benigne si può chiudere davvero;
+    un elenco di modi di rompersi no.
+    """
+    t = str(exc).lower()
+    return not any(s in t for s in _PASSEGGERI)
+
+
 # Ogni canale ha il suo ritmo, quindi ognuno ha la sua soglia: una sola
 # soglia buona per tutti sarebbe troppo stretta per l'episodio settimanale o
 # troppo larga per i reel, e in entrambi i casi inutile. La regola con cui

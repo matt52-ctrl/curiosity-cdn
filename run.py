@@ -712,10 +712,13 @@ def _giro_youtube(conn, imparato: str) -> None:
         _pubblica_youtube(conn, imparato)
     except Exception as exc:
         print(f"  ⚠ YouTube saltato: {exc}")
-        # Un singhiozzo di rete non merita una mail; un token scaduto si',
-        # perche' da li' in poi su YouTube non esce piu' nulla.
-        if allarme.critico(exc):
-            allarme.segnala("YouTube", exc)
+        # Un singhiozzo di rete non merita una mail. Tutto il resto si': qui
+        # saltare vuol dire che in questo giro su YouTube non e' uscito niente,
+        # e il motivo va guardato. Si usa `serio` e non `critico` apposta —
+        # `critico` riconosceva solo le cause gia' viste, e l'errore che ha
+        # tenuto fermo il canale per venti ore non era fra quelle.
+        if allarme.serio(exc):
+            allarme.segnala("YouTube Short", exc)
 
 
 def cmd_tiktok(args: argparse.Namespace) -> int:
@@ -1390,6 +1393,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
             print(f"generazione frasi fallita: {exc}")
             nuove = []
 
+        guasti: list[str] = []
         for l in nuove[:quanti]:
             print(f"  [{l['mood']}] {l['line'][:58]}")
             try:
@@ -1439,8 +1443,23 @@ def cmd_reels(args: argparse.Namespace) -> int:
                     print(f"    ⚠ caricamento rimandato: {exc}")
             except Exception as exc:
                 print(f"    ✗ {exc}")
+                guasti.append(str(exc))
 
         pronti = reels_by_status(conn, "approved")
+
+        # Se si e' provato a costruire e non e' nato niente, il magazzino
+        # resta vuoto e da qui in poi non esce piu' un reel. Va detto adesso,
+        # non fra ventiquattro ore: e' proprio cosi' che la coda si e' svuotata
+        # senza che nessun giro diventasse rosso — ogni riga falliva da sola,
+        # l'errore veniva stampato, e il ciclo tirava dritto come se avesse
+        # lavorato. Un errore ogni tanto e' la vita; tutti gli errori insieme
+        # e' un guasto.
+        if nuove and not pronti:
+            allarme.segnala(
+                "Instagram reel",
+                f"provate {len(nuove[:quanti])} frasi, nessun reel costruito. "
+                f"Primo errore: {guasti[0] if guasti else 'nessun filmato'}",
+            )
 
     # 2. Pubblicazione: uno per giro.
     if not pronti:
