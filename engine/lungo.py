@@ -240,8 +240,15 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
     # Qui gli indirizzi sono per esteso, non chiocciole: sui video lunghi
     # YouTube rende i link cliccabili (a differenza degli Short, dove non lo
     # fa mai). Serve pero' il canale verificato, altrimenti restano testo.
+    # Il numero si conta, non si scrive a mano: se un segmento salta per
+    # mancanza di filmato l'episodio ne ha nove, e una descrizione che ne
+    # promette dieci si smentisce da sola nel primo minuto.
+    NUMERI = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+              7: "seven", 8: "eight", 9: "nine", 10: "ten"}
+    quanti = NUMERI.get(len(fatti), str(len(fatti)))
+
     righe = [
-        f"{tema} — ten things your mind does without asking you.",
+        f"{tema} — {quanti} things your mind does without asking you.",
         "Every claim here names the study behind it.",
         "",
     ]

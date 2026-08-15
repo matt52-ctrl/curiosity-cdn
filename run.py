@@ -1347,6 +1347,20 @@ def cmd_lungo(args: argparse.Namespace) -> int:
         return 1
     video, capitoli = r
 
+    # Solo le curiosita' finite davvero nel montaggio. `costruisci` salta con
+    # un `continue` quelle senza filmato, quindi `fatti` e' cio' che si voleva
+    # mettere e `capitoli` cio' che c'e' dentro: sono due cose diverse e
+    # confonderle costava due volte. In descrizione, "Studies referenced"
+    # elencava studi mai nominati nel video — su un canale il cui unico
+    # argomento di vendita e' che ogni affermazione cita la fonte, e' il
+    # difetto peggiore possibile. E piu' sotto segna_uso_fatto marchiava come
+    # gia' usate curiosita' mai andate in onda, bruciandole per sempre.
+    visti = {c["hook"] for c in capitoli}
+    usati = [f for f in fatti if f["hook"] in visti]
+    if len(usati) < len(fatti):
+        print(f"  · {len(fatti) - len(usati)} curiosita' senza filmato, "
+              f"escluse dall'episodio e non consumate")
+
     if getattr(args, "no_publish", False):
         print(f"\n--no-publish: episodio pronto in {video}")
         return 0
@@ -1355,7 +1369,7 @@ def cmd_lungo(args: argparse.Namespace) -> int:
     # il titolo da' il contesto, e non devono mai ripetersi. Generati
     # separatamente direbbero due volte la stessa cosa, che e' lo spreco piu'
     # comune su YouTube.
-    copertina = lungo.titolo_e_miniatura(tema, fatti)
+    copertina = lungo.titolo_e_miniatura(tema, usati)
     titolo = copertina["titolo"]
     print(f"  titolo    : {titolo}")
     print(f"  miniatura : {copertina['miniatura']}")
@@ -1363,7 +1377,7 @@ def cmd_lungo(args: argparse.Namespace) -> int:
     try:
         yt_id = youtube.publish(
             video, titolo,
-            lungo.descrizione(titolo_tema, capitoli, fatti),
+            lungo.descrizione(titolo_tema, capitoli, usati),
             tags=[tema, "psychology", "human behaviour", "cognitive bias"],
         )
     except Exception as exc:
@@ -1400,7 +1414,7 @@ def cmd_lungo(args: argparse.Namespace) -> int:
 
     # Registrato DOPO il caricamento: se YouTube rifiuta, le curiosita' devono
     # restare disponibili per la settimana dopo invece di risultare bruciate.
-    for f in fatti:
+    for f in usati:
         segna_uso_fatto(conn, f["id"], "yt_lungo", f"lungo-{yt_id}")
     conn.execute(
         "INSERT OR REPLACE INTO episodi (video_id, tema, titolo, capitoli, creato) "
