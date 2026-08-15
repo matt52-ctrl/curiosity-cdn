@@ -26,6 +26,24 @@ L'onere della prova e' rovesciato di proposito: se le ricerche non trovano
 nulla il verdetto e' «non verificabile», non «solida». Un capitolo con tre
 studi solidi vale piu' di uno con dieci traballanti, e questa funzione serve a
 togliere, non ad aggiungere.
+
+COME SI LEGGONO I VERDETTI, che non e' come sembra.
+
+Cercando repliche si vedono benissimo gli studi dubbi e quasi per niente i
+classici, e il motivo e' che le due cose stanno in rapporto inverso: un
+effetto traballante genera montagne di tentativi di replica, mentre uno
+assodato non ne genera nessuno, perche' negli articoli successivi viene
+*usato* come strumento invece che messo alla prova. Misurato: l'effetto
+Stroop, del 1935, uno dei piu' saldi della disciplina, esce «non
+verificabile» anche cercandolo col titolo esatto dell'articolo originale —
+tutto cio' che si trova lo definisce, nessuno lo rimisura. Sparrow 2011,
+invece, che e' fragile, esce «discussa» con la meta-analisi in mano.
+
+Quindi «non verificabile» NON vuol dire dubbio: vuol dire che questo metodo
+non ha niente da dire. Il segnale utile e' quello negativo. Solo «discussa» e
+«inesistente» devono far cambiare il copione; «solida» e' un bonus raro, non
+un requisito, e pretenderlo per ogni fonte vorrebbe dire buttare via gli
+studi migliori che esistano.
 """
 
 from typing import Any, Dict, List
@@ -35,14 +53,24 @@ from .research import _europepmc, gather
 
 VERDETTI = ("solida", "discussa", "inesistente", "non verificabile")
 
+# Gli unici tipi di prova che possono reggere un "solida". Il resto — una
+# definizione di passaggio, la frase di metodo di uno studio che dà l'effetto
+# per scontato, l'articolo originale — descrive l'effetto senza misurarlo.
+PROVE_CHE_REGGONO = ("replica_riuscita", "meta_analisi", "recensione")
+
+TIPI_PROVA = PROVE_CHE_REGGONO + (
+    "replica_fallita", "definizione", "metodo", "solo_originale", "nessuna",
+)
+
 SCHEMA = {
     "type": "object",
     "properties": {
+        "tipo_prova": {"type": "string", "enum": list(TIPI_PROVA)},
         "verdetto": {"type": "string", "enum": list(VERDETTI)},
         "motivo": {"type": "string"},
         "citazione": {"type": "string"},
     },
-    "required": ["verdetto", "motivo", "citazione"],
+    "required": ["tipo_prova", "verdetto", "motivo", "citazione"],
     "additionalProperties": False,
 }
 
@@ -80,14 +108,45 @@ present, IT decides the verdict, and it overrides the original paper no \
 matter how famous the original is. A meta-analysis reporting that an effect \
 is "smaller than originally claimed" or "context-dependent" means "discussa".
 
+FIRST, pick the single sentence in the retrieved material that best supports \
+your verdict, and classify what KIND of sentence it is, in `tipo_prova`. \
+Classify what the sentence actually says, not what you believe about the \
+study. This is a description task, not a judgement:
+
+· "replica_riuscita" — a later, independent study reports it reproduced the \
+                       original finding.
+· "replica_fallita"  — a later study reports it failed to reproduce it, or \
+                       found a much smaller effect.
+· "meta_analisi"     — pooled results across many studies, with an estimate.
+· "recensione"       — a review that weighs the accumulated evidence and says \
+                       how well the effect holds up.
+· "definizione"      — the sentence explains what the effect IS. Later papers \
+                       constantly do this in passing, to introduce their own \
+                       topic. It shows the term is in circulation. It says \
+                       nothing about whether the effect holds.
+· "metodo"           — a later study describing what it set out to examine, \
+                       or assuming the effect while studying something else. \
+                       "We examined whether the availability heuristic \
+                       influences physician testing" is this: a plan, not a \
+                       result.
+· "solo_originale"   — the sentence comes from the original article itself.
+· "nessuna"          — nothing in the material speaks to this study.
+
+Be accurate here even when it is inconvenient. If the best sentence you can \
+find is a definition, say "definizione". Do not upgrade the label to protect \
+a verdict you have already decided on — the label is checked separately, and \
+a wrong label is worse than a cautious verdict.
+
 The burden of proof runs against "solida". If you find yourself reasoning \
 "this is a famous study, it must be fine" — stop. That reasoning is memory, \
 not evidence, and it is exactly the failure this check exists to catch. \
 Absence of evidence is "non verificabile".
 
-In `citazione`, quote the sentence from the retrieved material that decided \
-the verdict, word for word. It must come from later work, not from the \
-original article. If nothing decided it, leave it empty."""
+Write `motivo` in Italian. In `citazione`, quote the sentence from the \
+retrieved material that decided the verdict, word for word and in its \
+original language. It must come from later work, not from the original \
+article, and it must state a finding, not a definition. If nothing decided \
+it, leave it empty."""
 
 
 def _prove(studio: str, affermazione: str) -> str:
@@ -102,9 +161,17 @@ def _prove(studio: str, affermazione: str) -> str:
     # due chiavi, il titolo e le parole dell'affermazione.
     fenomeno = " ".join(affermazione.split()[:10])
 
+    # La ricerca sulle meta-analisi non c'era, e la sua assenza si e' vista
+    # appena il giudizio e' diventato severo: l'effetto Stroop, che e' fra i
+    # piu' replicati che esistano, e' finito "non verificabile" perche' tutto
+    # cio' che si trovava lo definiva senza misurarlo. Non era un errore di
+    # giudizio ma di raccolta. Una meta-analisi e' esattamente il tipo di
+    # articolo che contiene la frase che adesso si pretende: un numero messo
+    # insieme su molti studi, non una definizione.
     for query, etichetta in (
         (f'"{studio}" replication', "REPLICHE (per titolo)"),
         (f"{fenomeno} replication failure", "REPLICHE (per fenomeno)"),
+        (f"{fenomeno} meta-analysis effect size", "META-ANALISI"),
         (f'TITLE:"{studio}"', "ORIGINALE, META-ANALISI E SEGUITI"),
     ):
         estratti = _europepmc(query, limit=3, chars=900)
@@ -143,6 +210,24 @@ def verifica(studio: str, anno: str, rivista: str,
     )
     r = ask_json(SYSTEM, user, SCHEMA, max_tokens=2000, use_web_search=False)
     r["studio"] = studio
+
+    # Il declassamento lo fa Python, non il modello. Due versioni di questo
+    # file hanno provato a ottenerlo scrivendo la regola nel prompt, sempre
+    # piu' severa, e la seconda ha fallito in modo istruttivo: il modello ha
+    # scritto «sebbene il materiale citi l'euristica solo come concetto» e
+    # subito dopo ha messo "solida". Aveva capito l'obiezione e l'ha
+    # scavalcata. Chiedere a un modello di sorvegliare se stesso e' la stessa
+    # cosa che gli si sta togliendo di mano scrivendo questo file.
+    #
+    # Quindi non gli si chiede piu' di applicare la regola: gli si chiede
+    # solo di dire che frase ha in mano, che e' un compito descrittivo e
+    # molto piu' facile. La conseguenza la traggo qui, dove non e'
+    # negoziabile.
+    if r["verdetto"] == "solida" and r["tipo_prova"] not in PROVE_CHE_REGGONO:
+        r["verdetto"] = "non verificabile"
+        r["motivo"] = (f"declassato: l'unica prova trovata e' di tipo "
+                       f"«{r['tipo_prova']}», che descrive l'effetto senza "
+                       f"misurarlo. " + r["motivo"])
     return r
 
 

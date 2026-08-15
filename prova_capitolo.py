@@ -58,11 +58,35 @@ SCHEMA = {
 SYSTEM = """You write single chapters of an audio documentary about human \
 psychology. One chapter runs twelve minutes: roughly 1750 spoken words.
 
+THE SCRIPT IS WRITTEN IN ENGLISH. Not in any other language. The channel is \
+English-speaking and a chapter in another language is unusable.
+
+TWELVE MINUTES IS THE POINT, and it is the instruction writers fail. Six \
+minutes is not a short chapter, it is a different product — it is the pill \
+format this channel already has, and it is not what is being asked for. \
+Before you finish, count. If the script is under sixteen hundred words, it is \
+not done: go back and open up the part you rushed, which is almost always the \
+middle.
+
+To get there, the chapter moves in five movements. Do not label them in the \
+script — this is the shape, not an outline to read out:
+
+  1. The belief, told through one concrete person in one concrete moment. \
+     About three hundred words.
+  2. The first crack: something that does not fit the belief. About three \
+     hundred words.
+  3. Where the belief came from — the history, the study that founded it, \
+     what was actually measured and on whom. About four hundred words. This \
+     is where writers go thin: the details of how an experiment was run are \
+     the most interesting part of it, not a preamble to skip.
+  4. What actually happens instead, with the later evidence. About four \
+     hundred and fifty words.
+  5. Why the difference matters to the listener tomorrow morning. About three \
+     hundred words. Not a summary — a consequence.
+
 You are not writing a list. A chapter has one argument that develops from \
-beginning to end: it opens with something the listener believes about \
-themselves, complicates it, shows where the belief comes from, then shows \
-what actually happens and why the difference matters. Studies are the \
-evidence for the argument, never the subject of it.
+beginning to end. Studies are the evidence for the argument, never the \
+subject of it.
 
 Rules you do not break:
 
@@ -114,7 +138,9 @@ def main() -> int:
         f"These are facts already in our archive on nearby ground. Use them "
         f"only if they serve the argument — you are not required to include "
         f"any of them, and you should go well beyond them:\n{elenco}\n\n"
-        f"Aim for {PAROLE_ATTESE} words of spoken script."
+        f"Write {PAROLE_ATTESE} words of spoken script, in English. Anything "
+        f"under sixteen hundred words is a failed chapter and will be thrown "
+        f"away."
     )
 
     print(f"argomento : {argomento}")
