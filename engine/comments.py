@@ -95,6 +95,13 @@ REPLY RULES
   - If you are not sure of the answer, say you are not sure. Never invent a
     study, a number, or a name to fill a reply — this account's entire value
     is that it does not do that.
+  - CITATIONS COME FROM THE SOURCE ON RECORD, SHOWN ABOVE, AND NOWHERE ELSE.
+    Not from what you remember. If someone asks for the source, you may name
+    only what is on record, exactly as written there. If nothing is on
+    record, say the source is in the archive rather than guessing at it, and
+    do not produce an author, a year, or a journal from memory. A wrong year
+    stated confidently in public is worse than no answer: it is the one
+    mistake this account cannot survive making twice.
   - No emoji unless the comment used one first, then at most one.
   - Never ask them to follow, never link out, never pitch anything.
 
@@ -145,6 +152,7 @@ def draft_reply(
     comment_text: str,
     post_hook: str,
     post_fact: str,
+    fonte: str = "",
     recent_replies: Optional[List[str]] = None,
     commenter_history: Optional[List[str]] = None,
     recent_shapes: Optional[List[str]] = None,
@@ -157,9 +165,16 @@ def draft_reply(
     commentato — rispondere due volte allo stesso modo alla stessa persona è
     il modo più veloce per farsi smascherare.
     """
+    # La fonte va messa davanti al modello, non lasciata alla sua memoria.
+    # Senza, alla domanda «source?» rispondeva citando uno studio con l'anno
+    # sbagliato, pur avendo il divieto di inventare scritto nel prompt.
+    riga_fonte = (
+        f"\nTHE SOURCE ON RECORD FOR THIS POST: {fonte}" if fonte else
+        "\nTHERE IS NO SOURCE ON RECORD FOR THIS POST."
+    )
     parts = [
         f"A comment arrived on this post.\n\nPOST HOOK: {post_hook}\n"
-        f"POST CLAIM: {post_fact}\n\nCOMMENT: {comment_text}"
+        f"POST CLAIM: {post_fact}{riga_fonte}\n\nCOMMENT: {comment_text}"
     ]
 
     if recent_replies:

@@ -444,11 +444,23 @@ def cmd_comments(args: argparse.Namespace) -> int:
         # I reel portano il proprio testo; i caroselli lo prendono dal fatto.
         gancio = c.get("testo_hook") or ""
         fatto = c.get("testo_fatto") or ""
-        if not gancio and c.get("fact_id"):
-            f = conn.execute("SELECT hook, fact FROM facts WHERE id=?",
-                             (c["fact_id"],)).fetchone()
+        # La fonte si carica SEMPRE, anche quando il testo c'e' gia'. Finora
+        # non veniva passata a chi redige la risposta, e il risultato e' che
+        # la citazione se la inventava: a «is this actually true? source?» ha
+        # risposto «a 1993 study by Daniel Kahneman on medical procedures»,
+        # mentre quello sulle procedure mediche e' del 1996. Una data
+        # sbagliata detta in pubblico, in automatico, sotto un post di un
+        # canale che si vende dicendo che le fonti le cita giuste. Il divieto
+        # di inventare c'era gia' scritto nel prompt e non e' bastato: non
+        # basta vietargli di inventare, bisogna dargli il dato vero.
+        fonte = ""
+        if c.get("fact_id"):
+            f = conn.execute("SELECT hook, fact, source_hint FROM facts "
+                             "WHERE id=?", (c["fact_id"],)).fetchone()
             if f:
-                gancio, fatto = f["hook"], f["fact"]
+                fonte = f["source_hint"] or ""
+                if not gancio:
+                    gancio, fatto = f["hook"], f["fact"]
 
         try:
             if c["platform"] == "youtube":
@@ -488,7 +500,7 @@ def cmd_comments(args: argparse.Namespace) -> int:
             analizzati += 1
             try:
                 verdict = cm.draft_reply(
-                    com.get("text", ""), gancio, fatto,
+                    com.get("text", ""), gancio, fatto, fonte=fonte,
                     recent_replies=cm.recent_replies(conn),
                     commenter_history=cm.commenter_history(conn, com.get("username", "")),
                 )
