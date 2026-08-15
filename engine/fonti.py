@@ -44,6 +44,28 @@ non ha niente da dire. Il segnale utile e' quello negativo. Solo «discussa» e
 «inesistente» devono far cambiare il copione; «solida» e' un bonus raro, non
 un requisito, e pretenderlo per ogni fonte vorrebbe dire buttare via gli
 studi migliori che esistano.
+
+NON ACCENDERE QUI LA RICERCA WEB. Sembra la correzione ovvia al problema qui
+sopra — se Europe PMC non trova la meta-analisi su Stroop, la trova Google —
+ed e' la strada che rimette dentro esattamente il difetto che questo file
+esiste per fermare. Provato: chiedendo con la ricerca attiva una prova
+sull'effetto Stroop, il modello ha risposto con una citazione precisa, con
+tanto di effetto in millisecondi e Cohen's d, attribuita a «The Stroop
+Effect: Cognitive Psychology's Most-Replicated Finding». Quel titolo su
+Europe PMC da' zero risultati: non e' un articolo, e la frase ha tutta
+l'aria di venire da un blog o di essere stata ricucita.
+
+La differenza non e' la qualita' del modello, e' la garanzia della fonte:
+Europe PMC restituisce solo articoli veri e indicizzati, il web aperto
+restituisce qualsiasi cosa, e il modello cita un blog con la stessa
+sicurezza con cui cita una meta-analisi — anzi con piu' sicurezza, perche' i
+blog sono scritti per suonare conclusivi. Un «non verificabile» di troppo
+costa un'affermazione ammorbidita nel copione. Un «solida» appoggiato a una
+fonte inesistente costa il canale.
+
+La ricerca web va invece bene a monte, a chi SCRIVE il capitolo: li' serve a
+scegliere studi che esistono e a sapere quali sono contestati, e comunque
+tutto quello che produce ripassa di qui.
 """
 
 from typing import Any, Dict, List
