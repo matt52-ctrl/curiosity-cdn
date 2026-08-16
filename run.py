@@ -1439,6 +1439,118 @@ def cmd_lungo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capitolo(args: argparse.Namespace) -> int:
+    """Scrive, verifica e monta i capitoli da dodici minuti.
+
+    Non pubblica niente, di proposito. I capitoli si accumulano in magazzino
+    perche' l'ordine e' quello deciso da Mattia: prima passano tutti in
+    diretta, poi escono uno ogni due giorni. Un comando che monta e carica
+    nello stesso giro renderebbe impossibile quella sequenza.
+
+    Un capitolo con uno studio INESISTENTE non si monta. Non e' una regola
+    prudenziale: in questo formato le fonti si dicono a voce dentro il
+    copione, quindi una fonte falsa non e' un metadato sbagliato che si
+    corregge dopo, e' una frase detta ad alta voce dentro il video. Si butta
+    il capitolo e si passa al successivo, che costa una chiamata e non la
+    credibilita' del canale.
+    """
+    import collections
+    import json as _j
+
+    from engine import capitolo as cap
+    from engine import fonti as fo
+
+    conn = connect()
+
+    if getattr(args, "lista", False):
+        righe = conn.execute(
+            "SELECT id, stato, durata, argomento, titolo FROM capitoli "
+            "ORDER BY id").fetchall()
+        if not righe:
+            print("magazzino vuoto")
+            return 0
+        for r in righe:
+            print(f"  [{r['id']:3}] {r['stato']:11} "
+                  f"{r['durata'] / 60:5.1f} min  {r['titolo'][:52]}")
+        conta = collections.Counter(r["stato"] for r in righe)
+        print(f"\n  {dict(conta)}")
+        return 0
+
+    if args.argomento:
+        temi = [args.argomento]
+    else:
+        gia = [r["argomento"] for r in
+               conn.execute("SELECT argomento FROM capitoli").fetchall()]
+        temi = cap.argomenti(args.quanti, gia)
+        if not temi:
+            print("nessun argomento nuovo proposto")
+            return 1
+        print(f"{len(temi)} argomenti proposti:")
+        for t in temi:
+            print(f"  · {t}")
+        print()
+
+    # Le curiosita' d'archivio servono da spunto, non da contenuto: il
+    # capitolo va ben oltre, e infatti non le consuma — non passano da
+    # fact_uses. Un capitolo non "usa" una curiosita' come fa un reel, la
+    # sfiora, e marcarle brucerebbe magazzino senza motivo.
+    archivio = [dict(r) for r in conn.execute(
+        "SELECT hook, fact, detail, source_hint FROM facts "
+        "WHERE status IN ('published','rendered','approved')").fetchall()]
+
+    fatti = 0
+    for i, tema in enumerate(temi, 1):
+        print(f"\n{'=' * 64}\n[{i}/{len(temi)}] {tema}\n{'=' * 64}")
+        semi = [a for a in archivio
+                if any(p in (a["hook"] + a["fact"]).lower()
+                       for p in tema.lower().split() if len(p) > 4)][:6]
+        try:
+            testo = cap.scrivi(tema, semi)
+        except Exception as exc:
+            print(f"  scrittura fallita: {str(exc)[:120]}")
+            continue
+
+        parole = len(testo["copione"].split())
+        print(f"  {testo['titolo']}")
+        print(f"  {parole} parole → ~{parole / 140:.1f} minuti, "
+              f"{len(testo['fonti'])} studi dichiarati\n")
+
+        esiti = fo.verifica_capitolo(testo["fonti"])
+        falsi = [e for e in esiti if e["verdetto"] == "inesistente"]
+        if falsi:
+            print(f"\n  ✗ {len(falsi)} studi inesistenti: capitolo scartato")
+            for e in falsi:
+                print(f"      {e['studio']}")
+            continue
+
+        cid = conn.execute(
+            "INSERT INTO capitoli (argomento, titolo, tesi, copione, fonti, "
+            "esiti, creato) VALUES (?,?,?,?,?,?,?)",
+            (tema, testo["titolo"], testo.get("tesi", ""), testo["copione"],
+             _j.dumps(testo["fonti"]), _j.dumps(esiti), time.time()),
+        ).lastrowid
+        conn.commit()
+
+        if getattr(args, "solo_testo", False):
+            print(f"  · salvato come scritto (id {cid}), montaggio saltato")
+            fatti += 1
+            continue
+
+        r = cap.costruisci(testo["copione"], f"{cid:04d}", testo.get("tesi", ""),
+                           testo["fonti"], esiti)
+        if not r:
+            print("  ✗ montaggio fallito: il copione resta in magazzino")
+            continue
+        video, durata = r
+        conn.execute("UPDATE capitoli SET video=?, durata=?, stato='montato' "
+                     "WHERE id=?", (str(video), durata, cid))
+        conn.commit()
+        fatti += 1
+
+    print(f"\n{fatti}/{len(temi)} capitoli in magazzino")
+    return 0 if fatti else 1
+
+
 def cmd_didascalie(args: argparse.Namespace) -> int:
     """Riscrive le didascalie dei contenuti in coda, senza rifare i video.
 
@@ -2685,6 +2797,18 @@ def main() -> int:
     p.add_argument("--no-publish", action="store_true",
                    help="monta l'episodio senza caricarlo")
     p.set_defaults(func=cmd_lungo)
+
+    p = sub.add_parser("capitolo",
+                       help="capitoli da ~12 minuti: scrive, verifica, monta")
+    p.add_argument("--argomento", default="",
+                   help="un argomento preciso invece di farli proporre")
+    p.add_argument("--quanti", type=int, default=15,
+                   help="quanti capitoli scrivere in questo lotto")
+    p.add_argument("--solo-testo", action="store_true",
+                   help="scrivi e verifica senza montare i video")
+    p.add_argument("--lista", action="store_true",
+                   help="mostra il magazzino dei capitoli")
+    p.set_defaults(func=cmd_capitolo)
 
     p = sub.add_parser("sito", help="rigenera il sito statico in docs/")
     p.add_argument("--pubblica", action="store_true",

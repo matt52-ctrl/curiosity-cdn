@@ -1,0 +1,79 @@
+/* CAPITOLO — sovrimpressione per i capitoli da dodici minuti, 1920×1080.
+   Trasparente: sotto ci va il filmato, come per wide.
+
+   Perché non si riusa wide.css. Lì la sovrimpressione c'è sempre, per tutto
+   l'episodio, quindi può permettersi una velatura diagonale che copre mezzo
+   quadro: non cambia mai, e l'occhio smette di notarla dopo due secondi. Qui
+   il riferimento allo studio compare su quattro blocchi su venticinque, e con
+   quella velatura il quadro si scurirebbe di colpo per mezzo minuto per poi
+   tornare chiaro — quattro volte in dodici minuti. Non si legge come una
+   scelta, si legge come un difetto di codifica.
+
+   Quindi: nessuna velatura sul quadro. Solo una sfumatura sul fondo, alta un
+   quinto, che è la stessa cosa che fa qualunque sottopancia televisivo, e che
+   qui sta su TUTTI i blocchi — anche su quelli senza riferimento, dove resta
+   solo la firma. Così l'unica cosa che appare e sparisce è la riga di testo,
+   e il resto dell'inquadratura non si muove. */
+
+body { background: transparent; }
+
+.slide {
+  background: transparent;
+  color: #ffffff;
+  padding: 0;
+}
+
+/* Solo il fondo, e non troppo: il filmato sotto è già scelto sul contenuto,
+   coprirlo sarebbe buttare via l'unica cosa che rende il video non generico. */
+.canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg,
+    rgba(0,0,0,.62) 0%, rgba(0,0,0,.30) 9%, rgba(0,0,0,0) 20%);
+}
+
+.grain { display: none; }
+.top, .index, .nav, .credit, .kicker, .headline { display: none; }
+
+.stage {
+  position: absolute;
+  left: 112px;
+  bottom: 84px;
+  width: 1300px;
+  display: block;
+}
+
+/* Il riferimento allo studio. Va letto in un'occhiata mentre si ascolta, non
+   studiato: una riga sola, colore caldo per staccarlo dal filmato senza
+   gridare, ombra pesante perché sotto può esserci qualunque cosa. */
+.body {
+  display: block;
+  font-family: 'Body', system-ui, sans-serif;
+  font-size: 34px;
+  line-height: 1.35;
+  color: #e8c07a;
+  text-align: left;
+  max-width: 100%;
+  margin: 0;
+  letter-spacing: .015em;
+  text-shadow: 0 2px 12px rgba(0,0,0,.95), 0 6px 40px rgba(0,0,0,.8);
+}
+
+/* La firma sta in basso a destra, sulla stessa sfumatura del riferimento, che
+   è l'unica zona del quadro dove si legge sempre. In alto starebbe sul
+   filmato in chiaro e su un cielo bianco sparirebbe. */
+.bottom {
+  position: absolute;
+  bottom: 88px; right: 112px;
+  top: auto; left: auto;
+  justify-content: flex-end;
+}
+
+.mark {
+  color: #ffffff;
+  opacity: .5;
+  font-size: 26px;
+  letter-spacing: .14em;
+  text-shadow: 0 2px 14px rgba(0,0,0,.95);
+}

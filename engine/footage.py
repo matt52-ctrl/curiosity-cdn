@@ -90,7 +90,64 @@ def scena_per(mood: str, seme: str = "") -> str:
     return rnd.choice(opzioni)
 
 
-def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
+# Parole che compaiono in mezzo catalogo e non dicono di cosa sia la clip. Se
+# restassero, «close up of hands» combacerebbe con qualunque cosa.
+_GENERICHE = {
+    "close", "closeup", "shot", "shots", "view", "with", "over", "into",
+    "from", "that", "this", "some", "very", "slow", "motion", "footage",
+    "video", "clip", "background", "scene", "person", "people", "someone",
+    "hand", "hands", "man", "woman", "adult", "young", "beautiful",
+    # Parole corte di servizio. La soglia sta a tre lettere e non a quattro
+    # perche' scartando le corte si perdevano proprio i soggetti piu' secchi
+    # — «eye», «sky», «car» — e «close up human eye» restava con la sola
+    # parola «human», che in un archivio non la scrive nessuno.
+    "the", "and", "for", "two", "one", "its", "his", "her", "out", "off",
+    "are", "was", "not", "but", "who", "how", "why", "all", "you", "our",
+}
+
+
+def _parole_chiave(query: str) -> List[str]:
+    """Le parole della query che dicono davvero cosa si vuole vedere."""
+    fuori = []
+    for p in re.split(r"[^a-z]+", query.lower()):
+        if len(p) >= 3 and p not in _GENERICHE:
+            # Radice grezza: basta a far combaciare "papers" con "paperwork" e
+            # "walking" con "walk". Non e' morfologia, e' un troncamento, e
+            # per confrontare due etichette di stock e' abbastanza.
+            fuori.append(p[:5])
+    return fuori
+
+
+def _pertinente(query: str, descrizione: str) -> bool:
+    """La clip parla di cio' che si e' chiesto, o e' finita qui per riempire?
+
+    Serve perche' gli archivi non dicono mai di no. Chiedendo «hands holding
+    research papers» le prime posizioni di Pexels sono esattamente quello —
+    misurate: «a person working with paperworks», «person holding documents»,
+    «close up of hands flipping through old documents» — ma la lista non si
+    ferma quando i risultati buoni finiscono, continua a scorrere il catalogo
+    con criteri sempre piu' larghi. Piu' in basso, per quella stessa query,
+    c'e' un bambino che soffia una lingua di Menelik.
+
+    In cima non ci si arriva sempre, ed e' il punto: le clip gia' usate si
+    scartano, sono duecento e passa e crescono a ogni video, quindi la
+    posizione media di cio' che si prende scende di mese in mese. Il filtro
+    non serve oggi, serve fra sei mesi, e allora sara' tardi per accorgersene.
+
+    Non e' un giudizio di qualita': e' un controllo che almeno una parola
+    della richiesta compaia in cio' con cui l'archivio ha etichettato la clip.
+    """
+    chiavi = _parole_chiave(query)
+    if not chiavi:
+        # Query tutta di parole generiche: non c'e' niente da verificare, e
+        # rifiutare tutto sarebbe peggio che accettare.
+        return True
+    testo = re.sub(r"[^a-z]+", " ", descrizione.lower())
+    return any(k in testo for k in chiavi)
+
+
+def _cerca_pixabay(query: str, usate: Dict,
+                   esigente: bool = False) -> Optional[Dict]:
     """Seconda fonte. Serve alla varietà: due archivi diversi hanno cataloghi
     diversi, e alternarli allontana il momento in cui una clip si ripete."""
     key = env("PIXABAY_API_KEY")
@@ -111,6 +168,8 @@ def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
         vid = f"px{h['id']}"
         if vid in usate or h.get("duration", 0) < 5:
             continue
+        if esigente and not _pertinente(query, h.get("tags", "")):
+            continue
         # Pixabay espone più tagli: si prende il verticale se c'è, altrimenti
         # il più piccolo in HD — il ritaglio a 1080×1920 avviene comunque dopo.
         files = h.get("videos", {})
@@ -124,8 +183,16 @@ def _cerca_pixabay(query: str, usate: Dict) -> Optional[Dict]:
 
 
 def cerca(query: str, evita_usate: bool = True,
-          orientamento: str = "portrait") -> Optional[Dict]:
-    """Cerca una clip verticale. None se nessuna fonte ha nulla di nuovo."""
+          orientamento: str = "portrait",
+          esigente: bool = False) -> Optional[Dict]:
+    """Cerca una clip verticale. None se nessuna fonte ha nulla di nuovo.
+
+    Con `esigente` si scartano le clip che non hanno niente a che vedere con
+    la query, e si accetta di tornare a mani vuote. Lo usa il formato lungo,
+    dove la clip accompagna una frase precisa: li' una clip sbagliata e' un
+    non sequitur che dura mezzo minuto. Nei reel resta spento, perche' li' la
+    clip e' uno sfondo per sei secondi e restare senza costa di piu'.
+    """
     usate = _usate() if evita_usate else {}
 
     key = env("PEXELS_API_KEY")
@@ -133,7 +200,7 @@ def cerca(query: str, evita_usate: bool = True,
         # Senza chiave Pexels si passa direttamente all'altro archivio.
         # Prima si usciva qui restituendo None, rendendo irraggiungibile il
         # ripiego proprio nel caso in cui serve di piu'.
-        return _cerca_pixabay(query, usate)
+        return _cerca_pixabay(query, usate, esigente)
     try:
         r = httpx.get(
             "https://api.pexels.com/videos/search",
@@ -158,6 +225,10 @@ def cerca(query: str, evita_usate: bool = True,
         # Si preferisce una clip che copra il reel senza ripetersi in loop.
         if v.get("duration", 0) < 5:
             continue
+        # Pexels non espone i tag, ma l'indirizzo della pagina contiene la
+        # descrizione della clip: .../video/child-using-a-party-blower-7331246/
+        if esigente and not _pertinente(query, v.get("url", "")):
+            continue
         file_hd = [
             f for f in v.get("video_files", [])
             # Il lato lungo deve arrivare a 1080: in verticale e' l'altezza,
@@ -176,7 +247,7 @@ def cerca(query: str, evita_usate: bool = True,
 
     # Pexels non ha nulla di nuovo per questa scena: si prova l'altro archivio
     # prima di rinunciare e cambiare scena.
-    return _cerca_pixabay(query, usate)
+    return _cerca_pixabay(query, usate, esigente)
 
 
 def scarica(clip: Dict) -> Optional[Path]:
@@ -184,17 +255,27 @@ def scarica(clip: Dict) -> Optional[Path]:
     if target.exists() and target.stat().st_size > 100_000:
         _segna(clip["id"], "riuso")
         return target
-    try:
-        with httpx.Client(timeout=180, follow_redirects=True) as client:
-            with client.stream("GET", clip["url"]) as r:
-                r.raise_for_status()
-                with open(target, "wb") as f:
-                    for blocco in r.iter_bytes(65536):
-                        f.write(blocco)
-    except Exception as exc:
-        print(f"    scaricamento clip fallito: {exc}")
-        target.unlink(missing_ok=True)
-        return None
+    # Due tentativi, non uno. Il timeout in mezzo a uno scaricamento non e' un
+    # "questa clip non c'e'", e' la rete che ha singhiozzato — misurato sul
+    # primo capitolo: due timeout di fila su un blocco, che e' finito con una
+    # ripresa di ripiego mentre la clip giusta esisteva. Un secondo tentativo
+    # su una connessione nuova costa qualche secondo e recupera il caso.
+    for tentativo in (1, 2):
+        try:
+            with httpx.Client(timeout=180, follow_redirects=True) as client:
+                with client.stream("GET", clip["url"]) as r:
+                    r.raise_for_status()
+                    with open(target, "wb") as f:
+                        for blocco in r.iter_bytes(65536):
+                            f.write(blocco)
+            break
+        except Exception as exc:
+            target.unlink(missing_ok=True)
+            if tentativo == 1:
+                print(f"    scaricamento interrotto ({str(exc)[:60]}), riprovo")
+                continue
+            print(f"    scaricamento clip fallito: {exc}")
+            return None
 
     _segna(clip["id"], "nuova")
     return target

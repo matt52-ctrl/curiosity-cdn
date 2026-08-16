@@ -180,6 +180,33 @@ CREATE TABLE IF NOT EXISTS episodi (
     creato    REAL NOT NULL
 );
 
+-- I capitoli da dodici minuti. Hanno un ciclo di vita che nessun'altra cosa
+-- qui dentro ha, ed e' il motivo per cui vogliono una tabella propria: si
+-- scrivono in blocco — una quindicina in una volta — poi vanno in diretta
+-- tutti insieme, e solo dopo escono uno alla volta ogni due giorni. Fra lo
+-- scrivere e il pubblicare passano settimane, quindi il capitolo deve
+-- sopravvivere su disco a macchina spenta, e deve sapere a che punto e'.
+--
+-- `copione` si conserva anche dopo il montaggio: costa poco e permette di
+-- rifare il video senza ripagare la scrittura, che e' la chiamata piu' cara
+-- di tutta la pipeline.
+CREATE TABLE IF NOT EXISTS capitoli (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    argomento  TEXT NOT NULL,
+    titolo     TEXT NOT NULL,
+    tesi       TEXT NOT NULL DEFAULT '',
+    copione    TEXT NOT NULL,
+    fonti      TEXT NOT NULL DEFAULT '[]',
+    esiti      TEXT NOT NULL DEFAULT '[]',
+    video      TEXT NOT NULL DEFAULT '',
+    durata     REAL NOT NULL DEFAULT 0,
+    -- scritto → montato → in_onda (passato in diretta) → pubblicato
+    stato      TEXT NOT NULL DEFAULT 'scritto',
+    video_id   TEXT NOT NULL DEFAULT '',
+    creato     REAL NOT NULL,
+    pubblicato REAL
+);
+
 CREATE TABLE IF NOT EXISTS esperimento (
     video_id  TEXT PRIMARY KEY,
     variante  TEXT NOT NULL,
