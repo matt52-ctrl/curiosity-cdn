@@ -15,14 +15,28 @@ name: Curiosity Bluesky
 
 on:
   schedule:
-    # Un post al giorno, alle ~15:00 UTC. È il momento in cui si sovrappongono
-    # il pomeriggio europeo e la mattina della costa est americana — lo stesso
-    # ragionamento sui fusi già applicato ai reel, e qui vale ancora di più
-    # perché il pubblico di Bluesky è ancora più sbilanciato sugli Stati Uniti.
+    # Tre post al giorno, uno per giro. Il numero viene dai conti: la pipeline
+    # approva 5,6 curiosità al giorno, e a uno al giorno la coda cresceva di
+    # 4,6 — cioè l'ottanta per cento del lavoro già verificato non sarebbe mai
+    # uscito di qui. A tre la coda cresce ancora, ma piano, e resta il margine
+    # per i giorni in cui la generazione si ferma.
     #
-    # Anticipato di 45 minuti come gli altri: GitHub accoda i job schedulati e
-    # parte in ritardo, misurato fino a 64 minuti.
-    - cron: "15 14 * * *"
+    # Tre giri separati e non un solo giro da tre post: pubblicati insieme
+    # coprirebbero un fuso solo, e il pubblico di Bluesky è sbilanciato sugli
+    # Stati Uniti quanto e più di quello degli Short. Così si copre la mattina,
+    # la metà giornata e la sera della costa est.
+    #
+    # Anticipati di 45 minuti come gli altri workflow: GitHub accoda i job
+    # schedulati e parte in ritardo, misurato fino a 64 minuti.
+    #
+    # Le ore sono scelte anche per NON cadere sulle stesse degli altri: reel
+    # (7:45, 10:15, 16:15, 20:15), cycle (12:15, 18:15) e lungo (15:15 il
+    # sabato) condividono il gruppo `curiosity-state`, quindi un orario in
+    # comune non romperebbe niente ma metterebbe questo giro in coda dietro a
+    # quaranta minuti di montaggio video, per un post di testo da due secondi.
+    - cron: "15 11 * * *"    # ~14:00 italiane — mattina sulla costa est
+    - cron: "15 14 * * *"    # ~17:00 italiane — metà giornata negli USA
+    - cron: "15 21 * * *"    # ~24:00 italiane — sera piena negli USA
   workflow_dispatch:
     inputs:
       prova:
