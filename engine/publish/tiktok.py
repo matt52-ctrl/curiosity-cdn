@@ -210,6 +210,17 @@ class LimiteRaggiunto(TikTokError):
     """Le 5 bozze pendenti nelle 24 ore sono esaurite: non è un guasto."""
 
 
+class CredenzialiAssenti(TikTokError):
+    """Le credenziali non ci sono ancora — diverso dall'averle sbagliate.
+
+    La distinzione conta e non è pedanteria. Chi chiama può accendere gli
+    orari PRIMA che l'app sviluppatore esista: finché è così il giro deve
+    finire in silenzio e uscire a zero, o GitHub manda una mail di workflow
+    fallito ogni notte finché non ti stanchi e spegni tutto. Un token invece
+    presente e rifiutato è un guasto vero e deve restare rumoroso.
+    """
+
+
 def _token_accesso() -> str:
     """Scambia il refresh token con un token d'accesso valido 24 ore.
 
@@ -223,7 +234,7 @@ def _token_accesso() -> str:
     segreto = env("TIKTOK_CLIENT_SECRET")
     refresh = env("TIKTOK_REFRESH_TOKEN")
     if not (chiave and segreto and refresh):
-        raise TikTokError(
+        raise CredenzialiAssenti(
             "Mancano TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET o "
             "TIKTOK_REFRESH_TOKEN in .env. Lancia:  python3 setup_tiktok.py"
         )

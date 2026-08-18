@@ -1,0 +1,93 @@
+# Bluesky — la curiosità in forma di frase, con lo studio citato e il link.
+#
+# Perché un workflow suo e non un passo dentro reels.yml: qui non si monta
+# niente e non si carica niente. È una chiamata HTTP da due secondi che non ha
+# bisogno di ffmpeg, di Playwright, dei font o della musica — cioè di tutto
+# ciò che rende il ciclo dei reel lungo quaranta minuti e fragile. Attaccarlo
+# lì significherebbe che un fallimento di Pexels impedisce a un post di testo
+# di uscire, il che non ha senso.
+#
+# È anche l'unico canale che manda traffico FUORI, verso le 74 pagine del
+# sito. Tutti gli altri trattengono. Da quando Cloudflare misura le pagine,
+# questo è il solo posto da cui quel numero può salire.
+
+name: Curiosity Bluesky
+
+on:
+  schedule:
+    # Un post al giorno, alle ~15:00 UTC. È il momento in cui si sovrappongono
+    # il pomeriggio europeo e la mattina della costa est americana — lo stesso
+    # ragionamento sui fusi già applicato ai reel, e qui vale ancora di più
+    # perché il pubblico di Bluesky è ancora più sbilanciato sugli Stati Uniti.
+    #
+    # Anticipato di 45 minuti come gli altri: GitHub accoda i job schedulati e
+    # parte in ritardo, misurato fino a 64 minuti.
+    - cron: "15 14 * * *"
+  workflow_dispatch:
+    inputs:
+      prova:
+        description: "Prova a vuoto: scrive il post a schermo senza pubblicarlo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # STESSO gruppo degli altri: scrive fact_uses nello stesso database, e due
+  # esecuzioni sovrapposte perderebbero uno dei due segni — cioè farebbero
+  # uscire due volte la stessa curiosità, che è l'unica cosa che questo
+  # progetto non deve fare.
+  group: curiosity-state
+  cancel-in-progress: false
+
+jobs:
+  bluesky:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Solo le dipendenze Python, e nemmeno tutte servirebbero: niente
+      # ffmpeg, niente Playwright, niente font. Il job dura meno di un minuto.
+      - name: Installa dipendenze
+        run: pip install -r requirements.txt
+
+      - name: Pubblica su Bluesky
+        env:
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py bluesky --quanti 1 ${{ inputs.prova && '--prova' || '' }}
+
+      - name: Salva lo stato
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db
+          git diff --staged --quiet && exit 0
+          git commit -m "bluesky: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            git rebase origin/main -X ours || {
+              git rebase --abort
+              git reset --soft origin/main
+              git add data/engine.db
+              git commit -m "bluesky: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            }
+            sleep 5
+          done
+          echo "::error::stato NON salvato: rischio di ripubblicazione"
+          exit 1

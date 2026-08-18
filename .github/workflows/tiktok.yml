@@ -10,27 +10,55 @@
 
 name: Curiosity TikTok
 
-# ⚠️  SPENTO. Mattia ha deciso di non fare TikTok per ora — vedi in fondo.
+# Riacceso il 19 agosto 2026, dopo lo stop dell'11.
 #
-# Il codice resta al suo posto e funziona: per riaccenderlo basta togliere il
-# commento dagli orari qui sotto e mettere i tre secret TIKTOK_* su GitHub.
-# Senza quei secret il caricamento fallirebbe a ogni giro mandando una mail,
-# ed è il motivo per cui gli orari sono commentati invece che lasciati attivi.
+# Cosa NON è cambiato, e va tenuto a mente: la bozza non si pubblica da sola.
+# L'endpoint inbox accetta solo i byte del video — nel corpo c'è `source_info`
+# e non esiste alcun `post_info` — quindi titolo, descrizione e hashtag non
+# sono allegabili. È TikTok a volerlo: è proprio quel pezzo lasciato all'utente
+# a rendere superfluo l'audit di 2-4 settimane. Le due cose sono la stessa cosa
+# vista da due lati, e nessuna quantità di codice le separa.
 #
-# Perché è stato sospeso, in breve, per quando lo riprenderai:
-#   · l'automazione COMPLETA su TikTok non è ottenibile gratis. L'audit del
-#     nostro client è precluso (richiede schermate di consenso e l'avatar del
-#     creator: la pipeline non ha interfaccia da mostrare), e i piani gratuiti
-#     dei servizi terzi escludono TikTok proprio perché è il più costoso.
-#   · a pagamento si può: Upload-Post Basic ~16 $/mese, oppure Blotato 29 $.
-#   · ma Upload-Post stesso, nella propria documentazione, sconsiglia la
-#     pubblicazione diretta: dice che pubblicare dall'app rende di più in
-#     copertura organica. Pagare comprerebbe meno lavoro E meno copertura.
+# Cosa è cambiato: la didascalia ora parte su Telegram nell'istante in cui la
+# bozza arriva, dentro un blocco che sulle app si copia con un tocco. Restano
+# due tocchi — apri la bozza, incolla, pubblica — invece dei quattro di prima,
+# e soprattutto niente da scrivere e niente da cercare su un foglio.
 #
-# Quindi la scelta è: o quattro tocchi al giorno sul telefono, o soldi con un
-# probabile costo in copertura. Rivalutabile quando il canale avrà dei numeri.
+# Se i tre secret TIKTOK_* non ci sono ancora, questo workflow NON fallisce:
+# `ttcarica` riconosce le credenziali assenti e esce a zero. Gli orari si
+# possono quindi accendere prima di registrare l'app sviluppatore, senza
+# ricevere una mail di errore ogni notte.
 
 on:
+  # ⚠️  ORARI ANCORA FERMI — vanno tolti i cancelletti, ma NON prima di aver
+  # registrato l'app sviluppatore. Il motivo non è il caricamento, che ormai
+  # esce a zero da solo quando le credenziali mancano: è il passo PRIMA.
+  # `run.py tiktok` monta i video, e montare significa consumare — la riga
+  # `segna_uso_fatto(..., "tiktok", ...)` marca ogni curiosità come già andata
+  # su TikTok. Con quattro giri al giorno sarebbero sedici curiosità al giorno
+  # bruciate per video che nessuno può ancora spedire, sopra ai tredici già
+  # fermi in output/tiktok/. Cioè il danno di agosto, moltiplicato.
+  #
+  # L'ordine giusto è: prima i tre secret TIKTOK_*, poi questi orari.
+  #
+  # schedule:
+    # Quattro giri al giorno, uno per bozza, sotto il tetto TikTok di cinque
+    # ogni 24 ore — il quinto posto resta libero per un recupero a mano.
+    #
+    # Gli orari sono in UTC e anticipati di 45 minuti come negli altri
+    # workflow, perché GitHub accoda i job schedulati e parte in ritardo
+    # (misurato fino a 64 minuti).
+    #
+    # Le fasce seguono lo stesso ragionamento sui fusi già applicato ai reel:
+    # il canale è in inglese e pesca da Stati Uniti e Regno Unito, quindi la
+    # finestra utile in ora italiana va dal pomeriggio all'una di notte.
+    # Diversamente dai reel, qui l'orario del job NON è l'orario di uscita:
+    # deposita solo la bozza, e a pubblicare sei tu quando la vedi. Contano
+    # perciò gli orari in cui hai il telefono in mano, non quelli di TikTok.
+    # - cron: "15 6 * * *"     # ~9:00 italiane — la bozza ti aspetta al risveglio
+    # - cron: "15 10 * * *"    # ~13:00 italiane — pausa pranzo
+    # - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
+    # - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:

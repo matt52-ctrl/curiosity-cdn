@@ -225,15 +225,33 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 
     dati = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>' if jsonld else ""
 
-    # Misura del traffico, se e' stata configurata. `defer` e non un caricamento
-    # normale: lo script non serve a disegnare la pagina, e metterlo davanti al
-    # contenuto ritarderebbe cio' per cui la gente e' arrivata. Se il campo e'
-    # vuoto non viene emesso nulla — nessuno script, nessuna richiesta a terzi.
+    # Misura del traffico, se e' stata configurata. Se il campo e' vuoto non
+    # viene emesso nulla — nessuno script, nessuna richiesta a terzi.
+    #
+    # `type="module"` e non `defer`: e' la forma che Cloudflare emette oggi nel
+    # pannello, e beacon.min.js e' diventato un modulo ES. Caricato come script
+    # classico puo' non riportare niente SENZA dare errore — cioe' il modo
+    # peggiore di sbagliare, perche' il sito sembra misurato e non lo e'.
+    # Un modulo e' comunque differito per specifica, quindi non ritarda il
+    # disegno della pagina: si guadagna la correttezza senza perdere niente.
     misura = ""
     if token := (cfg.get("sito.analytics", "") or "").strip():
-        misura = ('<script defer src="https://static.cloudflareinsights.com/'
+        misura = ('<script type="module" src="https://static.cloudflareinsights.com/'
                   f'beacon.min.js" data-cf-beacon=\'{{"token": "{_e(token)}"}}\'>'
                   '</script>')
+
+    # Prova di proprieta' per Search Console e Bing. Sono meta vuote di
+    # contenuto: non cambiano la pagina, servono al motore per credere che il
+    # sito sia tuo e in cambio darti cosa cerca chi ci arriva.
+    #
+    # Su ogni pagina e non solo sull'indice, di proposito: Google chiede
+    # l'indice, ma se un giorno la radice cambia forma la prova resta valida
+    # comunque, e una meta ripetuta settantaquattro volte non costa niente.
+    prove = "\n".join(
+        f'<meta name="{_e(nome_meta)}" content="{_e(valore)}">'
+        for nome_meta, valore in (cfg.get("sito.verifica", {}) or {}).items()
+        if str(valore or "").strip()
+    )
     return f"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -247,6 +265,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 {f'<meta property="og:url" content="{url}">' if url else ''}
 <meta property="og:site_name" content="{nome}">
 <meta name="twitter:card" content="summary">
+{prove}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">

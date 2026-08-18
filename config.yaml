@@ -306,12 +306,19 @@ publish:
     # Vantaggio collaterale: niente app sviluppatore, niente audit di 2-4
     # settimane, niente verifica del dominio.
     #
-    # SPENTO per scelta l'11 agosto 2026: l'automazione completa su TikTok
-    # costa (~16-29 $/mese) e, secondo gli stessi fornitori, la pubblicazione
-    # via API rende meno in copertura di quella fatta dall'app. Restava
-    # l'alternativa dei quattro tocchi al giorno, che non vale il fastidio
-    # finché il canale non ha numeri. Il codice è pronto: rimettere true.
-    enabled: false
+    # Spento l'11 agosto 2026 perché l'automazione completa costa (~16-29 $
+    # al mese) e i fornitori stessi dicono che pubblicare via API rende meno
+    # in copertura che pubblicare dall'app. Restavano quattro tocchi al giorno
+    # sul telefono, che non valevano il fastidio.
+    #
+    # RIACCESO il 19 agosto 2026. Due cose sono cambiate. La prima: i tocchi
+    # sono due invece di quattro, perché la didascalia ora arriva su Telegram
+    # in un blocco che si copia toccandolo, e non va più né scritta né cercata
+    # su un foglio. La seconda, che pesa di più: i tredici video del lotto di
+    # agosto sono già montati e le sessantadue curiosità che contengono sono
+    # già segnate come consumate su TikTok. Quel costo è già stato pagato, e
+    # tenerli fermi è l'unica scelta con ritorno certo pari a zero.
+    enabled: true
 
     # Quanti video prepara ogni volta. Studio programma fino a 10 giorni
     # avanti (non 30: quelli sono gli scheduler esterni), quindi un lotto da
@@ -493,8 +500,31 @@ sito:
   # paese e poco altro. Per sapere se il sito cresce basta.
   #
   # Misura le visite, non le ricerche. Per sapere COSA cerca chi arriva serve
-  # Search Console, che è un'altra cosa e si attiva a parte.
-  analytics: ""
+  # Search Console, che è un'altra cosa e si attiva qui sotto.
+  analytics: "16a38ffcca1943e784cac0e70824e66a"
+
+  # Prova di proprietà per i motori di ricerca. Ogni voce diventa una <meta>
+  # in testa a ogni pagina; le voci vuote non emettono niente.
+  #
+  # Perché serve, e in cosa differisce da `analytics`: Cloudflare conta CHI
+  # arriva, Search Console dice CON QUALE RICERCA. Sono la stessa domanda
+  # vista dai due lati, e la seconda è quella che dice cosa scrivere dopo — se
+  # scopri che la gente arriva cercando "does the marshmallow test replicate",
+  # quello è il prossimo capitolo, e non l'avresti indovinato.
+  #
+  # google-site-verification:
+  #   search.google.com/search-console → Aggiungi proprietà → Prefisso URL
+  #   → https://oddlywired.github.io → metodo "Tag HTML" → copia SOLO il
+  #   valore di content=, non il tag intero. Poi `run.py sito` per pubblicare
+  #   la meta, e solo dopo premi Verifica.
+  #   Verificato: invia la sitemap /sitemap.xml (74 pagine).
+  #
+  # msvalidate.01 (facoltativo):
+  #   bing.com/webmasters — si importa da Search Console in un clic. Vale la
+  #   pena perché Bing alimenta anche DuckDuckGo e vari assistenti.
+  verifica:
+    google-site-verification: ""
+    msvalidate.01: ""
 
 # ─── EPISODIO LUNGO (YouTube) ─────────────────────────────────────────────────
 # Settimanale, ~8 minuti, dieci curiosità legate da un tema.

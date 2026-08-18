@@ -138,6 +138,32 @@ def cmd_check(args: argparse.Namespace) -> int:
     ):
         print(f"  {key:28} {cfg.get(key)}")
 
+    # Misura del sito. Sta qui e non fra le opzionali perché la sua assenza
+    # non rompe niente e quindi non se ne accorge nessuno: il sito continua a
+    # pubblicare settantaquattro pagine e nessuno saprà mai se le legge
+    # qualcuno. È l'unico pezzo della pipeline che fallisce in silenzio.
+    print("\nMISURA DEL SITO")
+    # Le chiavi di `verifica` si leggono dal dizionario e non con cfg.get()
+    # puntato: `msvalidate.01` contiene un punto, quindi il percorso puntato
+    # lo cercherebbe come sito→verifica→msvalidate→01 e non lo troverebbe mai.
+    prove = cfg.get("sito.verifica", {}) or {}
+    misure = (
+        ("analytics", cfg.get("sito.analytics", ""), "visite, provenienza, paese",
+         "dash.cloudflare.com → Web Analytics → Add a site → copia il token"),
+        ("google-site-verification", prove.get("google-site-verification"),
+         "con quali ricerche ti trovano",
+         "search.google.com/search-console → Tag HTML → copia il content"),
+        ("msvalidate.01", prove.get("msvalidate.01"),
+         "lo stesso su Bing e DuckDuckGo",
+         "bing.com/webmasters → importa da Search Console"),
+    )
+    for nome_misura, valore, cosa, dove in misure:
+        if str(valore or "").strip():
+            print(f"  ✓ {nome_misura:26} {cosa}")
+        else:
+            print(f"  ✗ {nome_misura:26} {cosa}")
+            print(f"      → {dove}")
+
     handle = cfg.get("brand.handle", "")
     if handle == "@thequietfacts":
         print(f"\n  ⚠ brand.handle è ancora il segnaposto ({handle}) — mettilo vero")
@@ -974,6 +1000,15 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
 
     _scrivi_istruzioni(out, lotto)
     _scrivi_pagina(out, lotto)
+    # Lo stesso lotto in forma leggibile da un programma. Serve a `ttcarica`,
+    # che gira su GitHub e non vede ne' la pagina HTML ne' il computer di
+    # Mattia: senza questo file saprebbe quale video ha spedito ma non quale
+    # didascalia gli appartiene, e la didascalia e' l'unica cosa che TikTok
+    # non lascia allegare a una bozza dell'inbox.
+    (out / "lotto.json").write_text(
+        _json.dumps([{"file": v["file"], "didascalia": v["didascalia"],
+                      "commento": v["commento"]} for v in lotto],
+                    ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n{'─' * 62}")
     print(f"{len(lotto)} video pronti in  {out}")
     print(f"Apri questa e clicca per copiare:  {out / 'carica.html'}")
@@ -1196,6 +1231,13 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     # producevano cinque errori identici e cinque allarmi.
     try:
         token = tiktok._token_accesso()
+    except tiktok.CredenzialiAssenti as exc:
+        # Esce a ZERO di proposito. Gli orari sono accesi ma l'app sviluppatore
+        # TikTok potrebbe non esistere ancora: uscire in errore qui vorrebbe
+        # dire una mail di workflow fallito ogni notte, e la fine di quelle
+        # mail e' che si spegne tutto invece di leggerle.
+        print(f"· TikTok non ancora collegato, salto: {exc}")
+        return 0
     except Exception as exc:
         print(f"✗ {exc}")
         return 1
@@ -1204,6 +1246,21 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     quanti = min(tetto, int(args.quanti or tetto), len(restanti))
     print(f"{len(restanti)} da caricare, ne mando {quanti} (tetto TikTok: {tetto}/24h)\n")
 
+    # Le didascalie scritte da `run.py tiktok`. L'endpoint inbox di TikTok
+    # accetta SOLO i byte del video: nel corpo della richiesta c'e' `source_info`
+    # e non esiste alcun `post_info`, quindi titolo, descrizione e hashtag non
+    # sono allegabili a una bozza — e' TikTok a volerlo, perche' e' proprio
+    # quel pezzo lasciato all'utente a rendere superfluo l'audit.
+    # Non potendo allegarla, la si manda dove Mattia ce l'ha gia' in mano: in
+    # Telegram, dentro un blocco <code> che su iOS e Android si copia con un
+    # tocco. Restano due tocchi invece di uno, ma nessuna riscrittura a mano.
+    didascalie = {}
+    try:
+        for v in _json.loads((out / "lotto.json").read_text()):
+            didascalie[v["file"]] = v
+    except Exception:
+        pass
+
     fatti = 0
     for v in restanti[:quanti]:
         try:
@@ -1211,6 +1268,7 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
             gia.add(v.name)
             fatti += 1
             print(f"  ✓ {v.name}  ({v.stat().st_size // 1024 // 1024} MB) → {pid}")
+            _manda_didascalia(didascalie.get(v.name))
         except tiktok.LimiteRaggiunto as exc:
             # Non e' un guasto: e' il ritmo previsto. Si smette e basta.
             print(f"  · tetto giornaliero raggiunto, riprovo domani ({exc})")
@@ -1225,6 +1283,30 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     if len(restanti) - fatti > 0:
         print(f"{len(restanti) - fatti} restano in coda per i prossimi giorni.")
     return 0
+
+
+def _manda_didascalia(voce) -> None:
+    """La didascalia della bozza appena depositata, su Telegram.
+
+    Il blocco <code> non e' un vezzo tipografico: nelle app Telegram un blocco
+    di codice si copia toccandolo. Senza, resterebbe una selezione a dito su
+    testo lungo, cioe' l'attrito che dopo due settimane fa smettere.
+    """
+    if not voce:
+        return
+    from engine import review as _rv
+    import html as _h
+
+    if not _rv.enabled():
+        return
+    _rv.notify(
+        f"🎬 <b>Bozza TikTok pronta</b> — <code>{_h.escape(voce['file'])}</code>\n"
+        f"Aprila dall'app, incolla e pubblica.\n\n"
+        f"<b>Didascalia</b> (tocca per copiare)\n"
+        f"<code>{_h.escape(voce['didascalia'])}</code>\n\n"
+        f"<b>Commento da fissare</b>\n"
+        f"<code>{_h.escape(voce['commento'])}</code>"
+    )
 
 
 def cmd_esperimento(args: argparse.Namespace) -> int:
@@ -1285,6 +1367,54 @@ def cmd_sito(args: argparse.Namespace) -> int:
     print("\n  Se e' la prima volta, va acceso GitHub Pages una sola volta:")
     print("  repo → Settings → Pages → Source: Deploy from a branch")
     print("                            Branch: main   Folder: /docs")
+    return 0
+
+
+def cmd_bluesky(args: argparse.Namespace) -> int:
+    """Pubblica su Bluesky le curiosita' non ancora uscite li'.
+
+    Qui non va il video e non va il carosello: va la frase. Bluesky e' l'unica
+    piattaforma dove il testo corre piu' del formato, e l'unica che lascia
+    uscire le persone — quindi ogni post porta il collegamento alla pagina
+    della curiosita' sul sito. E' il solo canale che manda traffico alle 74
+    pagine invece di trattenerlo.
+    """
+    from engine.publish import bluesky as bs
+
+    conn = connect()
+    da_fare = bs.prossimi(conn, args.quanti)
+    if not da_fare:
+        print("Nessuna curiosita' nuova da portare su Bluesky.")
+        return 0
+
+    fatti_n = 0
+    for f in da_fare:
+        try:
+            testi = bs.componi(f)
+        except bs.BlueskyError as e:
+            # Non e' un errore da fermare tutto: e' una curiosita' senza fonte,
+            # e sono proprio quelle che non devono uscire su un profilo che si
+            # regge sul citare gli studi. Si salta e si va avanti.
+            print(f"  · salto {f['id']}: {e}")
+            continue
+
+        if args.prova:
+            print(f"\n─── fatto {f['id']} ── {len(testi['testo'])}/300 caratteri")
+            print(testi["testo"])
+            continue
+
+        try:
+            uri = bs.pubblica(testi["testo"], testi["link"],
+                              testi["titolo"], testi["descrizione"])
+        except bs.BlueskyError as e:
+            print(f"  ✗ fatto {f['id']}: {e}")
+            continue
+        bs.segna_uso(conn, f["id"], uri)
+        fatti_n += 1
+        print(f"  ✓ {bs.url_pubblico(uri)}")
+
+    if not args.prova:
+        print(f"\n{fatti_n} post su Bluesky")
     return 0
 
 
@@ -2814,6 +2944,12 @@ def main() -> int:
     p.add_argument("--pubblica", action="store_true",
                    help="spingi anche sul repo del sito (serve SITE_TOKEN)")
     p.set_defaults(func=cmd_sito)
+
+    p = sub.add_parser("bluesky", help="porta le curiosita' su Bluesky, in testo")
+    p.add_argument("--quanti", type=int, default=1)
+    p.add_argument("--prova", action="store_true",
+                   help="scrivi a schermo senza pubblicare")
+    p.set_defaults(func=cmd_bluesky)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)
