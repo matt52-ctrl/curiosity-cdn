@@ -285,7 +285,16 @@ publish:
     # ne servono tre): oltre i due-tre Short quotidiani la spinta per video
     # cala, perché ognuno viene provato su un piccolo pubblico prima di essere
     # distribuito e pubblicarne troppi significa togliersi spazio da soli.
-    max_per_day: 3
+    # Sceso da 3 a 1 il 19 agosto 2026, per prova e a tempo. Il ragionamento
+    # è di Mattia e regge: con tre Short al giorno su un canale che non ha
+    # ancora pubblico, ogni video viene provato su un piccolo campione e i
+    # tre si tolgono spazio a vicenda. Uno solo concentra la spinta, e con
+    # un video al giorno la differenza fra un aggancio buono e uno mediocre
+    # si legge — con tre in fila si legge solo la media.
+    #
+    # Da rivalutare fra un paio di settimane guardando `run.py esperimento`
+    # e le iscrizioni in Studio, non le visualizzazioni del singolo video.
+    max_per_day: 1
 
     # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
     # workflow: il primo giro della giornata carica tutti e tre i video e li
@@ -301,11 +310,16 @@ publish:
     # domenica di ottobre, quando finisce l'ora legale. La conversione la fa
     # il programma ogni giorno.
     #
-    # Perché queste tre: il canale è in inglese e su Shorts l'inglese pesca
-    # soprattutto da Stati Uniti e Regno Unito. Le 19:00 e le 23:00 italiane
-    # sono il pomeriggio e la sera americani; le 13:00 prendono il pranzo
-    # europeo e la mattina della costa est.
-    orari: ["13:00", "19:00", "23:00"]
+    # Perché ne resta una sola e perché proprio questa. Il canale è in inglese
+    # e su Shorts l'inglese pesca soprattutto da Stati Uniti e Regno Unito:
+    # le 19:00 italiane sono il primo pomeriggio sulla costa est e la sera in
+    # Europa, cioè l'unica fascia che prende bene entrambi. È anche l'unica
+    # con un riscontro nostro: sui primi cinque video, le due uscite di
+    # mezzogiorno hanno fatto 115 e 117 visualizzazioni e quella delle 19:45
+    # ne ha fatte 497. Cinque video non distinguono l'orario dal contenuto —
+    # quel video aveva anche l'aggancio migliore — ma punta nella stessa
+    # direzione del ragionamento sui fusi, che regge da solo.
+    orari: ["19:00"]
     fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come
@@ -439,6 +453,13 @@ reel:
   # visione piena; sopra i 15 le repliche crollano.
   line_seconds: 9.0
   batch: 2                # quante frasi generare per volta
+
+  # Quanti reel Instagram al giorno. NON è questo campo a farli uscire — a
+  # farli uscire sono le fasce in .github/workflows/reels.yml, una per reel.
+  # Serve alla guardia in engine/allarme.py per sapere cosa aspettarsi: se i
+  # due numeri non combaciano, o la guardia grida al lupo ogni giorno o resta
+  # muta mentre il canale si ferma. Cambiando le fasce, cambiare anche qui.
+  al_giorno: 1
   # Coda volutamente minima: un magazzino grande invecchia. Ogni miglioria al
   # generatore rende peggiori i reel gia' in attesa, che usciranno comunque.
   min_queue: 1

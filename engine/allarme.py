@@ -144,7 +144,14 @@ def silenzio(conn, ore: float | None = None) -> None:
     except Exception:
         nascita = None
 
+    from .config import cfg
+
     for nome, soglia, sql in CANALI:
+        # Un canale in pausa non e' un canale muto: e' spento di proposito, e
+        # dirlo ogni giorno coprirebbe le segnalazioni vere. Vale per i
+        # caroselli dal 19 agosto, in attesa che Meta tolga il blocco.
+        if nome == "Instagram post" and not cfg.get("publish.instagram.enabled", True):
+            continue
         if ore is not None:
             soglia = ore
         try:
@@ -167,28 +174,44 @@ def silenzio(conn, ore: float | None = None) -> None:
                           f"Il giro gira ma non esce niente: guardare i log.")
 
 
-# Uscite attese al giorno, canale per canale, piu' la query che conta quelle
-# vere e quella che dice da quando il canale esiste. Tre al giorno perche' il
-# workflow dei reel gira in tre fasce e ognuna pubblica al massimo un reel e
-# uno Short.
-RITMO = (
-    ("YouTube Short", 3,
-     "SELECT COUNT(DISTINCT ref) FROM fact_uses "
-     "WHERE channel = 'youtube' AND ref LIKE 'yt-%' AND used_at > ?",
-     "SELECT MIN(used_at) FROM fact_uses "
-     "WHERE channel = 'youtube' AND ref LIKE 'yt-%'"),
-    ("Instagram reel", 3,
-     "SELECT COUNT(*) FROM reels WHERE status = 'published' "
-     "AND published_at > ?",
-     "SELECT MIN(published_at) FROM reels WHERE status = 'published'"),
-    # Due al giorno: il workflow dei caroselli gira in due fasce e ognuna
-    # pubblica un post. Mancava da questa tabella, ed era proprio il formato
-    # rimasto indietro senza che nessuno se ne accorgesse.
-    ("Carosello Instagram", 2,
-     "SELECT COUNT(*) FROM posts WHERE status = 'published' "
-     "AND published_at > ?",
-     "SELECT MIN(published_at) FROM posts WHERE status = 'published'"),
-)
+def _ritmo() -> Tuple:
+    """Uscite attese al giorno, canale per canale, lette dalla configurazione.
+
+    Erano tre numeri scritti a mano — 3, 3 e 2 — e andava bene finche' il
+    ritmo non cambiava mai. Il 19 agosto e' passato a uno Short e un reel al
+    giorno: con i numeri fissi questa guardia avrebbe segnalato "il canale
+    rende sotto i due terzi" ogni giorno, per un canale che stava facendo
+    esattamente quello che gli era stato chiesto.
+
+    E' il modo peggiore di rompere una guardia. Non smette di funzionare:
+    comincia a gridare al lupo, e dopo tre mail uno smette di leggerle —
+    quindi la volta che il guasto c'e' davvero non se ne accorge nessuno.
+    Legarla alla configurazione toglie il problema alla radice.
+    """
+    from .config import cfg
+
+    voci = [
+        ("YouTube Short", int(cfg.get("publish.youtube.max_per_day", 1)),
+         "SELECT COUNT(DISTINCT ref) FROM fact_uses "
+         "WHERE channel = 'youtube' AND ref LIKE 'yt-%' AND used_at > ?",
+         "SELECT MIN(used_at) FROM fact_uses "
+         "WHERE channel = 'youtube' AND ref LIKE 'yt-%'"),
+        ("Instagram reel", int(cfg.get("reel.al_giorno", 1)),
+         "SELECT COUNT(*) FROM reels WHERE status = 'published' "
+         "AND published_at > ?",
+         "SELECT MIN(published_at) FROM reels WHERE status = 'published'"),
+    ]
+    # I caroselli entrano nell'elenco solo se sono accesi. In pausa non sono
+    # un canale lento, sono un canale spento di proposito: segnalarlo ogni
+    # giorno direbbe una cosa che gia' sappiamo, con l'unico effetto di
+    # coprire le segnalazioni vere.
+    if cfg.get("publish.instagram.enabled", True):
+        voci.append(
+            ("Carosello Instagram", int(cfg.get("publish.instagram.al_giorno", 2)),
+             "SELECT COUNT(*) FROM posts WHERE status = 'published' "
+             "AND published_at > ?",
+             "SELECT MIN(published_at) FROM posts WHERE status = 'published'"))
+    return tuple(voci)
 
 # Tre giorni, non uno. La finestra e' stata scelta misurando, non a occhio:
 # rigiocando il controllo sui quattro giri realmente eseguiti durante la
@@ -226,7 +249,7 @@ def cadenza(conn, ore: float = _FINESTRA_ORE) -> None:
 
     limite = time.time() - ore * 3600
 
-    for nome, al_giorno, sql, sql_prima in RITMO:
+    for nome, al_giorno, sql, sql_prima in _ritmo():
         try:
             uscite = conn.execute(sql, (limite,)).fetchone()[0] or 0
             prima = conn.execute(sql_prima).fetchone()[0]

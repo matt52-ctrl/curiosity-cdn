@@ -32,10 +32,20 @@ on:
     # possono programmare e alle 9:45 italiane sarebbero fuori dalla finestra
     # scelta. Oltre tre ore di margine sulla prima fascia, perché GitHub parte
     # in ritardo fino a un'ora.
-    - cron: "45 7 * * *"     # carica e programma la giornata YouTube
-    - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA
+    #
+    # RIDOTTO il 19 agosto 2026: da quattro giri a due, cioè da tre reel e tre
+    # Short al giorno a uno e uno. Prova a tempo, decisa guardando che il
+    # canale non ha ancora pubblico: con tre video al giorno ognuno viene
+    # provato su un campione piccolo e i tre si tolgono spazio a vicenda,
+    # mentre con uno solo la spinta si concentra e la differenza fra un
+    # aggancio buono e uno mediocre si legge invece di sparire nella media.
+    #
+    # Gli altri due orari restano scritti qui sotto, commentati, perché
+    # rimetterli è la cosa più probabile che si voglia fare fra due settimane.
+    - cron: "45 7 * * *"     # carica e programma lo Short della giornata
     - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
-    - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
+    # - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA
+    # - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
