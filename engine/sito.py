@@ -288,7 +288,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 </div></main>
 <footer><div class="guscio">
   <p>One checked fact a day. Every claim here names the study behind it.</p>
-  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a>' if yt else ''}</p>
+  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a> · ' if yt else ''}<a href="{_radice()}privacy/">Privacy</a></p>
 </div></footer>
 </body></html>"""
 
@@ -667,6 +667,70 @@ with the finding each one supports. If a claim is contested, its page says so.</
             encoding="utf-8",
         )
 
+    # ── informativa privacy ──
+    #
+    # Nasce da una richiesta di Pinterest, che non concede un'app senza un
+    # indirizzo di informativa. Ma serve comunque: il sito e' raggiungibile
+    # dall'Europa e misura le visite, e questo basta a farne un obbligo.
+    #
+    # E' corta perche' e' vera. Questo sito non ha moduli, non ha account, non
+    # ha carrello e non manda email: non raccoglie un solo dato che una
+    # persona debba fornire. Le uniche due cose che toccano un visitatore sono
+    # il conteggio delle visite e i registri del server che serve le pagine.
+    # Un'informativa lunga qui sarebbe copiata da altrove, quindi descriverebbe
+    # trattamenti che non facciamo — che e' peggio di non averla.
+    corpo_p = f"""<a class="indietro" href="{_radice()}">back to all facts</a>
+<div class="occhiello">Privacy</div>
+<h1>What this site knows about you.</h1>
+<div class="corpo">
+<p class="guida">Short version: almost nothing, and none of it by name.</p>
+
+<h2>No forms, no accounts, no email</h2>
+<p>There is nothing here to sign up for and nothing to fill in. We never ask
+for your name, your email address or anything else, so there is no database of
+readers to leak, sell or lose. If you want updates, the
+<a href="{_radice()}feed.xml">RSS feed</a> gives them to you without telling us
+you subscribed.</p>
+
+<h2>No cookies</h2>
+<p>This site sets no cookies and uses no advertising or tracking scripts. That
+is also why you have not been asked to accept anything.</p>
+
+<h2>Visit counting</h2>
+<p>We use Cloudflare Web Analytics to count page views, referrers and country.
+It is cookie-free and does not fingerprint your device or build a profile
+across sites; we see totals, never individuals. It exists so we know which
+facts people actually read.</p>
+
+<h2>Server logs</h2>
+<p>The site is hosted on GitHub Pages. Like any web server, GitHub records
+requests, which includes IP addresses, and it does so under its own policy and
+retention, not ours. We do not have access to those logs.</p>
+
+<h2>Links out</h2>
+<p>Pages link to studies, journals and our own accounts on other platforms.
+Once you follow a link you are on someone else&rsquo;s site under someone
+else&rsquo;s rules, and this page stops applying.</p>
+
+<h2>Your rights</h2>
+<p>Because we hold no personal data about you, there is nothing to access,
+correct, export or delete. If you believe otherwise, write to
+<a href="https://instagram.com/{_e(ig)}" rel="me">@{_e(ig)}</a> and we will
+look into it.</p>
+
+<h2>Changes</h2>
+<p>If this ever stops being accurate, this page changes with it. It is
+generated from the site itself, not written once and forgotten.</p>
+</div>"""
+    (DOCS / "privacy").mkdir(parents=True, exist_ok=True)
+    (DOCS / "privacy" / "index.html").write_text(
+        _pagina("Privacy - what this site knows about you",
+                "No forms, no accounts, no cookies. Cookie-free visit counting "
+                "and the host's own server logs, and nothing else.",
+                corpo_p, "privacy/"),
+        encoding="utf-8",
+    )
+
     # ── feed RSS ──
     #
     # È la newsletter senza la newsletter. Chi vuole gli aggiornamenti si
@@ -715,6 +779,7 @@ with the finding each one supports. If a claim is contested, its page says so.</
                + [f"<url><loc>{base}/f/{s}/</loc></url>" for s, _ in voci]
                + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)]
                + ([f"<url><loc>{base}/sources/</loc></url>"] if fonti else [])
+               + [f"<url><loc>{base}/privacy/</loc></url>"]
                + [f"<url><loc>{base}/e/{e['video_id']}/</loc></url>" for e in episodi])
         (DOCS / "sitemap.xml").write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
