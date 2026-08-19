@@ -128,6 +128,38 @@ def cmd_check(args: argparse.Namespace) -> int:
         raw = env(name)
         print(f"  {'✓' if not is_placeholder(raw) else '·'} {name:22} {why}")
 
+    # Quali canali sono davvero collegati. Serve perché "acceso" e "collegato"
+    # sono due cose diverse e finora si vedeva solo la prima: publish.tiktok
+    # può stare a true mentre le credenziali non esistono, e in quel caso il
+    # montaggio gira, consuma curiosità e non spedisce niente. Qui si vede.
+    print("\nCANALI")
+    canali = (
+        ("Instagram", cfg.get("publish.instagram.enabled", True),
+         ("IG_USER_ID", "IG_ACCESS_TOKEN"), ""),
+        ("YouTube", cfg.get("publish.youtube.enabled", False),
+         ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"),
+         "python3 setup_youtube.py"),
+        ("TikTok", cfg.get("publish.tiktok.enabled", False),
+         ("TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REFRESH_TOKEN"),
+         "developers.tiktok.com → Content Posting API, scope video.upload, "
+         "poi python3 setup_tiktok.py"),
+        ("Bluesky", True,
+         ("BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"),
+         "bsky.app → Settings → App Passwords"),
+    )
+    for nome_canale, acceso, chiavi, come in canali:
+        mancanti = [k for k in chiavi if is_placeholder(env(k))]
+        if not acceso:
+            print(f"  · {nome_canale:11} spento in config.yaml")
+        elif mancanti:
+            # Acceso ma scollegato: è il caso che costa, non quello innocuo.
+            print(f"  ✗ {nome_canale:11} acceso ma SCOLLEGATO — manca "
+                  f"{', '.join(mancanti)}")
+            if come:
+                print(f"      → {come}")
+        else:
+            print(f"  ✓ {nome_canale:11} collegato")
+
     print(f"\nCONFIGURAZIONE")
     for key in (
         "format.mode",
