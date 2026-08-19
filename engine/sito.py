@@ -288,7 +288,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 </div></main>
 <footer><div class="guscio">
   <p>One checked fact a day. Every claim here names the study behind it.</p>
-  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a> · ' if yt else ''}<a href="{_radice()}privacy/">Privacy</a></p>
+  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a> · ' if yt else ''}<a href="{_radice()}privacy/">Privacy</a> · <a href="{_radice()}terms/">Terms</a></p>
 </div></footer>
 </body></html>"""
 
@@ -731,6 +731,70 @@ generated from the site itself, not written once and forgotten.</p>
         encoding="utf-8",
     )
 
+    # ── condizioni d'uso ──
+    #
+    # Come l'informativa, nasce da una richiesta: TikTok non accetta un'app
+    # senza un indirizzo di Terms of Service. E come quella, e' corta perche'
+    # e' vera — qui non si vende niente, non ci si iscrive a niente e non c'e'
+    # nessun servizio che possa smettere di funzionare per qualcuno.
+    #
+    # L'unica parte che serve davvero e' quella sulle fonti: il sito cita
+    # studi altrui, e dire chiaramente che le citazioni appartengono ai loro
+    # autori e che i testi sono nostri e' l'unica cosa che una persona
+    # potrebbe avere bisogno di sapere prima di riusarli.
+    corpo_t = f"""<a class="indietro" href="{_radice()}">back to all facts</a>
+<div class="occhiello">Terms</div>
+<h1>The rules, such as they are.</h1>
+<div class="corpo">
+<p class="guida">There is nothing to buy here and nothing to sign up for, so
+this is shorter than you expect.</p>
+
+<h2>What this is</h2>
+<p>A free, public archive of psychology findings. Every claim names the study
+behind it. You may read it, link to it and quote it without asking.</p>
+
+<h2>Accuracy, and its limits</h2>
+<p>Every page is fact-checked against a named source before it is published,
+and pages say so when a finding is contested. But summaries lose nuance, and
+research gets revised: this is a starting point for reading the studies, not a
+substitute for them. <strong>Nothing here is medical, psychological, legal or
+financial advice.</strong> Do not act on it in place of a professional.</p>
+
+<h2>Who owns what</h2>
+<p>The writing, the layout and the images on this site are ours. The studies
+are not: citations, titles and findings belong to their authors and publishers,
+and are named here so you can go and read the original. If you quote us, a link
+back is enough.</p>
+
+<h2>Availability</h2>
+<p>The site is published for free on infrastructure we do not own. It may be
+slow, it may be briefly unavailable, and pages may change or disappear as
+findings are corrected. Nothing here is promised to stay online, and there is
+no support to contact.</p>
+
+<h2>Automation</h2>
+<p>This site and the accounts that link to it are produced with the help of AI
+under human review, and the illustrations are AI-generated and labelled as
+such. The findings and the sources are not invented: they are checked against
+real published research.</p>
+
+<h2>Privacy</h2>
+<p>Covered separately, and briefly, on the
+<a href="{_radice()}privacy/">privacy page</a>.</p>
+
+<h2>Changes</h2>
+<p>This page is generated from the site itself, so it changes when the site
+does rather than being written once and forgotten.</p>
+</div>"""
+    (DOCS / "terms").mkdir(parents=True, exist_ok=True)
+    (DOCS / "terms" / "index.html").write_text(
+        _pagina("Terms - the rules, such as they are",
+                "A free public archive of checked psychology findings. "
+                "Nothing to buy, nothing to sign up for.",
+                corpo_t, "terms/"),
+        encoding="utf-8",
+    )
+
     # ── feed RSS ──
     #
     # È la newsletter senza la newsletter. Chi vuole gli aggiornamenti si
@@ -780,6 +844,7 @@ generated from the site itself, not written once and forgotten.</p>
                + [f"<url><loc>{base}/t/{_slug(a)}/</loc></url>" for a in sorted(argomenti)]
                + ([f"<url><loc>{base}/sources/</loc></url>"] if fonti else [])
                + [f"<url><loc>{base}/privacy/</loc></url>"]
+               + [f"<url><loc>{base}/terms/</loc></url>"]
                + [f"<url><loc>{base}/e/{e['video_id']}/</loc></url>" for e in episodi])
         (DOCS / "sitemap.xml").write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n'
