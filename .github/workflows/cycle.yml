@@ -48,14 +48,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Clone superficiale: questo repo è anche il CDN delle immagini e
           # cresce di ~6 MB a post. Senza, fra sei mesi ogni esecuzione
           # scaricherebbe centinaia di megabyte di storia inutile.
           fetch-depth: 1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip

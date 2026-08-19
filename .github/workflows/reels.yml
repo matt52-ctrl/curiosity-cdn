@@ -59,11 +59,11 @@ jobs:
     timeout-minutes: 45      # il montaggio video e l'upload sono lenti
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
