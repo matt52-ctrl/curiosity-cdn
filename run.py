@@ -153,6 +153,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         ("Bluesky", True,
          ("BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"),
          "bsky.app → Settings → App Passwords"),
+        ("Pinterest", True,
+         ("PINTEREST_APP_ID", "PINTEREST_APP_SECRET", "PINTEREST_REFRESH_TOKEN"),
+         "developers.pinterest.com → Connect app (profilo BUSINESS), "
+         "poi python3 setup_pinterest.py registrando lo schermo"),
         ("Telegram", True,
          ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
          "python3 setup_telegram.py"),
@@ -1457,6 +1461,71 @@ def cmd_bluesky(args: argparse.Namespace) -> int:
 
     if not args.prova:
         print(f"\n{fatti_n} post su Bluesky")
+    return 0
+
+
+def cmd_pinterest(args: argparse.Namespace) -> int:
+    """Porta su Pinterest i caroselli gia' costruiti.
+
+    Le cinque slide diventano un pin sfogliabile che punta alla pagina della
+    curiosita' sul sito. E' l'unico canale in cui il contenuto non scade: un
+    pin porta visite per mesi, un reel per due giorni.
+
+    Nota non ovvia: qui escono anche i caroselli che Meta ha bloccato. Il
+    blocco e' sul loro account, non sulle nostre immagini, e restano sei
+    caroselli gia' pronti che non hanno motivo di stare fermi.
+    """
+    from engine.publish import pinterest as pin
+    import json as _j
+
+    conn = connect()
+    da_fare = pin.prossimi(conn, args.quanti)
+    if not da_fare:
+        print("Nessun carosello nuovo da portare su Pinterest.")
+        return 0
+
+    try:
+        token = "" if args.prova else pin._token()
+        board = "" if args.prova else pin.bacheca(token)
+    except pin.CredenzialiAssenti as e:
+        # Esce a ZERO: gli orari possono essere accesi prima che l'app
+        # Pinterest esista, senza una mail di errore ogni notte.
+        print(f"· Pinterest non ancora collegato, salto: {e}")
+        return 0
+    fatti_n = 0
+
+    for p in da_fare:
+        try:
+            testi = pin.componi(p)
+        except pin.PinterestError as e:
+            print(f"  · salto post {p['id']}: {e}")
+            continue
+
+        immagini = _j.loads(p["image_urls"] or "[]")
+        if not immagini:
+            print(f"  · salto post {p['id']}: senza immagini pubbliche")
+            continue
+
+        if args.prova:
+            print(f"\n─── post {p['id']} ── {len(immagini)} immagini")
+            print(f"  titolo: {testi['titolo']}")
+            print(f"  link:   {testi['link']}")
+            print(f"  descr.: {testi['descrizione'][:120]}…")
+            continue
+
+        try:
+            pid = pin.pubblica(immagini, testi["titolo"], testi["descrizione"],
+                               link=testi["link"], alt=p["alt_text"] or "",
+                               token=token, board_id=board)
+        except pin.PinterestError as e:
+            print(f"  ✗ post {p['id']}: {e}")
+            continue
+        pin.segna_uso(conn, p["fact_id"], pid)
+        fatti_n += 1
+        print(f"  ✓ {pin.url_pubblico(pid)}")
+
+    if not args.prova:
+        print(f"\n{fatti_n} pin su Pinterest")
     return 0
 
 
@@ -3008,6 +3077,12 @@ def main() -> int:
     p.add_argument("--prova", action="store_true",
                    help="scrivi a schermo senza pubblicare")
     p.set_defaults(func=cmd_bluesky)
+
+    p = sub.add_parser("pinterest", help="porta i caroselli su Pinterest")
+    p.add_argument("--quanti", type=int, default=1)
+    p.add_argument("--prova", action="store_true",
+                   help="mostra cosa uscirebbe senza pubblicare")
+    p.set_defaults(func=cmd_pinterest)
 
     p = sub.add_parser("comments", help="leggi i commenti e prepara le risposte")
     p.set_defaults(func=cmd_comments)

@@ -1,0 +1,104 @@
+# Pinterest — i caroselli come pin sfogliabili, con il link alla pagina.
+#
+# Perché Pinterest merita un canale suo: è l'unico dove il contenuto non
+# scade. Un pin porta visite per mesi, un reel per due giorni. Insieme a
+# Bluesky è il secondo canale che manda gente FUORI, verso le 74 pagine del
+# sito, e l'unico che lo fa nel tempo invece che nell'ora dopo.
+#
+# Ha un workflow suo e non un passo dentro cycle.yml per la stessa ragione di
+# Bluesky: non monta niente e non genera niente, sono tre chiamate HTTP. Non
+# ha bisogno di ffmpeg, Playwright, font o musica, e non deve fallire perché
+# è caduto Pexels.
+#
+# Nota che vale più del resto: qui escono anche i sei caroselli che Meta ha
+# bloccato dal 16 agosto. Il blocco è sul loro account, non sulle nostre
+# immagini — verificato, 30 immagini su 30 ancora vive e 6 pagine su 6
+# raggiungibili. Non hanno motivo di restare fermi.
+#
+# Se i tre secret PINTEREST_* non ci sono ancora, questo workflow NON
+# fallisce: `run.py pinterest` riconosce le credenziali assenti ed esce a
+# zero. Gli orari si possono accendere prima di registrare l'app.
+
+name: Curiosity Pinterest
+
+on:
+  schedule:
+    # Due pin al giorno. Il numero non viene dal ritmo di produzione come su
+    # Bluesky, ma da quanti caroselli esistono: se ne costruisce circa uno al
+    # giorno, e ce ne sono sei arretrati da smaltire. A due al giorno la coda
+    # si svuota in una settimana e poi si allinea da sé alla produzione.
+    #
+    # Gli orari puntano al pubblico americano, che su Pinterest pesa ancora
+    # più che altrove, e come sempre sono anticipati di 45 minuti perché
+    # GitHub accoda i job schedulati e parte in ritardo, misurato fino a 64
+    # minuti. Scelti fra le fasce libere: reel (7:45, 16:15), cycle (12:15,
+    # 18:15), bluesky (11:15, 14:15, 21:15) e lungo (15:15 il sabato)
+    # condividono il gruppo `curiosity-state`.
+    - cron: "15 9 * * *"     # ~12:00 italiane — mattina presto sulla costa est
+    - cron: "15 19 * * *"    # ~22:00 italiane — sera in Europa, pomeriggio USA
+  workflow_dispatch:
+    inputs:
+      prova:
+        description: "Prova a vuoto: mostra i pin senza crearli"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # STESSO gruppo degli altri: scrive fact_uses nello stesso database, e due
+  # esecuzioni sovrapposte perderebbero uno dei due segni — cioè lo stesso
+  # carosello uscirebbe due volte.
+  group: curiosity-state
+  cancel-in-progress: false
+
+jobs:
+  pinterest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        run: pip install -r requirements.txt
+
+      - name: Pubblica su Pinterest
+        env:
+          PINTEREST_APP_ID: ${{ secrets.PINTEREST_APP_ID }}
+          PINTEREST_APP_SECRET: ${{ secrets.PINTEREST_APP_SECRET }}
+          PINTEREST_REFRESH_TOKEN: ${{ secrets.PINTEREST_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py pinterest --quanti 1 ${{ inputs.prova && '--prova' || '' }}
+
+      - name: Salva lo stato
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db
+          git diff --staged --quiet && exit 0
+          git commit -m "pinterest: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            git rebase origin/main -X ours || {
+              git rebase --abort
+              git reset --soft origin/main
+              git add data/engine.db
+              git commit -m "pinterest: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            }
+            sleep 5
+          done
+          echo "::error::stato NON salvato: rischio di ripubblicazione"
+          exit 1
