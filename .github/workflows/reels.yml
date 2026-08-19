@@ -79,11 +79,25 @@ jobs:
           cache: pip
 
       - name: Installa dipendenze
+        # Un tetto suo, molto sotto quello del job: se l'installazione si
+        # impianta deve morire lei e lasciare il tempo al resto, non mangiarsi
+        # i 45 minuti interi e portarsi giù la giornata.
+        timeout-minutes: 12
         run: |
           # ffmpeg non è garantito sull'immagine del runner e serve solo qui.
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -r requirements.txt
-          playwright install --with-deps chromium
+          # NIENTE `playwright install`. Il pacchetto pip serve — render.py lo
+          # importa in cima e senza il modulo l'import di run.py fallisce — ma
+          # il BROWSER no: in questo workflow nessun passo lo apre. Verificato
+          # una funzione alla volta: cmd_reels, _uno_short, _pubblica_youtube,
+          # cmd_comments e cmd_sito non toccano render.
+          #
+          # Non è un'ottimizzazione, è la causa di un guasto vero. Il 19 agosto
+          # `playwright install --with-deps chromium` si è impiantato per 45
+          # minuti — apt-get per le librerie di sistema di un browser mai
+          # aperto — il job è morto per timeout e la giornata YouTube non è
+          # stata programmata. Zero Short usciti quel giorno.
 
       - name: Scarica font e musica
         run: |

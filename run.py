@@ -770,6 +770,24 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
         if f > adesso + 600 and not any(abs(f - c) < 60 for c in coperte)
     ][: max(0, tetto - len(coperte))]
 
+    # Recupero della giornata perduta.
+    #
+    # La regola "le fasce passate si perdono" nasce da un caso preciso: due
+    # Short a pochi minuti l'uno dall'altro finiscono nella stessa prova di
+    # pubblico e si tolgono spazio. Quel ragionamento vale se qualcosa oggi e'
+    # gia' uscito — non se non e' uscito niente, dove il confronto vero e' fra
+    # un video in ritardo e nessun video.
+    #
+    # Prima non si notava: con tre fasce, perderne una lasciava le altre due.
+    # Da quando la fascia e' UNA sola, un giro fallito al mattino significa
+    # giornata a zero senza appello — ed e' successo davvero il 19 agosto,
+    # quando il margine di dieci minuti ha scartato l'unica fascia rimasta
+    # per diciassette minuti di ritardo.
+    if not da_coprire and not coperte and _fasce_di_oggi():
+        print("  · YouTube: nessuna fascia utile oggi e niente ancora uscito "
+              "— recupero adesso invece di saltare la giornata")
+        da_coprire = [0.0]      # 0.0 = pubblica subito, senza programmazione
+
     if not da_coprire:
         print(f"  · YouTube: {len(coperte)} fasce di oggi gia' coperte, "
               f"nessuna da programmare")
@@ -891,8 +909,14 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
     for f in frasi:
         segna_uso_fatto(conn, f["fact_id"], "youtube", f"yt-{yt_id}")
     segna_variante(conn, yt_id, variante)
-    if quando:
-        segna_fascia(conn, yt_id, quando)
+    # `is not None` e non `if quando`: nel recupero di una giornata perduta la
+    # fascia vale 0.0, che significa "esci adesso" ed e' falsa. Con il vecchio
+    # controllo la fascia non veniva segnata, `fasce_coperte` restava vuota e
+    # il giro successivo dello stesso giorno faceva scattare di nuovo il
+    # recupero — cioe' due Short a poche ore l'uno dall'altro, che e' proprio
+    # cio' che la regola sulle fasce passate esiste per evitare.
+    if quando is not None:
+        segna_fascia(conn, yt_id, quando or time.time())
     import datetime as _dt
     orario = (" — esce alle " + _dt.datetime.fromtimestamp(
         quando, _fuso()).strftime("%H:%M italiane")) if quando else ""
