@@ -248,7 +248,26 @@ pipeline:
 # ─── PUBBLICAZIONE ────────────────────────────────────────────────────────────
 publish:
   instagram:
-    enabled: true
+    # ⏸️  CAROSELLI IN PAUSA dal 19 agosto 2026. NON è una scelta editoriale:
+    # Meta blocca la pubblicazione delle immagini su questo account.
+    #
+    # Cosa è stato misurato prima di spegnere. I contenitori si creano tutti e
+    # cinque e arrivano a FINISHED; è la sola `media_publish` a rispondere 403
+    # «azione bloccata». Dal 16 agosto alle 13:04 i video passano sempre e le
+    # immagini non passano mai — stesso token, stessa app, stessa chiamata.
+    # Escluso: la quota (1 su 100, app all'1%), il token (i reel ci passano),
+    # le immagini (200 e contenitori FINISHED), l'hosting (i post 24 e 25 sono
+    # usciti dallo stesso raw.githubusercontent.com) e il nostro codice (il 16
+    # agosto non è stata toccata una riga).
+    #
+    # Perché spegnere invece di lasciar ritentare: il ciclo riprovava quattro
+    # volte al giorno, e i blocchi di integrità di Meta si allungano quando
+    # l'azione bloccata viene ripetuta. Si stava peggiorando la situazione.
+    #
+    # Si riaccende dopo il ricorso: Instagram → Impostazioni → Stato
+    # dell'account. I reel NON sono toccati da questo interruttore e
+    # continuano a uscire.
+    enabled: false
   youtube:
     # Verificato con un caricamento reale l'11 agosto 2026.
     # Quota: 6 caricamenti al giorno — ai 3 reel attuali sta larga.
@@ -318,7 +337,16 @@ publish:
     # agosto sono già montati e le sessantadue curiosità che contengono sono
     # già segnate come consumate su TikTok. Quel costo è già stato pagato, e
     # tenerli fermi è l'unica scelta con ritorno certo pari a zero.
-    enabled: true
+    #
+    # Resta però `false`, e non è una contraddizione: questo interruttore NON
+    # governa i video. Governa un solo punto del codice, l'invio delle cinque
+    # immagini di un carosello a TikTok come photo post — una strada che
+    # richiede PULL_FROM_URL e quindi la verifica del dominio, impossibile su
+    # raw.githubusercontent.com che non è nostro. A true fa solo fallire una
+    # chiamata a ogni carosello.
+    # I video seguono un'altra strada, `run.py tiktok` e `run.py ttcarica`,
+    # che non guarda questo campo: per quelli bastano i tre secret TIKTOK_*.
+    enabled: false
 
     # Quanti video prepara ogni volta. Studio programma fino a 10 giorni
     # avanti (non 30: quelli sono gli scheduler esterni), quindi un lotto da

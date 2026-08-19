@@ -133,32 +133,42 @@ def cmd_check(args: argparse.Namespace) -> int:
     # può stare a true mentre le credenziali non esistono, e in quel caso il
     # montaggio gira, consuma curiosità e non spedisce niente. Qui si vede.
     print("\nCANALI")
+    # Un canale per riga di lavoro vera, non per piattaforma: su Instagram i
+    # caroselli e i reel hanno interruttori diversi e in questo momento stati
+    # diversi, e una riga sola direbbe "spento" di un canale che sta uscendo.
     canali = (
-        ("Instagram", cfg.get("publish.instagram.enabled", True),
+        ("IG caroselli", cfg.get("publish.instagram.enabled", True),
          ("IG_USER_ID", "IG_ACCESS_TOKEN"), ""),
+        ("IG reel", True, ("IG_USER_ID", "IG_ACCESS_TOKEN"), ""),
         ("YouTube", cfg.get("publish.youtube.enabled", False),
          ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN"),
          "python3 setup_youtube.py"),
-        ("TikTok", cfg.get("publish.tiktok.enabled", False),
+        # I video NON passano da publish.tiktok.enabled: quello governa solo
+        # le foto dei caroselli, che richiedono la verifica del dominio e per
+        # noi non sono percorribili. Qui contano i tre secret e basta.
+        ("TikTok video", True,
          ("TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_REFRESH_TOKEN"),
-         "developers.tiktok.com → Content Posting API, scope video.upload, "
-         "poi python3 setup_tiktok.py"),
+         "developers.tiktok.com → Sign up (PIN via email, nessuna password), "
+         "Content Posting API, scope video.upload, poi python3 setup_tiktok.py"),
         ("Bluesky", True,
          ("BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"),
          "bsky.app → Settings → App Passwords"),
+        ("Telegram", True,
+         ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+         "python3 setup_telegram.py"),
     )
     for nome_canale, acceso, chiavi, come in canali:
         mancanti = [k for k in chiavi if is_placeholder(env(k))]
         if not acceso:
-            print(f"  · {nome_canale:11} spento in config.yaml")
+            print(f"  ⏸ {nome_canale:13} in pausa in config.yaml")
         elif mancanti:
             # Acceso ma scollegato: è il caso che costa, non quello innocuo.
-            print(f"  ✗ {nome_canale:11} acceso ma SCOLLEGATO — manca "
+            print(f"  ✗ {nome_canale:13} acceso ma SCOLLEGATO — manca "
                   f"{', '.join(mancanti)}")
             if come:
                 print(f"      → {come}")
         else:
-            print(f"  ✓ {nome_canale:11} collegato")
+            print(f"  ✓ {nome_canale:13} collegato")
 
     print(f"\nCONFIGURAZIONE")
     for key in (
@@ -2628,6 +2638,22 @@ def _publish_one(conn, post) -> bool:
 
 def cmd_publish(args: argparse.Namespace) -> int:
     conn = connect()
+
+    # La pausa si controlla QUI e non dentro `_publish_one`, ed e' una
+    # differenza che conta. La', a instagram spento, il carosello non usciva
+    # ma `mark_published` veniva chiamato lo stesso poche righe piu' sotto:
+    # il post finiva a "pubblicato" senza media_id e la curiosita' risultava
+    # consumata senza essere mai uscita. Una pausa che brucia cio' che mette
+    # in pausa e' peggio di nessuna pausa.
+    #
+    # Fermandosi prima della coda, invece, non si tocca niente: i post
+    # restano "approved" e ripartono da soli quando si rimette true.
+    if not cfg.get("publish.instagram.enabled", True):
+        quanti = len(posts_by_status(conn, "approved"))
+        print("Caroselli in pausa (publish.instagram.enabled: false).")
+        print(f"  {quanti} in coda, intatti: ripartono da soli quando si riaccende.")
+        return 0
+
     queue = posts_by_status(conn, "approved")
     if not queue:
         print("Nessun post approvato in coda.")
