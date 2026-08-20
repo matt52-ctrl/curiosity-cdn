@@ -2893,6 +2893,13 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"  aggiornamento saltato: {exc}")
     print(analytics.rapporto_youtube(conn))
 
+    # Il sito. Sta qui e non in un comando suo perché la domanda a cui
+    # risponde è la stessa del resto del rapporto — cosa sta funzionando — ma
+    # su un canale che nessun algoritmo spinge: se una pagina viene letta,
+    # è perché qualcuno l'ha cercata o ci è arrivato da un link nostro.
+    from engine import sito_metriche
+    sito_metriche.stampa()
+
     imparato = analytics.brief_youtube(conn)
     if imparato:
         print("\n" + "═" * 76)
