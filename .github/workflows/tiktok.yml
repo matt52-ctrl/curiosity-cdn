@@ -30,18 +30,17 @@ name: Curiosity TikTok
 # ricevere una mail di errore ogni notte.
 
 on:
-  # ⚠️  ORARI ANCORA FERMI — vanno tolti i cancelletti, ma NON prima di aver
-  # registrato l'app sviluppatore. Il motivo non è il caricamento, che ormai
-  # esce a zero da solo quando le credenziali mancano: è il passo PRIMA.
-  # `run.py tiktok` monta i video, e montare significa consumare — la riga
-  # `segna_uso_fatto(..., "tiktok", ...)` marca ogni curiosità come già andata
-  # su TikTok. Con quattro giri al giorno sarebbero sedici curiosità al giorno
-  # bruciate per video che nessuno può ancora spedire, sopra ai tredici già
-  # fermi in output/tiktok/. Cioè il danno di agosto, moltiplicato.
+  # ORARI ACCESI il 20 agosto 2026, dopo la prima bozza arrivata davvero
+  # nell'app (publish_id v_inbox_file~v2.7676…, stato SEND_TO_USER_INBOX).
   #
-  # L'ordine giusto è: prima i tre secret TIKTOK_*, poi questi orari.
-  #
-  # schedule:
+  # Restavano fermi perché montare CONSUMA: `segna_uso_fatto(..., "tiktok",
+  # ...)` marca ogni curiosità come già uscita, quindi orari accesi senza app
+  # collegata bruciavano materiale per video non spedibili — il danno di
+  # agosto, moltiplicato per quattro. Adesso non serve più tenerli fermi:
+  # `cmd_tiktok` chiede il token PRIMA di montare e, se manca, esce a zero
+  # senza toccare niente. Il guardrail sta nel codice, non nella prudenza di
+  # chi si ricorda di non accendere l'interruttore.
+  schedule:
     # Quattro giri al giorno, uno per bozza, sotto il tetto TikTok di cinque
     # ogni 24 ore — il quinto posto resta libero per un recupero a mano.
     #
@@ -55,10 +54,10 @@ on:
     # Diversamente dai reel, qui l'orario del job NON è l'orario di uscita:
     # deposita solo la bozza, e a pubblicare sei tu quando la vedi. Contano
     # perciò gli orari in cui hai il telefono in mano, non quelli di TikTok.
-    # - cron: "15 6 * * *"     # ~9:00 italiane — la bozza ti aspetta al risveglio
-    # - cron: "15 10 * * *"    # ~13:00 italiane — pausa pranzo
-    # - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
-    # - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
+    - cron: "15 6 * * *"     # ~9:00 italiane — la bozza ti aspetta al risveglio
+    - cron: "15 10 * * *"    # ~13:00 italiane — pausa pranzo
+    - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
+    - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
@@ -91,10 +90,14 @@ jobs:
           cache: pip
 
       - name: Installa dipendenze
+        timeout-minutes: 12
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -r requirements.txt
-          playwright install --with-deps chromium
+          # Niente `playwright install`: qui nessun passo apre un browser, e
+          # il 19 agosto quel comando si è impiantato 45 minuti nel workflow
+          # dei reel facendo saltare la giornata YouTube. Il pacchetto pip
+          # serve (render.py lo importa), il browser no.
 
       - name: Scarica font e musica
         run: |
@@ -109,6 +112,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          # Servono ANCHE qui, non solo al passo che carica: da oggi il
+          # montaggio chiede il token prima di consumare una curiosità, e
+          # senza questi tre vedrebbe credenziali assenti e non monterebbe
+          # mai niente.
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
         # Uno per giro. Quattro giri al giorno restano sotto il tetto di
         # cinque bozze ogni 24 ore, con un margine per un recupero manuale.
         run: python run.py tiktok --quanti 1 --max-generazioni 1

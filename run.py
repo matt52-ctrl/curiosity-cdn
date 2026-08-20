@@ -975,6 +975,30 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
     from engine.db import quanti_liberi, segna_uso_fatto
     from engine.publish import tiktok
 
+    # Niente montaggio senza credenziali. E' il guardrail che mancava ed e'
+    # la ragione per cui gli orari sono stati tenuti fermi fino a oggi:
+    # montare CONSUMA — `segna_uso_fatto(..., "tiktok", ...)` marca ogni
+    # curiosita' come gia' uscita — quindi con gli orari accesi e l'app non
+    # ancora collegata si bruciavano curiosita' per video che nessuno poteva
+    # spedire. E' successo davvero ad agosto: tredici video montati, zero
+    # inviati, sessantadue curiosita' marcate.
+    #
+    # Sta qui e non in `ttcarica` perche' e' il montaggio a costare, non il
+    # caricamento. Uscire a zero e non in errore: le credenziali assenti sono
+    # una configurazione incompleta, non un guasto, e un giro rosso ogni notte
+    # e' una mail che dopo tre giorni non legge piu' nessuno.
+    from engine.publish import tiktok as _tt
+    try:
+        _tt._token_accesso()
+    except _tt.CredenzialiAssenti as exc:
+        print(f"· TikTok non collegato, non monto niente: {exc}")
+        return 0
+    except Exception:
+        # Credenziali presenti ma rifiutate: e' un guasto vero e va visto.
+        # Il montaggio prosegue lo stesso — i video restano pronti per
+        # quando il token torna valido, senza rifare il lavoro.
+        print("⚠ TikTok: credenziali presenti ma non valide, monto lo stesso")
+
     conn = connect()
     quante = int(cfg.get("publish.tiktok.facts_per_video", 4))
     durata = float(cfg.get("publish.tiktok.target_seconds", 45.0))
