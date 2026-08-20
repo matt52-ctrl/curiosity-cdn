@@ -664,10 +664,18 @@ def _rifornisci(conn) -> None:
     giornaliera, lasciando a secco anche le didascalie e le risposte.
     """
     fabbisogno = {
-        # Al giorno: 2 caroselli + 3 reel = 5 su Instagram; 3 video da 3
-        # curiosita' = 9 su YouTube. Si tiene circa un giorno di margine.
         "instagram": int(cfg.get("pipeline.buffer_instagram", 10)),
         "youtube": int(cfg.get("pipeline.buffer_youtube", 12)),
+        # TikTok mancava, ed e' il canale che consuma di piu' di tutti: quattro
+        # video al giorno da quattro curiosita' l'uno fanno sedici, contro le
+        # cinque e sei che la pipeline approva ogni giorno. Non comparendo qui
+        # non ha mai fatto scattare una generazione: si svuotava e basta, e il
+        # primo segno visibile sarebbe stato il canale fermo, giorni dopo.
+        #
+        # E' anche il motivo per cui il numero qui sotto e' il piu' alto: il
+        # buffer non e' una preferenza, e' il consumo giornaliero piu' un
+        # margine, e va rifatto ogni volta che si cambia il ritmo di un canale.
+        "tiktok": int(cfg.get("pipeline.buffer_tiktok", 20)),
     }
     tetto = int(cfg.get("pipeline.max_batches_per_run", 2))
 
@@ -1000,6 +1008,14 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
         print("⚠ TikTok: credenziali presenti ma non valide, monto lo stesso")
 
     conn = connect()
+
+    # Chi consuma di piu' deve anche rifornire. Finora `_rifornisci` girava
+    # solo nel ciclo dei reel, due volte al giorno, mentre TikTok gira quattro
+    # volte e si porta via sedici curiosita': prendeva dal magazzino senza mai
+    # farlo riempire. Con la voce "tiktok" nel fabbisogno, questa chiamata fa
+    # scattare la generazione quando le scorte scendono.
+    _rifornisci(conn)
+
     quante = int(cfg.get("publish.tiktok.facts_per_video", 4))
     durata = float(cfg.get("publish.tiktok.target_seconds", 45.0))
     voluti = int(args.quanti or cfg.get("publish.tiktok.batch", 20))

@@ -207,8 +207,20 @@ pipeline:
   # YouTube (3 video da 3): questi valori tengono circa un giorno di margine.
   # I due registri sono separati, quindi la stessa curiosità può servire
   # entrambi i canali — ma mai due volte lo stesso.
-  buffer_instagram: 10
-  buffer_youtube: 12
+  # Aggiornati il 20 agosto 2026 sul consumo VERO, che non era più quello del
+  # commento qui sopra. Il buffer non è una preferenza: è il consumo di un
+  # giorno più un margine, e va rifatto ogni volta che cambia il ritmo di un
+  # canale — altrimenti il magazzino si svuota senza che nulla lo segnali.
+  #
+  #   Instagram   1 carosello + 1 reel      =  2/giorno
+  #   YouTube     1 Short × 3 curiosità     =  3/giorno
+  #   TikTok      4 video × 4 curiosità     = 16/giorno   ← il più affamato
+  #
+  # TikTok mancava del tutto dal fabbisogno in `_rifornisci`: consumava sedici
+  # curiosità al giorno senza far scattare una sola generazione.
+  buffer_instagram: 6
+  buffer_youtube: 9
+  buffer_tiktok: 20
 
   # Tetto di generazioni per singolo giro. La generazione è l'unico punto che
   # può consumare quota senza un limite naturale: se il fact-check bocciasse
