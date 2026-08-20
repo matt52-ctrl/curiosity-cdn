@@ -278,6 +278,15 @@ publish:
     # dell'account. I reel NON sono toccati da questo interruttore e
     # continuano a uscire.
     enabled: false
+
+    # Quanti caroselli al giorno. Come per `reel.al_giorno`, NON è questo campo
+    # a farli uscire — a farli uscire sono le fasce in cycle.yml, una per
+    # carosello. Serve alla guardia in engine/allarme.py per sapere cosa
+    # aspettarsi: se i due numeri non combaciano, o grida al lupo ogni giorno
+    # o resta muta mentre il canale si ferma.
+    #
+    # Sceso da 2 a 1 il 20 agosto 2026, insieme alla fascia tolta in cycle.yml.
+    al_giorno: 1
   youtube:
     # Verificato con un caricamento reale l'11 agosto 2026.
     # Quota: 6 caricamenti al giorno — ai 3 reel attuali sta larga.

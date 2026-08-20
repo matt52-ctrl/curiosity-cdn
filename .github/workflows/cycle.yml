@@ -28,8 +28,20 @@ on:
     # desiderata (13:00 e 20:00 italiane): con il ritardo tipico si finisce
     # mediamente dentro. Se un giorno servisse precisione vera, l'unica
     # strada è un VPS con cron proprio.
-    - cron: "15 12 * * *"    # ~15:00 italiane — 9:00 a New York
+    #
+    # RIDOTTO a uno il 20 agosto 2026, stessa scelta già fatta per reel e
+    # Short il giorno prima: su canali nuovi due caroselli al giorno si
+    # tolgono spazio a vicenda, e con uno solo la differenza fra un aggancio
+    # buono e uno mediocre si legge invece di sparire nella media.
+    #
+    # Resta quello delle 21:00 e non quello delle 15:00 perché è il tardo
+    # pomeriggio a New York e la sera in Europa: prende i due pubblici
+    # insieme, mentre le 15:00 italiane sono le 9 del mattino a New York.
+    #
+    # L'orario tolto resta qui sotto commentato: rimetterlo è la cosa più
+    # probabile da fare quando il canale avrà dei numeri.
     - cron: "15 18 * * *"    # ~21:00 italiane — 15:00 a New York
+    # - cron: "15 12 * * *"    # ~15:00 italiane — 9:00 a New York
   # Permette di lanciarlo a mano dalla tab Actions, utile per provare.
   workflow_dispatch:
 
