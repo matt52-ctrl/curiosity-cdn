@@ -18,6 +18,16 @@ brand:
   # con lo stesso nome invece che una sola con due porte d'ingresso.
   youtube: "@OddlyWiredDaily"
 
+  # Gli altri due canali attivi. Compaiono sul sito — barra in alto, piè di
+  # pagina e i riquadri in fondo alle pagine — solo se questi campi sono
+  # pieni: chi arriva da uno Short deve poter trovare gli altri posti, e
+  # finché un canale non esiste il collegamento non viene emesso affatto.
+  #
+  # Bluesky vuole l'handle intero, dominio compreso, perché l'indirizzo del
+  # profilo è bsky.app/profile/<handle> e senza il dominio non risolve.
+  tiktok: "@oddlywireddaily"
+  bluesky: "oddlywireddaily.bsky.social"
+
 # ─── NICCHIA ──────────────────────────────────────────────────────────────────
 # Determina il prompt di generazione. Più è stretta, più l'algoritmo profila
 # bene il pubblico e più cresci. "Mix generalista" = crescita lenta.
@@ -549,8 +559,13 @@ sito:
   # Il nome del file e il contenuto li dà la piattaforma: TikTok → la tua app
   # → URL properties → aggiungi oddlywired.github.io → scarica il file di
   # verifica, e qui va il nome esatto con dentro la stringa esatta.
+  # Il nome del file NON è generico: TikTok lo lega alla stringa, quindi è
+  # `tiktok<codice>.txt` e il contenuto ripete lo stesso codice. Va riprodotto
+  # byte per byte — l'originale è 68 byte SENZA a capo finale, e `write_text`
+  # non ne aggiunge. Un a capo di troppo qui è una verifica che fallisce senza
+  # dire perché.
   file_radice:
-    tiktok-developers-site-verification.txt: ""
+    tiktokxDWsdLnQkxT2lh64aA83gVbxNUWSLObr.txt: "tiktok-developers-site-verification=xDWsdLnQkxT2lh64aA83gVbxNUWSLObr"
 
   # Misura del traffico. Vuoto = nessuno script, nessuna richiesta a terzi:
   # finché questo campo è vuoto le pagine restano identiche a prima.

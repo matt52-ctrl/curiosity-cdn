@@ -221,6 +221,8 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
     marchio = MARCHIO
     ig = (cfg.get("brand.handle", "") or "").lstrip("@")
     yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+    tk = (cfg.get("brand.tiktok", "") or "").lstrip("@")
+    bs = (cfg.get("brand.bluesky", "") or "").lstrip("@")
     nome = _e(cfg.get("brand.name", "Oddly Wired"))
 
     dati = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>' if jsonld else ""
@@ -281,6 +283,8 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
     <a href="{_radice()}sources/">Sources</a>
     {f'<a href="https://instagram.com/{ig}" rel="me">Instagram</a>' if ig else ''}
     {f'<a href="https://youtube.com/@{yt}" rel="me">YouTube</a>' if yt else ''}
+    {f'<a href="https://tiktok.com/@{tk}" rel="me">TikTok</a>' if tk else ''}
+    {f'<a href="https://bsky.app/profile/{bs}" rel="me">Bluesky</a>' if bs else ''}
   </nav>
 </div></header>
 <main><div class="guscio">
@@ -288,7 +292,7 @@ def _pagina(titolo: str, descrizione: str, corpo: str, percorso: str,
 </div></main>
 <footer><div class="guscio">
   <p>One checked fact a day. Every claim here names the study behind it.</p>
-  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a> · ' if yt else ''}<a href="{_radice()}privacy/">Privacy</a> · <a href="{_radice()}terms/">Terms</a></p>
+  <p>{f'<a href="https://instagram.com/{ig}">@{ig}</a> · ' if ig else ''}{f'<a href="https://youtube.com/@{yt}">YouTube</a> · ' if yt else ''}{f'<a href="https://tiktok.com/@{tk}">TikTok</a> · ' if tk else ''}{f'<a href="https://bsky.app/profile/{bs}">Bluesky</a> · ' if bs else ''}<a href="{_radice()}privacy/">Privacy</a> · <a href="{_radice()}terms/">Terms</a></p>
 </div></footer>
 </body></html>"""
 
@@ -353,6 +357,8 @@ def genera(conn: sqlite3.Connection) -> int:
     base = _base_url()
     ig = (cfg.get("brand.handle", "") or "").lstrip("@")
     yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+    tk = (cfg.get("brand.tiktok", "") or "").lstrip("@")
+    bs = (cfg.get("brand.bluesky", "") or "").lstrip("@")
 
     # Primo passaggio: si contano gli argomenti. Serve prima di scrivere le
     # pagine perche' ognuna deve sapere quali delle sue etichette avranno una
@@ -454,6 +460,8 @@ def genera(conn: sqlite3.Connection) -> int:
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">One a day on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
+  {f'<a href="https://tiktok.com/@{tk}">Short version on TikTok</a>' if tk else ''}
+  {f'<a href="https://bsky.app/profile/{bs}">One a day on Bluesky</a>' if bs else ''}
 </div>"""
 
         cartella = DOCS / "f" / slug
@@ -548,6 +556,8 @@ def genera(conn: sqlite3.Connection) -> int:
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">Follow on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
+  {f'<a href="https://tiktok.com/@{tk}">Short version on TikTok</a>' if tk else ''}
+  {f'<a href="https://bsky.app/profile/{bs}">One a day on Bluesky</a>' if bs else ''}
 </div>
 <div class="strumenti">
   <input id="cerca" type="search" placeholder="Search {len(voci)} checked facts…"
