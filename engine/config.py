@@ -48,7 +48,22 @@ class Config:
 
 
 def env(name: str, default: str = "") -> str:
-    return os.environ.get(name, default) or default
+    """Il valore, ripulito dagli spazi e dagli a-capo ai bordi.
+
+    Il `.strip()` non è cosmetico: nasce da un guasto vero. Il 20 agosto 2026
+    il token Telegram è stato incollato nei secret di GitHub con un a-capo in
+    fondo, e la libreria HTTP ha rifiutato l'indirizzo con «Invalid
+    non-printable ASCII character in URL, '\\n' at position 74» — cioè
+    esattamente dopo il token. Le didascalie TikTok non sono arrivate per due
+    giri, mentre tutto il resto sembrava funzionare.
+
+    È il tipo di guasto che costa ore perché il messaggio non nomina il
+    colpevole: parla di un URL malformato, e nessuno va a cercare uno spazio
+    invisibile in un segreto mascherato da asterischi. Ripulire qui lo rende
+    impossibile per TUTTE le credenziali, non solo per quella che è già
+    esplosa — le altre trenta hanno lo stesso difetto latente.
+    """
+    return (os.environ.get(name, default) or default).strip()
 
 
 # Valori che compaiono in .env.example: non sono vuoti, quindi senza questo
