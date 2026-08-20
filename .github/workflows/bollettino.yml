@@ -1,0 +1,65 @@
+# Bollettino quotidiano su Telegram — come stanno andando i canali.
+#
+# Perché esiste: un sistema che devi controllare a mano non è automatico.
+# Prima, per sapere se qualcosa era uscito, bisognava aprire GitHub, YouTube
+# Studio, l'app di TikTok e il pannello di Cloudflare — quattro posti, ogni
+# giorno, per scoprire quasi sempre che era tutto a posto. Quel costo si paga
+# anche nei giorni in cui non serve, ed è il motivo per cui si smette di
+# controllare proprio prima del giorno in cui servirebbe.
+#
+# Non sostituisce gli allarmi: quelli scattano quando un canale si ferma e
+# arrivano quando serve. Questo arriva sempre, e serve a vedere i numeri
+# salire o scendere senza doverli andare a cercare.
+#
+# È l'unico workflow che non tocca il database: legge e basta, quindi non ha
+# il passo di salvataggio e non entra nel gruppo `curiosity-state`.
+
+name: Curiosity bollettino
+
+on:
+  schedule:
+    # Una volta al giorno, alle ~11:00 italiane. DOPO il giro TikTok delle 6:15
+    # UTC e prima di quello delle 10:15, così il conteggio delle ultime 24 ore
+    # comprende già la bozza del mattino invece di mancarla per pochi minuti.
+    #
+    # Anticipato di 45 minuti come tutti gli altri: GitHub accoda i job
+    # schedulati e parte in ritardo, misurato fino a 64 minuti.
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+
+# Nessun permesso di scrittura: questo workflow non commit niente.
+permissions:
+  contents: read
+
+jobs:
+  bollettino:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Solo le dipendenze Python: niente ffmpeg, niente browser. Il
+      # bollettino fa quattro chiamate HTTP e legge il database.
+      - name: Installa dipendenze
+        timeout-minutes: 12
+        run: pip install -r requirements.txt
+
+      - name: Manda il bollettino
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+        run: python run.py bollettino

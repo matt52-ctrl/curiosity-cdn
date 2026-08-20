@@ -56,7 +56,12 @@ on:
     # perciò gli orari in cui hai il telefono in mano, non quelli di TikTok.
     - cron: "15 6 * * *"     # ~9:00 italiane — la bozza ti aspetta al risveglio
     - cron: "15 10 * * *"    # ~13:00 italiane — pausa pranzo
-    - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
+    # Le 17:15 e non le 16:15: a quell'ora gira il ciclo dei reel, che
+    # condivide il gruppo di concorrenza `curiosity-state`. Due giri dello
+    # stesso gruppo in coda insieme non si accodano educatamente — GitHub
+    # ne tiene uno solo in attesa e ANNULLA l'altro. È successo il 19
+    # agosto e costò la giornata YouTube.
+    - cron: "15 17 * * *"    # ~19:15 italiane — sera Europa, pomeriggio USA
     - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:

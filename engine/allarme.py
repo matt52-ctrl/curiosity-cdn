@@ -34,6 +34,17 @@ def segnala(ambito: str, messaggio: str) -> None:
     _raccolti.append((ambito, str(messaggio).strip().replace("\n", " ")[:400]))
 
 
+def elenco() -> list:
+    """I guasti raccolti finora, come testo leggibile.
+
+    Serve a chi vuole COMPORRE un messaggio invece di stamparlo — il
+    bollettino quotidiano, per esempio. `riepiloga` stampa e invia da sola,
+    che va bene per un workflow ma non per chi sta costruendo un messaggio
+    piu' grande e vuole solo sapere cosa mettere in cima.
+    """
+    return [f"{ambito}: {msg}" for ambito, msg in _raccolti]
+
+
 def critico(exc: Exception) -> bool:
     """Dice se un'eccezione è di quelle che non si risolvono da sole.
 

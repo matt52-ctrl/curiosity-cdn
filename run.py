@@ -1528,6 +1528,27 @@ def cmd_bluesky(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bollettino(args: argparse.Namespace) -> int:
+    """Manda su Telegram il riassunto di come stanno andando i canali.
+
+    Esiste perche' un sistema che devi controllare a mano non e' automatico.
+    Prima, per sapere se qualcosa era uscito, bisognava aprire GitHub, YouTube
+    Studio, l'app di TikTok e il pannello di Cloudflare: quattro posti ogni
+    giorno per scoprire quasi sempre che era tutto a posto. Quel costo si paga
+    anche nei giorni in cui non serve, ed e' il motivo per cui si smette di
+    controllare proprio prima del giorno in cui servirebbe.
+    """
+    from engine import bollettino
+
+    conn = connect()
+    if args.prova:
+        print(bollettino.componi(conn))
+        return 0
+    if bollettino.manda(conn):
+        print("bollettino inviato su Telegram")
+    return 0
+
+
 def cmd_pinterest(args: argparse.Namespace) -> int:
     """Porta su Pinterest i caroselli gia' costruiti.
 
@@ -3148,6 +3169,12 @@ def main() -> int:
     p.add_argument("--prova", action="store_true",
                    help="scrivi a schermo senza pubblicare")
     p.set_defaults(func=cmd_bluesky)
+
+    p = sub.add_parser("bollettino",
+                       help="manda su Telegram come stanno andando i canali")
+    p.add_argument("--prova", action="store_true",
+                   help="scrivi a schermo senza mandare")
+    p.set_defaults(func=cmd_bollettino)
 
     p = sub.add_parser("pinterest", help="porta i caroselli su Pinterest")
     p.add_argument("--quanti", type=int, default=1)
