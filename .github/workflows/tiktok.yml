@@ -94,10 +94,17 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           pip install -r requirements.txt
-          # Niente `playwright install`: qui nessun passo apre un browser, e
-          # il 19 agosto quel comando si è impiantato 45 minuti nel workflow
-          # dei reel facendo saltare la giornata YouTube. Il pacchetto pip
-          # serve (render.py lo importa), il browser no.
+          # Il browser SERVE: reel.py importa `render` dentro alle funzioni
+          # (engine/reel.py:386) e render_slides apre Chromium per trasformare
+          # l'HTML delle schede in PNG. Il 20 agosto l'ho tolto sbagliando —
+          # avevo controllato solo gli import in cima ai file — e i giri sono
+          # morti con "Executable doesn't exist at .cache/ms-playwright".
+          #
+          # Resta però il tetto qui sopra: il 19 agosto questo stesso comando
+          # si era impiantato 45 minuti sull'apt-get delle librerie di sistema,
+          # mangiandosi l'intero job. Con `timeout-minutes` muore il passo e
+          # non la giornata, e il giro dopo ritenta.
+          playwright install --with-deps chromium
 
       - name: Scarica font e musica
         run: |
