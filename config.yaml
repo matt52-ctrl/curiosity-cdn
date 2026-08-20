@@ -537,6 +537,21 @@ sito:
   # Serve il secret SITE_TOKEN con permesso Contents: Read and write.
   repo: "oddlywired/oddlywired.github.io"
 
+  # File scritti alla radice del sito, così come sono. Servono a dimostrare a
+  # una piattaforma che il dominio è tuo: lei dà una stringa, tu la pubblichi
+  # a un indirizzo preciso, lei va a leggerla. TikTok lo pretende prima di
+  # accettare gli indirizzi di privacy, termini e ritorno OAuth.
+  #
+  # Perché qui e non a mano dentro docs/: docs/ si rigenera. Un file messo lì
+  # a mano sopravvive finché non si fa pulizia, poi sparisce e la verifica
+  # cade mesi dopo senza che nessuno colleghi le due cose.
+  #
+  # Il nome del file e il contenuto li dà la piattaforma: TikTok → la tua app
+  # → URL properties → aggiungi oddlywired.github.io → scarica il file di
+  # verifica, e qui va il nome esatto con dentro la stringa esatta.
+  file_radice:
+    tiktok-developers-site-verification.txt: ""
+
   # Misura del traffico. Vuoto = nessuno script, nessuna richiesta a terzi:
   # finché questo campo è vuoto le pagine restano identiche a prima.
   #

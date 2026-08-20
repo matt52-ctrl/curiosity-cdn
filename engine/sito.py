@@ -323,6 +323,21 @@ def genera(conn: sqlite3.Connection) -> int:
     # cartelle che iniziano per underscore e a volte rimaneggia l'HTML.
     (DOCS / ".nojekyll").write_text("", encoding="utf-8")
 
+    # File di verifica alla radice del sito.
+    #
+    # Servono a dimostrare a una piattaforma che il dominio e' tuo: lei ti da'
+    # una stringa, tu la pubblichi a un indirizzo preciso, lei va a leggerla.
+    # TikTok lo pretende prima di accettare gli indirizzi di privacy, termini
+    # e ritorno OAuth; altri lo chiedono allo stesso modo.
+    #
+    # Stanno in configurazione e non a mano dentro docs/ per un motivo pratico:
+    # `docs/` si rigenera, e un file messo li' a mano sopravvive finche' non
+    # si fa pulizia — poi sparisce e la verifica cade mesi dopo, senza che
+    # nessuno colleghi le due cose. Da qui invece si riscrive a ogni giro.
+    for nome_file, contenuto in (cfg.get("sito.file_radice", {}) or {}).items():
+        if str(contenuto or "").strip():
+            (DOCS / str(nome_file)).write_text(str(contenuto), encoding="utf-8")
+
     # Tutte le verificate, non solo quelle gia' uscite sui social. Il sito e'
     # un archivio, non un feed: razionare le pagine non ha alcun vantaggio, e
     # la pipeline verifica piu' in fretta di quanto i social consumino —
