@@ -125,8 +125,13 @@ def componi_metadati(hook: str, reveal: str, caption: str, tags: list,
     # aggiunge il collegamento diretto, per chi invece la apre.
     from ..config import cfg
 
-    # Su YouTube i link nella descrizione SONO cliccabili, al contrario di
-    # Instagram: qui conviene l'URL completo, non il solo nome.
+    # ⚠️ La richiesta di iscriversi NON sta qui: arriva dentro `caption`, che
+    # il chiamante compone con `lines.corpo_didascalia(..., canale="youtube")`.
+    # Prima che quel parametro esistesse la descrizione ereditava `caption.cta`
+    # tale e quale — una riga scritta per Instagram, con la chiocciola
+    # Instagram — e sommata al rimando qui sotto chiedeva DUE VOLTE di andare
+    # altrove senza chiedere mai un'iscrizione. Chi cambia il chiamante e si
+    # dimentica `canale` fa tornare quel difetto, e non se ne accorge nessuno.
     handle = (cfg.get("brand.handle", "") or "").lstrip("@")
     # Chiocciola e non indirizzo: nelle descrizioni degli Short YouTube NON
     # rende cliccabili i link, per scelta anti-spam. Un URL che non si clicca

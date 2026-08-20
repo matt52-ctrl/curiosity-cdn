@@ -475,6 +475,59 @@ caption:
   # ridondante. Riattivare mettendo una stringa qui se le regole cambiano.
   ai_disclosure: ""
 
+# ─── LA RICHIESTA FINALE ──────────────────────────────────────────────────────
+# Fino al 20 agosto 2026 i video finivano e basta: l'ultima curiosità sfumava e
+# il file era finito. Nessuna richiesta, mai, in nessuno dei tre formati. Il
+# ponte verso gli altri canali stava solo nel commento fissato di TikTok, che
+# lo legge una frazione di chi guarda.
+#
+# Perché una domanda e non "iscriviti": si commenta per avere ragione, non per
+# dare un'opinione. "Which one was new to you?" ha una risposta breve — un
+# numero — e chi ha appena visto quattro curiosità ce l'ha già in testa. Un
+# "dimmi cosa ne pensi" chiede di comporre una frase, che è dieci volte il
+# lavoro e infatti non lo fa nessuno.
+#
+# La chiocciola NON va scritta qui: il filigrana `brand.watermark` è già
+# stampato in fondo a ogni fotogramma, compreso questo. Ripeterla toglierebbe
+# spazio alla richiesta senza aggiungere niente.
+cta:
+  # Il fotogramma si aggiunge DOPO l'ultima curiosità, non le ruba tempo.
+  # 2,4 secondi: il minimo per leggere due righe corte. Il totale passa da 45
+  # a 47 su TikTok e da 33 a 35 su YouTube — dentro le finestre premiate in
+  # tutti e due i casi (42-54 e 30-45).
+  #
+  # ⚠️ Allungare il video ABBASSA la percentuale di visione anche se non
+  # guarda meno nessuno: gli stessi 22 secondi visti su 47 fanno 48% dove su
+  # 45 facevano 50%. Da qui in poi il numero da guardare è
+  # `averageViewDuration` in SECONDI, non la percentuale. Chi confronta le
+  # percentuali prima e dopo questa riga conclude il contrario di quello che
+  # è successo.
+  secondi: 2.4
+
+  # Fissa, non generata dal modello. Se cambiasse a ogni video non sapremmo se
+  # a muovere i numeri è la richiesta o quale versione è capitata. Si passa a
+  # una versione generata solo dopo che questa ha dato una misura.
+  domanda: "Which one was new to you?"
+
+  # Il verbo cambia per piattaforma — su YouTube si dice "subscribe", altrove
+  # "follow" — e usare la parola sbagliata segnala che il video è riciclato.
+  azione:
+    youtube: "Subscribe. One checked study a day."
+    tiktok: "Follow. One checked study a day."
+    default: "One checked study a day."
+
+  # Le stesse richieste in forma di testo, per descrizioni e didascalie. Qui
+  # lo spazio non è il vincolo — l'attenzione sì, quindi restano una riga.
+  #
+  # Senza la voce `youtube` la descrizione di uno Short chiedeva DUE VOLTE di
+  # andare su Instagram (`caption.cta`, che porta la chiocciola Instagram, più
+  # il rimando esplicito in youtube.py) e non chiedeva mai di iscriversi: il
+  # canale che vogliamo far crescere mandava via il suo pubblico.
+  # Un canale senza voce qui ricade su `caption.cta`.
+  testo:
+    youtube: "Subscribe if you want one of these every day."
+    tiktok: "Follow for one checked study a day."
+
 # ─── REEL ─────────────────────────────────────────────────────────────────────
 # Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti
 # diversi. Se i video si rompono, i post continuano a uscire.

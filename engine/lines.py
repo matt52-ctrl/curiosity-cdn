@@ -363,7 +363,8 @@ Return JSON matching the schema."""
     return [l for l in linee if not l.get("_doppione")]
 
 
-def corpo_didascalia(line: Dict[str, Any], ponte: bool = True) -> str:
+def corpo_didascalia(line: Dict[str, Any], ponte: bool = True,
+                     canale: str = "") -> str:
     """La didascalia senza hashtag.
 
     Sta separata da `full_caption` perche' i due usi vogliono cose diverse e
@@ -379,6 +380,13 @@ def corpo_didascalia(line: Dict[str, Any], ponte: bool = True) -> str:
     dove quella riga invitava a cercare il canale che si sta gia' guardando —
     e nella stessa descrizione compariva due righe sotto il rimando opposto,
     verso Instagram. Il richiamo incrociato ha senso solo verso l'altra parte.
+
+    `canale` decide quale richiesta finale mettere. Serve perche' `caption.cta`
+    e' scritta per Instagram — porta la chiocciola Instagram — e finiva tale e
+    quale nella descrizione degli Short: il canale YouTube chiedeva due volte
+    di andare altrove e non chiedeva mai di iscriversi. Senza `canale` il
+    comportamento resta quello di prima, per i richiami che non sanno dove
+    stanno andando.
     """
     # La didascalia arriva a pezzi e si unisce qui con le righe vuote: prima
     # si chiedeva al modello di formattarla e la comprimeva in un blocco solo,
@@ -387,7 +395,8 @@ def corpo_didascalia(line: Dict[str, Any], ponte: bool = True) -> str:
     if isinstance(grezza, dict):
         pezzi = [x.strip() for x in (grezza.get("apertura"), grezza.get("prova"))
                  if x and x.strip()]
-        cta = cfg.get("caption.cta", "")
+        cta = (cfg.get(f"cta.testo.{canale}", "") if canale else "") \
+            or cfg.get("caption.cta", "")
         if cta:
             pezzi.append(cta)
     else:

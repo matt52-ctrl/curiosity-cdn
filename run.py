@@ -888,7 +888,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
 
     import hashlib as _h
     nome = _h.sha1(frasi[0]["line"].encode()).hexdigest()[:10]
-    video, montate = _reel.build_multi(voci, nome)
+    video, montate = _reel.build_multi(voci, nome, canale="youtube")
     if not video:
         print("    montaggio fallito")
         return ("montaggio a vuoto: le frasi c'erano, il video non e' nato. "
@@ -904,7 +904,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
 
     meta = youtube.componi_metadati(
         frasi[0]["hook"], frasi[0]["reveal"],
-        lines.corpo_didascalia(frasi[0], ponte=False),
+        lines.corpo_didascalia(frasi[0], ponte=False, canale="youtube"),
         frasi[0].get("hashtags", []),
         altre=[f["line"] for f in frasi[1:]],
     )
@@ -1078,7 +1078,8 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
         import hashlib as _h
         nome = "tt-" + _h.sha1(frasi[0]["line"].encode()).hexdigest()[:8]
         try:
-            video, montate = _reel.build_multi(voci, nome, totale=durata)
+            video, montate = _reel.build_multi(voci, nome, totale=durata,
+                                               canale="tiktok")
         except Exception as exc:
             print(f"  ✗ montaggio fallito: {str(exc)[:90]}")
             falliti += 1

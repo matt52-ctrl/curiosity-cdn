@@ -91,7 +91,16 @@ def _bluesky() -> str:
 
 
 def _youtube(conn: sqlite3.Connection) -> List[str]:
-    """Le viste degli ultimi giorni. L'API è indietro: si dice, non si nasconde."""
+    """Le viste degli ultimi giorni. L'API è indietro: si dice, non si nasconde.
+
+    Perché ci sono sia i secondi che la percentuale, e i secondi vengono prima:
+    dal 20 agosto 2026 i video portano un fotogramma finale con la richiesta, e
+    sono due secondi e mezzo più lunghi. La percentuale scende da sola — gli
+    stessi 22 secondi guardati valgono 50% su 45 e 48% su 47 — mentre i secondi
+    guardati non si muovono. Chi confronta le percentuali attraverso quella
+    data conclude che la richiesta ha peggiorato i video, che è il contrario di
+    quello che i dati dicono. Il numero da leggere è il primo.
+    """
     try:
         from .publish import youtube as yt
         token = yt.access_token()
@@ -104,7 +113,9 @@ def _youtube(conn: sqlite3.Connection) -> List[str]:
                       params={"ids": "channel==MINE",
                               "startDate": str(oggi - _dt.timedelta(days=6)),
                               "endDate": str(oggi),
-                              "metrics": "views,subscribersGained",
+                              "metrics": "views,subscribersGained,"
+                                         "averageViewDuration,"
+                                         "averageViewPercentage",
                               "dimensions": "day", "sort": "day"}, timeout=30)
         righe = r.json().get("rows", [])
     except Exception as exc:
@@ -114,8 +125,18 @@ def _youtube(conn: sqlite3.Connection) -> List[str]:
     viste = sum(x[1] for x in righe)
     iscritti = sum(x[2] for x in righe)
     ultimo = righe[-1]
-    return [f"7 giorni: {viste} viste · +{iscritti} iscritti",
-            f"ultimo dato ({ultimo[0][5:]}): {ultimo[1]} viste"]
+    fuori = [f"7 giorni: {viste} viste · +{iscritti} iscritti",
+             f"ultimo dato ({ultimo[0][5:]}): {ultimo[1]} viste"]
+
+    # Media pesata sulle viste, non media delle medie: un giorno da 3 viste
+    # peserebbe come uno da 2500 e il numero direbbe una cosa che non è
+    # successa. Con `dimensions=day` l'API dà una media per giornata, quindi il
+    # peso va rimesso a mano.
+    if viste and len(ultimo) > 4:
+        secondi = sum(x[1] * x[3] for x in righe) / viste
+        quota = sum(x[1] * x[4] for x in righe) / viste
+        fuori.append(f"visione media: {secondi:.0f}s ({quota:.0f}%)")
+    return fuori
 
 
 def componi(conn: sqlite3.Connection) -> str:

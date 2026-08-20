@@ -347,6 +347,71 @@ def build_line(
     return out
 
 
+def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
+              indice: int, canale: str = "") -> Optional[Path]:
+    """Il fotogramma finale: cosa chiediamo a chi è arrivato in fondo.
+
+    Perché esiste: fino al 20 agosto 2026 i video finivano e basta. L'ultima
+    rivelazione sfumava, il file era finito, e a chi aveva guardato tutto non
+    veniva chiesto niente — né di iscriversi né di rispondere. Non era una CTA
+    debole, non c'era proprio.
+
+    Perché in coda e non sopra l'ultima rivelazione: la rivelazione è la parte
+    che la gente ferma e rimanda a qualcuno, e dividere quel fotogramma fra la
+    risposta e una richiesta le indebolisce entrambe. Il prezzo di metterla in
+    coda è che il video si allunga, ed è un prezzo che si paga in un modo
+    subdolo — vedi la nota su `cta.secondi` in config.yaml: la percentuale di
+    visione scende anche se non guarda meno nessuno.
+
+    Lo sfondo è quello dell'ultima curiosità, già scaricato: cercarne uno nuovo
+    costerebbe una chiamata a Pexels per due secondi di video.
+
+    ⚠️ I parametri di codifica devono restare IDENTICI a quelli dei segmenti
+    del ciclo qui sopra. La concatenazione usa `-c:v copy` e non ricodifica:
+    con un fps o un profilo diverso il video esce corrotto e ffmpeg non dice
+    niente. Se si tocca la riga di codifica di sopra, va toccata anche questa.
+    """
+    from . import render
+
+    domanda = (cfg.get("cta.domanda", "") or "").strip()
+    if not domanda:
+        return None
+    azione = (cfg.get(f"cta.azione.{canale}", "")
+              or cfg.get("cta.azione.default", "") or "").strip()
+    dur = float(cfg.get("cta.secondi", 2.4))
+
+    # La chiocciola non si scrive: `brand.watermark` è già stampato in fondo a
+    # ogni fotogramma, questo compreso.
+    overlay = render.render_slides(
+        [{"kicker": "", "headline": domanda, "body": azione}],
+        f"{nome}-cta", "line", size=REEL_SIZE, transparent=True,
+    )[0]
+
+    w, h = REEL_SIZE
+    seg = tmp / f"{indice:02d}.mp4"
+    filtro = (
+        f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+        f"crop={w}:{h},{_gradazione()}format=yuv420p[bg];"
+        # Entra subito ma non di colpo: 0,35 di dissolvenza. Su due secondi e
+        # mezzo un ingresso più lento mangerebbe il tempo di lettura.
+        f"[1:v]format=rgba,fade=t=in:st=0:d=0.35:alpha=1,"
+        f"fade=t=out:st={dur - 0.45:.2f}:d=0.4:alpha=1[t];"
+        f"[bg][t]overlay=0:0:format=auto[v]"
+    )
+    _run([
+        ff, "-y",
+        "-stream_loop", "-1", "-t", f"{dur}", "-i", str(sfondo),
+        "-loop", "1", "-t", f"{dur}", "-i", str(overlay),
+        "-filter_complex", filtro, "-map", "[v]",
+        "-t", f"{dur}",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-maxrate", "6M", "-bufsize", "12M",
+        "-pix_fmt", "yuv420p", "-r", "30",
+        str(seg),
+    ])
+    return seg
+
+
 def build(slides: List[Dict[str, str]], name: str) -> Path:
     """Dalle battute al file mp4."""
     from . import render
@@ -365,7 +430,8 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
 
 def build_multi(voci: List[Dict], name: str,
                 totale: Optional[float] = None,
-                massimo: Optional[float] = None) -> tuple:
+                massimo: Optional[float] = None,
+                canale: str = "") -> tuple:
     """Ritorna (percorso, voci_effettivamente_montate).
 
     Le due cose vanno insieme: se un filmato non si trova quel segmento salta,
@@ -430,6 +496,7 @@ def build_multi(voci: List[Dict], name: str,
 
     segmenti: List[Path] = []
     montate: List[Dict] = []
+    ultimo_sfondo: Optional[Path] = None
     for i, v in enumerate(voci):
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
@@ -438,6 +505,7 @@ def build_multi(voci: List[Dict], name: str,
             print(f"    nessun filmato per la curiosita' {i+1}: la salto")
             continue
         montate.append(v)
+        ultimo_sfondo = sfondo
 
         overlays = render.render_slides(
             [
@@ -478,12 +546,27 @@ def build_multi(voci: List[Dict], name: str,
     if not segmenti:
         return None, []
 
+    durata = per_voce * len(segmenti)
+
+    # La richiesta finale. Si aggiunge in coda, quindi non toglie tempo a
+    # nessuna curiosita': il video si allunga di due secondi e mezzo.
+    #
+    # Se fallisce il video esce lo stesso, senza. Un fotogramma di CTA non
+    # vale la perdita dell'intero montaggio — e la fascia oraria di uno Short
+    # non si recupera.
+    if ultimo_sfondo is not None:
+        try:
+            coda = _coda_cta(ff, ultimo_sfondo, name, tmp, len(segmenti), canale)
+            if coda:
+                segmenti.append(coda)
+                durata += float(cfg.get("cta.secondi", 2.4))
+        except Exception as exc:
+            print(f"    fotogramma finale non montato: {str(exc)[:80]}")
+
     # Concatenazione + una sola traccia musicale sopra l'intero video: cambiare
     # brano a ogni curiosita' spezzerebbe il video in tre cose separate.
     elenco = tmp / "elenco.txt"
     elenco.write_text("".join(f"file '{s.name}'\n" for s in segmenti))
-
-    durata = per_voce * len(segmenti)
     musica = _traccia_a_caso(name, voci[0].get("mood", "reflective"))
     out = out_dir / "short.mp4"
 

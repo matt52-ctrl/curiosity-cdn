@@ -151,9 +151,29 @@ def componi_didascalia(frasi: list) -> Dict[str, str]:
                 propri.append(h)
     scelti = (propri[:2] + tag)[:5]
 
+    # "three more" era scritto a mano e valeva solo per i video da quattro
+    # curiosita'. Bastava cambiare `publish.tiktok.facts_per_video` perche' la
+    # didascalia annunciasse un numero diverso da quello nel video — una bugia
+    # verificabile in dieci secondi da chiunque guardi.
+    altre = max(0, len(frasi) - 1)
+    numeri = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+    coda = (f" — and {numeri.get(altre, altre)} more thing"
+            f"{'' if altre == 1 else 's'} your mind does without asking"
+            if altre else "")
+
+    # La richiesta sta in didascalia e non solo nel commento fissato: il
+    # commento e' il ponte verso gli altri canali — dove trovare il resto — e
+    # non chiede niente. Prima di oggi il video non chiedeva mai nulla, ne'
+    # nel filmato ne' nel testo.
+    richiesta = (cfg.get("cta.testo.tiktok", "") or "").strip()
+
+    pezzi = [f"{apertura}{coda}."]
+    if richiesta:
+        pezzi.append(richiesta)
+    pezzi.append(" ".join("#" + x for x in scelti))
+
     return {
-        "didascalia": f"{apertura} — and three more things your mind does without asking.\n\n"
-                      + " ".join("#" + x for x in scelti),
+        "didascalia": "\n\n".join(pezzi),
         # Il commento fissato è il ponte verso le altre due piattaforme. Sta
         # nei commenti e non nella didascalia per due motivi: la didascalia
         # viene troncata, e TikTok tratta con più sospetto ciò che spinge
