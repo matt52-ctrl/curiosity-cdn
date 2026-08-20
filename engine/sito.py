@@ -163,6 +163,27 @@ footer p { margin-bottom:.6rem; }
                     color:var(--oro); line-height:1.35; }
 .fonti .sotto { margin-top:.3rem; }
 
+/* Telefono. Il sito non aveva NESSUNA regola per schermi stretti: reggeva per
+   caso finché la barra in alto aveva due voci, e si è rotto il giorno in cui
+   sono diventate quattro. Misurato su 375 px: viewport 375, contenuto 461,
+   ottantasei pixel di scorrimento laterale su ogni pagina.
+
+   La barra passa sotto al nome invece di stringersi: comprimere quattro voci
+   in centottanta pixel le renderebbe illeggibili, e una riga in più costa
+   molto meno di quattro etichette da cinque punti. */
+@media (max-width: 34rem) {
+  header .guscio { flex-wrap:wrap; row-gap:.9rem; }
+  header nav { margin-left:0; width:100%; flex-wrap:wrap; gap:.9rem; font-size:.84rem; }
+
+  /* Gli indirizzi lunghi — quelli degli studi, quello del sito nelle pagine
+     legali — non hanno spazi dove andare a capo e sfondano la colonna. */
+  .corpo, .elenco, .verifica { overflow-wrap:anywhere; }
+
+  /* Due riquadri affiancati non ci stanno: 11rem l'uno più il divario
+     superano la colonna utile. Uno per riga, a piena larghezza. */
+  .altrove a { min-width:100%; }
+}
+
 /* La curiosità del giorno: uguale per tutti, cambia a mezzanotte. È il motivo
    per tornare che al sito mancava del tutto — chi l'aveva già visto non aveva
    nessuna ragione di riaprirlo. */

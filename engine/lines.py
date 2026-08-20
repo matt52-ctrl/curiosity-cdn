@@ -141,17 +141,31 @@ What does NOT change:
 
 
 def scegli_variante(conn) -> str:
-    """Sceglie il gruppo tenendo la prova bilanciata.
+    """Il registro con cui scrivere. Dal 20 agosto 2026 non e' piu' una prova.
 
-    Non a caso: con pochi video il caso produce facilmente 5 contro 1, e un
-    confronto sbilanciato non si legge. Si guarda quale gruppo ha meno video e
-    si assegna quello.
+    La prova A/B e' finita e ha un vincitore. Su sette video per gruppo con
+    dati di visione:
+
+        osservazione     34, 36, 40, 41, 51, 55, 61   mediana 41%
+        riconoscimento   40, 45, 45, 50, 52, 74, 115  mediana 50%
+
+    Non e' un video fuori scala a trascinare la media: il PEGGIORE di
+    riconoscimento vale quanto la mediana di osservazione, e togliendo il 115
+    la mediana resta 47,5. Ogni quantile e' piu' alto. I like sono identici
+    nei due gruppi (0,7%), quindi la differenza sta esattamente dove conta —
+    nella percentuale di visione, che e' il numero con cui YouTube decide se
+    rilanciare uno Short.
+
+    Sette video per gruppo non sono una certezza statistica. Ma da quando il
+    ritmo e' sceso a uno Short al giorno, aspettarla vorrebbe dire mesi di
+    pubblicazioni scritte per meta' nel registro che sappiamo peggiore. Il
+    costo dell'attesa supera il valore della certezza in piu'.
+
+    `scegli_variante` resta come funzione, e resta l'unico punto da cambiare
+    se un giorno si vuole aprire una prova nuova: quel giorno si rimette il
+    bilanciamento e si aggiunge una terza voce a VARIANTI.
     """
-    conteggi = {v: 0 for v in VARIANTI}
-    for r in conn.execute("SELECT variante, COUNT(*) n FROM esperimento GROUP BY variante"):
-        if r["variante"] in conteggi:
-            conteggi[r["variante"]] = r["n"]
-    return min(VARIANTI, key=lambda v: conteggi[v])
+    return "riconoscimento"
 
 
 def _system(variante: str = "osservazione") -> str:
