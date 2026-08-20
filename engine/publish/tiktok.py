@@ -163,10 +163,26 @@ def componi_didascalia(frasi: list) -> Dict[str, str]:
 
 
 def _ponte() -> str:
-    """Il commento da fissare sotto al video: dove trovare il resto."""
+    """Il commento da fissare sotto al video: dove trovare il resto.
+
+    Il sito viene per primo, e non per vanita': e' l'unico posto dove la
+    curiosita' porta lo studio con autore e anno, ed e' l'unica destinazione
+    che non appartiene a nessuna piattaforma. Instagram e YouTube mandano il
+    pubblico da una parte all'altra della stessa recinzione; il sito e' l'unica
+    porta che resta aperta se una delle due cambia idea domani.
+
+    Sta nel commento fissato e non nella didascalia per due motivi gia' validi
+    prima: la didascalia viene troncata dopo poche righe, e TikTok tratta con
+    piu' sospetto cio' che spinge fuori quando sta nel corpo del post.
+    """
     ig = (cfg.get("brand.handle", "") or "").lstrip("@")
     yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+    sito = (cfg.get("sito.url", "") or "").rstrip("/")
     pezzi = ["One checked fact a day."]
+    if sito:
+        # Senza "https://": scritto per esteso l'indirizzo occupa piu' spazio e
+        # non diventa comunque cliccabile nei commenti di TikTok.
+        pezzi.append(f"Every study behind every claim: {sito.split('//')[-1]}")
     if ig:
         pezzi.append(f"Longer versions on Instagram: @{ig}")
     if yt:
