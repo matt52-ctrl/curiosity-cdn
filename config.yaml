@@ -511,22 +511,47 @@ cta:
 
   # Il verbo cambia per piattaforma — su YouTube si dice "subscribe", altrove
   # "follow" — e usare la parola sbagliata segnala che il video è riciclato.
+  # Sul fotogramma lo spazio è due righe lette in due secondi, quindi qui la
+  # promessa sta in quattro parole invece che in una frase: è la stessa dei
+  # testi qui sotto, compressa. "We name every study" dice in mezzo secondo
+  # ciò che nessun'altra pagina di curiosità può dire.
   azione:
-    youtube: "Subscribe. One checked study a day."
-    tiktok: "Follow. One checked study a day."
-    default: "One checked study a day."
+    youtube: "Subscribe. We name every study."
+    tiktok: "Follow. We name every study."
+    default: "We name every study."
 
-  # Le stesse richieste in forma di testo, per descrizioni e didascalie. Qui
-  # lo spazio non è il vincolo — l'attenzione sì, quindi restano una riga.
+  # Le stesse richieste in forma di testo, per descrizioni e didascalie.
   #
-  # Senza la voce `youtube` la descrizione di uno Short chiedeva DUE VOLTE di
-  # andare su Instagram (`caption.cta`, che porta la chiocciola Instagram, più
-  # il rimando esplicito in youtube.py) e non chiedeva mai di iscriversi: il
-  # canale che vogliamo far crescere mandava via il suo pubblico.
+  # Senza la voce `youtube` la descrizione di uno Short prendeva `caption.cta`,
+  # che porta la chiocciola Instagram, e sommata al rimando esplicito in
+  # youtube.py chiedeva DUE VOLTE di andare altrove senza chiedere mai
+  # un'iscrizione: il canale che vogliamo far crescere mandava via il pubblico.
   # Un canale senza voce qui ricade su `caption.cta`.
+  #
+  # PERCHÉ SONO SCRITTE COSÌ. "Follow for more psychology facts" è quello che
+  # dicono diecimila pagine identiche, e non dà nessun motivo per scegliere
+  # questa. Queste righe promettono l'unica cosa che qui c'è e altrove quasi
+  # mai: il nome dello studio, gli autori, l'anno. E la seconda frase promette
+  # ciò che nessuno promette — di dire quando un risultato è contestato. È una
+  # promessa verificabile in un clic, il che la rende forte: chi la controlla
+  # trova che è vera.
+  #
+  # ⚠️ Non sono un vanto generico e non vanno annacquate. Il giorno in cui una
+  # curiosità esce senza fonte, questa riga diventa una bugia stampata sotto a
+  # ogni video. È anche il motivo per cui `bluesky.componi` si rifiuta di
+  # pubblicare un fatto senza `source_hint`.
   testo:
-    youtube: "Subscribe if you want one of these every day."
-    tiktok: "Follow for one checked study a day."
+    youtube: "Subscribe — one of these every day, and every one names the study it came from. When a finding is contested, it says so."
+    tiktok: "Follow — one a day, and every one names the study it came from."
+    instagram: "Follow @oddlywireddaily — one a day, and every one names the study it came from. When a finding is contested, it says so."
+
+  # Bluesky non ha spazio: i post stanno a 290-296 caratteri su 300, e lo
+  # spazio che manca lo paga già la spiegazione, che esce troncata. Una riga
+  # di richiesta dentro il post ruberebbe caratteri alla fonte o al fatto.
+  # Va invece in RISPOSTA al proprio post, dove non costa niente — ed è anche
+  # l'unico posto dove Bluesky sa che gli altri canali esistono: nel post non
+  # c'è mai stato un rimando a YouTube, TikTok o Instagram.
+  bluesky_coda: "One checked fact a day. Every one names the study, the authors and the year — and says so when a finding is contested."
 
 # ─── REEL ─────────────────────────────────────────────────────────────────────
 # Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti

@@ -380,7 +380,11 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
         # stringa; passando allo schema a pezzi il campo non esisteva piu' e
         # l'invito a seguire era sparito dai caroselli senza che nulla
         # segnalasse l'assenza.
-        cta = cfg.get("caption.cta", "")
+        # Stessa richiesta dei reel: i caroselli escono sullo stesso profilo, e
+        # due promesse diverse sotto due formati dello stesso account si
+        # leggono come due account. `caption.cta` resta come ripiego per le
+        # installazioni che non hanno ancora la sezione `cta`.
+        cta = cfg.get("cta.testo.instagram", "") or cfg.get("caption.cta", "")
         if cta:
             pezzi.append(cta)
         testo = "\n\n".join(x.strip() for x in pezzi if x and x.strip())

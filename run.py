@@ -1512,11 +1512,16 @@ def cmd_bluesky(args: argparse.Namespace) -> int:
         if args.prova:
             print(f"\n─── fatto {f['id']} ── {len(testi['testo'])}/300 caratteri")
             print(testi["testo"])
+            coda = bs._coda()
+            if coda:
+                print(f"\n   ↳ in risposta ── {len(coda)}/300 caratteri")
+                print("   " + coda.replace("\n", "\n   "))
             continue
 
         try:
             uri = bs.pubblica(testi["testo"], testi["link"],
-                              testi["titolo"], testi["descrizione"])
+                              testi["titolo"], testi["descrizione"],
+                              coda=True)
         except bs.BlueskyError as e:
             print(f"  ✗ fatto {f['id']}: {e}")
             continue
@@ -1911,7 +1916,7 @@ def cmd_didascalie(args: argparse.Namespace) -> int:
             continue
         # Corpo senza hashtag: la colonna `hashtags` esiste gia' e li riattacca
         # la pubblicazione. Salvarli anche qui li faceva uscire in doppio.
-        nuova = lines.corpo_didascalia({"caption": d})
+        nuova = lines.corpo_didascalia({"caption": d}, canale="instagram")
         if getattr(args, "dry", False):
             print(f"    dopo : {d['apertura']}")
             continue
@@ -2033,7 +2038,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 # di scendere nel database, che sa scrivere solo testo. Senza
                 # questa riga sqlite rifiuta la riga intera e il reel non nasce
                 # — ed e' esattamente cosi' che la coda si e' svuotata.
-                l["caption"] = lines.corpo_didascalia(l)
+                l["caption"] = lines.corpo_didascalia(l, canale="instagram")
                 rid = insert_reel(conn, l)
                 # Caricamento immediato, come per i post: il reel costruito
                 # oggi può essere pubblicato da un'altra macchina domani, e su

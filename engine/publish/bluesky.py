@@ -171,8 +171,65 @@ def componi(fatto, base_url: str = "") -> Dict[str, str]:
 
 # ─── Pubblicazione ────────────────────────────────────────────────────────────
 
-def pubblica(testo: str, link: str = "", titolo: str = "", descrizione: str = "") -> str:
-    """Pubblica un post e restituisce il suo URI at://. Solleva BlueskyError."""
+def _coda() -> str:
+    """La richiesta, più dove sono gli altri canali.
+
+    Perché in risposta al post e non dentro il post: i post stanno fra i 290 e
+    i 296 caratteri su 300 — misurato su quelli veri, non stimato — e quello
+    spazio lo paga già la spiegazione, che esce troncata con i puntini. Una
+    riga di richiesta nel corpo la toglierebbe al fatto o alla fonte, cioè alle
+    due cose per cui il post esiste. In risposta non costa niente.
+
+    È anche l'unico posto dove Bluesky sa che gli altri canali esistono: nel
+    post non c'è mai stato un rimando a YouTube, TikTok o Instagram, quindi chi
+    ci arrivava non aveva modo di scoprire il resto.
+    """
+    righe = []
+    testa = (cfg.get("cta.bluesky_coda", "") or "").strip()
+    if testa:
+        righe.append(testa)
+
+    # ⚠️ `https://` per esteso su OGNI indirizzo, e non è pignoleria tipografica:
+    # `_facets` riconosce i link con l'espressione `https?://`, quindi
+    # "youtube.com/@x" scritto senza schema NON diventa cliccabile. Misurato
+    # sulla prima risposta pubblicata davvero: quattro indirizzi nel testo, una
+    # sola facet costruita, tre link morti. Il post esce lo stesso e sembra
+    # giusto — è il tipo di guasto che si vede solo andando a leggere il record.
+    #
+    # Costano 24 caratteri in tutto e qui lo spazio c'è: la risposta sta sotto
+    # i 280 su 300. Una chiocciola scritta a mano invece resterebbe comunque
+    # testo morto, perché non è una menzione vera del protocollo.
+    altrove = []
+    sito = (cfg.get("sito.url", "") or "").rstrip("/")
+    yt = (cfg.get("brand.youtube", "") or "").lstrip("@")
+    tk = (cfg.get("brand.tiktok", "") or "").lstrip("@")
+    ig = (cfg.get("brand.handle", "") or "").lstrip("@")
+    if sito:
+        altrove.append(f"All of them: {sito}")
+    if yt:
+        altrove.append(f"https://youtube.com/@{yt}")
+    if tk:
+        altrove.append(f"https://tiktok.com/@{tk}")
+    if ig:
+        altrove.append(f"https://instagram.com/{ig}")
+    if altrove:
+        righe.append("\n".join(altrove))
+
+    # Il tetto vale anche qui: una risposta più lunga di 300 caratteri viene
+    # rifiutata dal PDS, e farebbe segnalare come guasto un post già uscito.
+    return "\n\n".join(righe)[:MAX_TESTO]
+
+
+def pubblica(testo: str, link: str = "", titolo: str = "", descrizione: str = "",
+             coda: bool = False) -> str:
+    """Pubblica un post e restituisce il suo URI at://. Solleva BlueskyError.
+
+    Con `coda` accoda in risposta al post appena creato la richiesta e i
+    rimandi agli altri canali. Se quella seconda chiamata fallisce, il post
+    resta pubblicato e l'errore si stampa: la richiesta è un di più, il fatto
+    no, e far fallire l'uno per l'altra brucerebbe la curiosità — che risulta
+    già segnata come usata e non tornerebbe mai più.
+    """
     if not testo.strip():
         raise BlueskyError("testo vuoto")
 
@@ -213,9 +270,41 @@ def pubblica(testo: str, link: str = "", titolo: str = "", descrizione: str = ""
             headers={"Authorization": f"Bearer {jwt}"},
             json={"repo": did, "collection": "app.bsky.feed.post", "record": record},
         )
-    if resp.status_code >= 400:
-        raise BlueskyError(f"createRecord → {resp.status_code} {resp.text}")
-    return resp.json().get("uri", "")
+        if resp.status_code >= 400:
+            raise BlueskyError(f"createRecord → {resp.status_code} {resp.text}")
+        creato = resp.json()
+        uri = creato.get("uri", "")
+
+        if coda:
+            testo_coda = _coda()
+            # `cid` insieme a `uri`: il protocollo vuole entrambi in ogni
+            # riferimento. Con il solo uri la risposta viene accettata ma resta
+            # orfana — appare nel profilo e NON sotto al post, che è il
+            # contrario di quello che serve.
+            #
+            # `root` e `parent` puntano tutti e due al post: è una catena di
+            # due, quindi la radice è il post stesso.
+            rif = {"uri": uri, "cid": creato.get("cid", "")}
+            if testo_coda and rif["cid"]:
+                r2 = client.post(
+                    f"{PDS}/xrpc/com.atproto.repo.createRecord",
+                    headers={"Authorization": f"Bearer {jwt}"},
+                    json={"repo": did, "collection": "app.bsky.feed.post",
+                          "record": {
+                              "$type": "app.bsky.feed.post",
+                              "text": testo_coda,
+                              "createdAt": datetime.now(timezone.utc)
+                                  .isoformat().replace("+00:00", "Z"),
+                              "langs": ["en"],
+                              "facets": _facets(testo_coda),
+                              "reply": {"root": rif, "parent": rif},
+                          }},
+                )
+                if r2.status_code >= 400:
+                    # Non si solleva: il post c'è già ed è quello che conta.
+                    print(f"    richiesta in coda non pubblicata: "
+                          f"{r2.status_code} {r2.text[:120]}")
+    return uri
 
 
 def url_pubblico(uri: str) -> str:

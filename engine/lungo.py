@@ -247,11 +247,21 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
               7: "seven", 8: "eight", 9: "nine", 10: "ten"}
     quanti = NUMERI.get(len(fatti), str(len(fatti)))
 
+    # La richiesta sta in seconda riga, dentro le due che YouTube mostra prima
+    # di «Altro». Prima non c'era affatto: la descrizione elencava il sito e
+    # Instagram — cioè mandava altrove il pubblico del canale che stiamo
+    # cercando di far crescere — e non chiedeva mai l'iscrizione, lo stesso
+    # difetto che avevano gli Short.
+    richiesta = (_c.get("cta.testo.youtube", "") or "").strip()
+
     righe = [
         f"{tema} — {quanti} things your mind does without asking you.",
-        "Every claim here names the study behind it.",
-        "",
     ]
+    if richiesta:
+        righe.append(richiesta)
+    else:
+        righe.append("Every claim here names the study behind it.")
+    righe.append("")
     if sito:
         righe.append(f"Full archive and sources: {sito}")
     if ig:
@@ -269,6 +279,13 @@ def descrizione(tema: str, capitoli: List[Dict], fatti: List[Dict]) -> str:
     if fonti:
         righe.append("Studies referenced")
         righe += [f"· {x}" for x in fonti]
+        righe.append("")
+
+    # Ripetuta in fondo, e non è la stessa cosa detta due volte: chi legge le
+    # prime due righe e chi scorre fino alle fonti sono due persone diverse,
+    # e la seconda ha appena finito di verificare che la promessa è vera.
+    if richiesta:
+        righe.append(richiesta)
         righe.append("")
 
     righe.append("─────")

@@ -135,6 +135,12 @@ footer { border-top:1px solid var(--bordo); padding:2.2rem 0 3rem;
 footer a { color:var(--oro); }
 footer p { margin-bottom:.6rem; }
 
+/* La riga sopra i riquadri. Quattro bottoni senza una frase che li introduca
+   sono un piè di pagina: si saltano. Una riga che dice cosa si ottiene
+   seguendo li trasforma in una scelta. */
+.invito { margin:2.6rem 0 -1rem; color:var(--tenue); font-size:.95rem;
+          line-height:1.5; }
+
 .altrove { display:flex; gap:.7rem; flex-wrap:wrap; margin:2.6rem 0 0; }
 .altrove a { flex:1; min-width:11rem; text-align:center; padding:.85rem 1rem;
              border:1px solid var(--bordo); border-radius:10px; text-decoration:none;
@@ -478,6 +484,8 @@ def genera(conn: sqlite3.Connection) -> int:
 {_scheda_verifica(f)}
 {etichette}
 {correlate}
+<p class="invito">One of these every day, and every one names the study it came
+from. When a finding is contested, it says so.</p>
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">One a day on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
@@ -574,6 +582,8 @@ def genera(conn: sqlite3.Connection) -> int:
   finding is contested, it says so.</p>
 </div>
 {oggi_html}
+<p class="invito">The same one goes out on all of these. Follow wherever you
+already are.</p>
 <div class="altrove">
   {f'<a href="https://instagram.com/{ig}">Follow on Instagram</a>' if ig else ''}
   {f'<a href="https://youtube.com/@{yt}">Watch on YouTube</a>' if yt else ''}
