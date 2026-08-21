@@ -168,37 +168,127 @@ What does NOT change:
 
 APERTURE = ("divario", "scontro")
 
+# I due blocchi hanno la stessa lunghezza e lo stesso impegno, e non e' una
+# simmetria estetica: e' la difesa contro l'errore piu' facile da fare qui.
+#
+# Il gruppo di controllo NON e' "il prompt senza aggiunte". Lo era fino al 21
+# agosto 2026, e non funzionava: il prompt di sistema chiedeva agganci "a
+# little accusatory" e due dei suoi tre esempi erano scontri belli e buoni
+# ("You don't remember your holiday"). Il controllo quindi non era neutro, era
+# uno scontro annacquato — generando frasi di prova e' uscito dal gruppo
+# divario "You are unhappy with your own success", che e' un'affermazione
+# contestabile quanto quelle dell'altro braccio. Due bracci che si somigliano
+# misurano zero, e uno zero del genere si legge come "l'apertura non conta"
+# quando in realta' dice "non abbiamo provato due cose diverse".
+#
+# La correzione ovvia sarebbe stata togliere forza al controllo. Sarebbe stato
+# l'errore peggiore: lo scontro avrebbe battuto un fantoccio costruito da noi,
+# cioe' esattamente la cosa che il blocco scontro qui sotto vieta di fare col
+# pubblico ("Not a fight with a strawman"). Il risultato avrebbe detto "lo
+# scontro batte un aggancio scritto male", che sappiamo gia' e non serve a
+# nessuno.
+#
+# Quindi: due bracci forti uguali, che differiscono nel MECCANISMO con cui
+# tengono lo spettatore. Curiosita' contro obiezione. Se lo scontro vince, ha
+# battuto il meglio che sappiamo fare nell'altro modo.
+
 APERTURA = {
-    # Gruppo di controllo: le TWO BEATS del prompt di sistema, invariate.
-    "divario": "",
+    "divario": """
+
+HOW TO OPEN, FOR THIS BATCH — the withheld answer
+
+THE ONE TEST, and everything else in this block serves it:
+
+    The viewer must AGREE with the hook, and still need the next line.
+
+They recognise the situation instantly — they nod — and what is missing is
+WHY it happens. The force comes from the gap, never from an argument. If the
+viewer's reaction is "no I don't" or "that's not true", the hook has started
+a fight instead of opening a gap, and a fight is the wrong tool for this
+batch. Rewrite it.
+
+  hook:   "There is one conversation you keep replaying."
+  reveal: "Unfinished things hold memory better than settled ones."
+
+  hook:   "Some insults outlast the day they were said."
+  reveal: "One criticism is filed with the weight of five compliments."
+
+  hook:   "You can feel the exact moment a room turns."
+  reveal: "You read the shift from posture, a half-second before the words."
+
+Notice what those three have in common: the viewer would say "yes, that
+happens to me" to every one of them, and none of them says why. That is the
+whole shape.
+
+WHAT A WITHHELD ANSWER IS NOT — this is where it usually goes wrong
+
+  Not a claim they would argue with. "You are convinced you are a better
+  driver than average" is a fine hook, but it belongs to a different batch:
+  it works by contradicting the viewer, and here we are measuring what the
+  gap alone can do. Anything the viewer would answer back to is out — no
+  matter how strong it is. Describe what they already know they do; withhold
+  only the reason.
+
+  One template slips through more than any other: a statement about how
+  accurately the viewer sees, judges or knows something. Every finding about
+  bias invites it, and it is always a collision. Same finding, both ways:
+
+    collision, wrong batch:  "You see the world exactly as it is."
+    withheld, this batch:    "There is someone you have decided is simply
+                              being difficult."
+
+  Both come from the same research. Only the second one gets a nod.
+
+  Not vague. "Your brain does something odd here" withholds everything and
+  promises nothing, so there is nothing to wait for. Name the situation, name
+  the moment, name the feeling — and withhold the finding, only the finding.
+
+  Not a tease. No "you won't believe what happens next", no "the reason will
+  surprise you". Those announce that something is coming instead of making
+  the viewer want it, and they read as the register of accounts people mute.
+
+  Not a formula. Asked for a withheld answer it is easy to write every hook
+  as a dangling fragment with a question mark — "The thing you just said?",
+  "Why that memory sticks?" — and across a batch that becomes a tic. At most
+  one hook may end in a question mark; the rest are complete sentences that
+  simply stop short of the explanation.
+
+The reveal must be the exact piece the hook removed. Not a related thought,
+not a broader lesson: the missing part, handed over.
+
+Last pass, one hook at a time: would the viewer answer yes, or no? Not
+"interesting" — yes or no. Every "no" is a collision that wandered into the
+wrong batch, however good the line is. Rewrite it or use another finding.""",
 
     "scontro": """
 
-HOW TO OPEN, FOR THIS BATCH — this replaces nothing above, it sharpens the hook
+HOW TO OPEN, FOR THIS BATCH — the collision
 
-The hook must not merely withhold the answer. It must state something the
-viewer believes is wrong about themselves — and the reveal then shows the
-research agrees with the hook, not with them.
+THE ONE TEST, and everything else in this block serves it:
 
-  withheld (what we usually do):
-      hook:   "Nobody can tell you're panicking."
-      reveal: "Observers spot it about half as often as you feel it."
+    The viewer must want to ARGUE with the hook, and stay to see it settled.
 
-  collision (what to do here):
-      hook:   "Your closest friend reads you worse than a stranger does."
-      reveal: "Strangers judge from behaviour. Friends judge from who they
-               need you to be."
+The hook states something they believe is wrong about themselves. They stay to
+watch it be taken apart, and the reveal shows the research siding with the
+hook rather than with them. The force comes from contradiction, never from
+something being held back. If the natural reaction is "hm, go on" instead of
+"no I don't", the hook is withholding rather than colliding — rewrite it.
 
-The test for a hook in this batch: could the viewer answer it back? If the
-natural reaction is "no I don't" or "that's not true", it is working. If the
-natural reaction is "hm, go on", that is the withheld version — rewrite it.
+  hook:   "Your closest friend reads you worse than a stranger does."
+  reveal: "Strangers judge from behaviour. Friends judge from who they need
+           you to be."
 
-  weak (curiosity):   "Memory does something strange with holidays."
-  strong (collision): "You never remember a holiday. You remember two minutes
-                       of it."
+  hook:   "You never remember a holiday. You remember two minutes of it."
+  reveal: "The best moment and the last one. The rest is gone."
 
-  weak (curiosity):   "There's a reason you reread that message."
-  strong (collision): "Nobody spent the evening thinking about your message."
+  hook:   "Nobody spent the evening thinking about your message."
+  reveal: "They were busy assuming you weren't thinking about theirs."
+
+Almost every finding supports both openings, so the choice is always
+available — it is never the fact's fault:
+
+  withholding:  "Something odd happens to a crowd when one person freezes."
+  colliding:    "You would not step in either. Nobody does."
 
 WHAT A COLLISION IS NOT — read this twice
 
@@ -223,7 +313,11 @@ WHAT A COLLISION IS NOT — read this twice
 
 The reveal's job changes slightly too: it must resolve the collision, not just
 complete the sentence. Afterwards the viewer should feel the hook was fair —
-not that they were tricked into staying.""",
+not that they were tricked into staying.
+
+Last pass, one hook at a time: would the viewer answer yes, or no? Every "yes"
+is a withheld answer that wandered into the wrong batch, however good the line
+is. Rewrite it or use another finding.""",
 }
 
 
@@ -379,27 +473,36 @@ watching after three seconds. A full sentence sitting still on screen is read
 in two, and then there is nothing left to wait for — so people leave exactly
 when it counts.
 
-So each reel is built as a withheld answer:
+So each reel is built in two parts:
 
-  hook    Appears first, alone. It must open a gap the viewer needs closed.
-          4-9 words. Blunt, specific, a little accusatory.
-          It must NOT contain the answer.
-  reveal  Appears after. It closes the gap and pays off the wait.
+  hook    Appears first, alone, and holds the screen by itself. 4-9 words.
+          Blunt and specific. It must NOT contain the answer.
+  reveal  Appears after. It settles what the hook raised.
           5-14 words. This is the part people screenshot and send.
 
-    hook:   "Nobody can tell you're panicking."
-    reveal: "Observers spot it about half as often as you feel it."
+HOW the hook should grip the viewer — and worked examples of it — are in the
+final block of this brief. That instruction changes between batches, because
+it is the one thing about these videos currently being measured. Follow it
+closely: it is not a stylistic preference, it is the variable under test.
 
-    hook:   "You don't remember your holiday."
-    reveal: "You remember its best hour, and its last one. That's all."
-
-    hook:   "The thing you're still cringing about?"
-    reveal: "They forgot it the same week."
+Those examples show the SHAPE, and are not stock to draw from. Several of them
+were written from findings that may well be in today's material; if one of them
+matches a finding you were given, that is the one case where you must write the
+line yourself rather than reach for the example. A hook that repeats an example
+word for word has been published already.
 
 WHAT MAKES BOTH BEATS WORK
 
   About the reader, not about people. "You" is the whole value — the small
   shock of being described. "People tend to…" is a lecture.
+
+  Second person, but not the same first word eight times. Written straight,
+  that rule makes every single hook begin with "You", and a feed of those
+  reads like one line repeated. The sentence can still be about the viewer
+  while starting elsewhere: "There is one conversation you keep replaying",
+  "Some insults outlast the day they were said", "The middle of the list is
+  the part that goes". Across a batch, at most half the hooks may open with
+  "You" or "Your".
 
   True. This is the hard part: stripped of its evidence a line drifts into a
   motivational aphorism, which is the one thing this account is not. Say only
@@ -452,7 +555,7 @@ HASHTAGS
   content by topic, not to distribute it. Thirty tags do nothing that five do
   not, and a wall of them reads as spam. So: five narrow, specific tags that
   describe the actual mechanism, not the field.""" + REGISTRO.get(variante, "") \
-        + APERTURA.get(apertura, "")
+        + APERTURA.get(apertura, APERTURA["divario"])
 
 
 def generate(conn: sqlite3.Connection, count: int,
