@@ -748,6 +748,48 @@ def _giornata_locale() -> tuple:
     return inizio.timestamp(), (inizio + _dt.timedelta(days=1)).timestamp()
 
 
+def _fabbisogno_giornaliero() -> int:
+    """Quante curiosita' consuma YouTube in una giornata intera.
+
+    Si contano i gruppi effettivamente assegnati alle fasce di oggi, non la
+    somma di tutti i gruppi: se un giorno le fasce diventassero tre, o una,
+    la somma fissa direbbe il numero sbagliato.
+    """
+    from engine.lines import giorni_di_prova, scegli_lunghezza
+
+    giorno = giorni_di_prova()
+    fasce = _fasce_di_oggi() or [0.0]
+    normale = int(cfg.get("publish.youtube.facts_per_video", 3))
+    return sum(
+        int(cfg.get(f"esperimento.lunghezza.gruppi."
+                    f"{scegli_lunghezza(giorno, i)}.fatti", normale))
+        for i in range(len(fasce)))
+
+
+def _gruppo_lunghezza(quando: float) -> str:
+    """Il gruppo della prova sulla lunghezza per il video di questa fascia.
+
+    L'indice della fascia si cerca dentro `_fasce_di_oggi()` e non dentro
+    l'elenco delle fasce ancora da coprire: se il giro del mattino salta, il
+    video delle 19:00 deve restare il video delle 19:00, non diventare il primo
+    della giornata e prendersi il gruppo dell'altro. Cosi' la prova regge anche
+    alle giornate rotte.
+
+    Il recupero (`quando` = 0.0, "esci adesso") non combacia con nessuna fascia
+    e finisce in posizione 0: e' l'unico caso in cui l'ora di uscita non e'
+    quella prevista, ed e' giusto che erediti il gruppo del primo slot.
+    """
+    from engine.lines import giorni_di_prova, scegli_lunghezza
+
+    indice = 0
+    if quando:
+        for i, f in enumerate(_fasce_di_oggi()):
+            if abs(f - quando) < 60:
+                indice = i
+                break
+    return scegli_lunghezza(giorni_di_prova(), indice)
+
+
 def _pubblica_youtube(conn, imparato: str = "") -> str:
     """Copre le fasce di oggi non ancora coperte, programmandole su YouTube.
 
@@ -809,7 +851,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
           f"({quando_leggibili} italiane)")
 
     for quando in da_coprire:
-        motivo = _uno_short(conn, imparato, quando)
+        motivo = _uno_short(conn, imparato, quando, _gruppo_lunghezza(quando))
         if motivo:
             # Il primo intoppo ferma il lotto: le cause sono comuni a tutti i
             # video (scorte, scrittore, ffmpeg), quindi insistere sui
@@ -818,7 +860,8 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
     return ""
 
 
-def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
+def _uno_short(conn, imparato: str, quando: Optional[float] = None,
+               gruppo: str = "lungo") -> str:
     """Costruisce e pubblica un video YouTube con curiosita' tutte nuove.
 
     Indipendente da Instagram di proposito. Le due piattaforme hanno pubblici
@@ -848,15 +891,42 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
                            segna_variante)
     from engine.publish import youtube
 
-    quante = int(cfg.get("publish.youtube.facts_per_video", 3))
+    # Prova sulla lunghezza (config.yaml → esperimento.lunghezza). Il gruppo
+    # arriva da fuori perche' dipende dalla fascia oraria, che qui non si vede.
+    # Cambia SOLO quante curiosita' entrano nel video e la domanda finale:
+    # registro, tipografia, musica, sorgenti e descrizione restano identici.
+    #
+    # Il ripiego sui valori normali non e' difensivo per abitudine: se un
+    # giorno la prova viene chiusa togliendo il blocco dal config invece che
+    # con `attiva: false`, senza ripiego il canale smetterebbe di pubblicare.
+    base = f"esperimento.lunghezza.gruppi.{gruppo}"
+    quante = int(cfg.get(f"{base}.fatti",
+                         cfg.get("publish.youtube.facts_per_video", 3)))
+    massimo = float(cfg.get(f"{base}.max_secondi_per_fatto",
+                            cfg.get("reel.long_max_seconds_per_fact", 16.0)))
+    domanda = str(cfg.get(f"{base}.domanda", "") or "")
+    if cfg.get("esperimento.lunghezza.attiva", False):
+        print(f"  · prova lunghezza: gruppo «{gruppo}», {quante} curiosita'")
 
     # Scorte. Il video si costruisce solo se ci sono abbastanza curiosita'
     # mai uscite su YouTube: meglio saltare un giro che montare un video con
     # una curiosita' sola, o riprenderne una gia' vista.
+    #
+    # La soglia che fa partire la generazione e' il fabbisogno della GIORNATA,
+    # non quello di questo video. Con la prova sulla lunghezza aperta i due
+    # numeri divergono: il gruppo corto ne consuma una, ma la giornata ne
+    # consuma quattro. Controllando solo la sua, il video corto non farebbe
+    # quasi mai scattare la generazione, le scorte scenderebbero in silenzio e
+    # il primo ad accorgersene sarebbe il video lungo — che salta perche' ne
+    # trova due invece di tre. Il gruppo lungo perderebbe uscite per un motivo
+    # che non c'entra niente con la sua lunghezza, e la prova sarebbe falsata
+    # proprio nel numero che decide.
+    soglia = _fabbisogno_giornaliero() if cfg.get(
+        "esperimento.lunghezza.attiva", False) else quante
     liberi = quanti_liberi(conn, "youtube")
     print(f"  · YouTube: {liberi} curiosita' mai uscite li'")
-    if liberi < quante:
-        print(f"    scorte sotto {quante}, genero")
+    if liberi < soglia:
+        print(f"    scorte sotto {soglia} (fabbisogno di una giornata), genero")
         try:
             ideas.run_batch(conn, learnings=analytics.learning_brief(conn))
         except Exception as exc:
@@ -868,9 +938,10 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
                 f"ne servono {quante}. La generazione non sta reintegrando: "
                 f"finche' resta cosi' non esce piu' nessuno Short.")
 
-    # Prova A/B sul registro: il gruppo si sceglie qui, non a caso ma
-    # tenendo il confronto bilanciato. Stessa riserva di curiosita' per
-    # entrambi — cambia solo come sono scritte.
+    # Il registro NON e' piu' una prova: `scegli_variante` restituisce sempre
+    # "riconoscimento" da agosto 2026, e resta una chiamata invece di una
+    # costante perche' e' li' che si riapre una prova sulla scrittura il giorno
+    # che servira'. Serve ancora a `generate`, che scrive di conseguenza.
     variante = lines.scegli_variante(conn)
     frasi = lines.generate(conn, quante, imparato=imparato, canale="youtube",
                            variante=variante)
@@ -888,7 +959,8 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
 
     import hashlib as _h
     nome = _h.sha1(frasi[0]["line"].encode()).hexdigest()[:10]
-    video, montate = _reel.build_multi(voci, nome, canale="youtube")
+    video, montate = _reel.build_multi(voci, nome, massimo=massimo,
+                                       canale="youtube", domanda_cta=domanda)
     if not video:
         print("    montaggio fallito")
         return ("montaggio a vuoto: le frasi c'erano, il video non e' nato. "
@@ -916,7 +988,13 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None) -> str:
     # risultare bruciate da un errore di rete.
     for f in frasi:
         segna_uso_fatto(conn, f["fact_id"], "youtube", f"yt-{yt_id}")
-    segna_variante(conn, yt_id, variante)
+    # Il gruppo della prova sulla lunghezza prende il posto del registro nella
+    # tabella `esperimento`: il registro non e' piu' una prova da agosto, e' un
+    # valore fisso, quindi registrarlo non direbbe niente. Le righe vecchie
+    # restano dove sono e `esito_esperimento` le taglia via con la data.
+    segna_variante(conn, yt_id,
+                   gruppo if cfg.get("esperimento.lunghezza.attiva", False)
+                   else variante)
     # `is not None` e non `if quando`: nel recupero di una giornata perduta la
     # fascia vale 0.0, che significa "esci adesso" ed e' falsa. Con il vecchio
     # controllo la fascia non veniva segnata, `fasce_coperte` restava vuota e
@@ -1421,40 +1499,98 @@ def _manda_didascalia(voce) -> None:
 
 
 def cmd_esperimento(args: argparse.Namespace) -> int:
-    """Come stanno andando i due registri a confronto."""
+    """Come sta andando la prova aperta: un fatto per video contro tre."""
     from engine.db import esito_esperimento
+    from engine.lines import giorni_di_prova, inizio_prova
 
     conn = connect()
-    righe = esito_esperimento(conn)
+    attiva = bool(cfg.get("esperimento.lunghezza.attiva", False))
+    righe = esito_esperimento(conn, inizio_prova() if attiva else 0.0)
     if not righe:
         print("Nessun video ancora assegnato a un gruppo.")
         print("Il primo parte alla prossima pubblicazione su YouTube.")
         return 0
 
-    print("\n  PROVA A/B SUL REGISTRO\n")
-    print(f"  {'gruppo':16} {'video':>6} {'viste':>7} {'like':>6} {'like %':>8} "
-          f"{'visione':>8} {'commenti':>9}")
-    print("  " + "-" * 66)
-    for r in righe:
-        viste = r["viste"] or 0
-        like = r["like_tot"] or 0
-        print(f"  {r['variante']:16} {r['video']:>6} {viste:>7} {like:>6} "
-              f"{100 * like / max(viste, 1):>7.1f}% {r['visione_media'] or 0:>7.1f}% "
-              f"{r['commenti'] or 0:>9}")
-
-    minimo = int(cfg.get("esperimento.video_minimi", 6))
-    totale = sum(r["video"] for r in righe)
+    giorni = int(cfg.get("esperimento.lunghezza.giorni", 30))
+    passati = giorni_di_prova()
+    print("\n  PROVA SULLA LUNGHEZZA — un fatto per video contro tre"
+          if attiva else "\n  PROVA A/B SUL REGISTRO")
+    if attiva:
+        print(f"  giorno {passati} di {giorni}"
+              + ("" if passati < giorni else "  ← si legge oggi"))
     print()
-    if totale < minimo * 2:
-        print(f"  Ancora presto: {totale} video in tutto, ne servono almeno "
-              f"{minimo} per gruppo\n  prima che il confronto voglia dire qualcosa. "
-              f"Con questi numeri la differenza\n  fra i due gruppi è rumore.")
+    print(f"  {'gruppo':10} {'video':>6} {'viste':>7} {'VISTE/VIDEO':>12} "
+          f"{'iscritti':>9} {'secondi':>8} {'(perc.)':>9} {'like':>6}")
+    print("  " + "-" * 74)
+    for r in righe:
+        print(f"  {r['variante']:10} {r['video']:>6} {r['viste'] or 0:>7} "
+              f"{r['viste_per_video'] or 0:>12.0f} {r['iscritti'] or 0:>9} "
+              f"{r['secondi_medi'] or 0:>7.1f}s {r['visione_media'] or 0:>8.0f}% "
+              f"{r['like_tot'] or 0:>6}")
+
+    print()
+    if attiva:
+        # La colonna che decide è una sola, ed è scritta in maiuscolo apposta.
+        # Le altre due sono truccate dalla durata in direzioni opposte — la
+        # percentuale premia il corto (i loop degli Short l'hanno già portata
+        # sopra il 100%), i secondi premiano il lungo — e servono a capire il
+        # meccanismo, non a decidere. Sono fra parentesi per ricordarlo.
+        _verdetto_lunghezza(righe, passati, giorni)
     else:
-        print("  Le iscrizioni non compaiono qui: YouTube non le espone per video.\n"
-              "  Vanno lette in Studio, e sono il numero che conta di più per\n"
-              "  questa prova — i like dicono se il video piace, le iscrizioni\n"
-              "  se la pagina convince.")
+        minimo = int(cfg.get("esperimento.video_minimi", 6))
+        totale = sum(r["video"] for r in righe)
+        if totale < minimo * 2:
+            print(f"  Ancora presto: {totale} video in tutto, ne servono almeno "
+                  f"{minimo} per gruppo\n  prima che il confronto voglia dire "
+                  f"qualcosa.")
     return 0
+
+
+def _verdetto_lunghezza(righe, passati: int, giorni: int) -> None:
+    """La regola di decisione, applicata come è scritta in config.
+
+    Sta in una funzione sua perché il punto di questa prova è che il verdetto
+    NON venga improvvisato a fine mese guardando i numeri. Le soglie stanno in
+    `esperimento.lunghezza.soglia_*`, scritte il primo giorno; qui si esegue e
+    basta. Se un giorno si vorranno cambiare, resta traccia nel diff.
+    """
+    dati = {r["variante"]: r for r in righe}
+    corto, lungo = dati.get("corto"), dati.get("lungo")
+    if not corto or not lungo or not lungo["viste_per_video"]:
+        print("  Manca ancora un gruppo: il confronto non esiste.")
+        return
+
+    scarto = corto["viste_per_video"] / lungo["viste_per_video"] - 1
+    # Un decimale, non zero: con lo zero un +29,6% si stampa "+30%" e la riga
+    # dopo dice "sotto il 30%, si chiude". Sembra una contraddizione e invece
+    # è l'arrotondamento — e il giorno che capita davvero, sul confine, è
+    # esattamente il giorno in cui non si deve avere il dubbio che il
+    # programma stia sbagliando.
+    print(f"  Il gruppo corto fa {scarto:+.1%} di viste per video "
+          f"rispetto al lungo.")
+
+    if passati < giorni:
+        print(f"  NON si decide oggi: mancano {giorni - passati} giorni. "
+              f"Guardare a metà\n  e cambiare è il modo di trasformare il "
+              f"rumore in una conclusione —\n  con questi numeri di canale "
+              f"servono ~30 video per gruppo perché una\n  differenza sotto "
+              f"il 60% si distingua dal caso.")
+        return
+
+    adozione = float(cfg.get("esperimento.lunghezza.soglia_adozione", 0.60))
+    proroga = float(cfg.get("esperimento.lunghezza.soglia_proroga", 0.30))
+    if scarto >= adozione:
+        print(f"  ≥ {adozione:.0%}: si adotta il formato a un fatto.\n"
+              f"  Metti `publish.youtube.facts_per_video: 1` e "
+              f"`esperimento.lunghezza.attiva: false`.")
+    elif scarto >= proroga:
+        print(f"  Fra {proroga:.0%} e {adozione:.0%}: non conclusivo.\n"
+              f"  Sposta `inizio` avanti di 30 giorni o chiudi — sono "
+              f"entrambe difendibili.")
+    else:
+        print(f"  Sotto {proroga:.0%}: si chiude, resta il formato a tre.\n"
+              f"  Metti `esperimento.lunghezza.attiva: false` e riporta "
+              f"`max_per_day` a 1.")
 
 
 def cmd_sito(args: argparse.Namespace) -> int:

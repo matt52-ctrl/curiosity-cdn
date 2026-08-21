@@ -119,6 +119,14 @@ MIGRATIONS = [
     # dell'epoca in cui i due canali erano ancora legati, e il ciclo di
     # apprendimento restava fermo a quelli per sempre.
     "ALTER TABLE reel_metrics ADD COLUMN video_id TEXT",
+    # Iscritti guadagnati dal singolo video. Per anni qui e' mancata perche'
+    # credevamo che YouTube non la desse per video: sbagliato, `dimensions=video`
+    # accetta `subscribersGained` (verificato il 21 agosto 2026, risposta 200).
+    # Aspettative basse: negli ultimi 90 giorni sono 8 iscritti su 21 Short, e
+    # solo 4 video su 21 ne hanno portato almeno uno. Come metrica di decisione
+    # e' inutile — si registra perche' costa zero e perche' il giorno che il
+    # canale cresce diventera' il numero piu' importante che abbiamo.
+    "ALTER TABLE reel_metrics ADD COLUMN sub_gained INTEGER DEFAULT 0",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -162,6 +170,7 @@ CREATE TABLE IF NOT EXISTS reel_metrics (
     -- guardato, non a quanti like riceve.
     avg_view_pct  REAL DEFAULT 0,
     avg_view_sec  REAL DEFAULT 0,
+    sub_gained    INTEGER DEFAULT 0,
     UNIQUE(reel_id, platform, collected_at)
 );
 CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
@@ -703,11 +712,12 @@ def salva_metriche_reel(conn: sqlite3.Connection, reel_id: Optional[int],
     conn.execute(
         """INSERT OR REPLACE INTO reel_metrics
            (reel_id, video_id, platform, collected_at, views, likes, comments,
-            avg_view_pct, avg_view_sec)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+            avg_view_pct, avg_view_sec, sub_gained)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
         (reel_id, video_id, piattaforma, time.time(), m.get("views", 0),
          m.get("likes", 0), m.get("comments", 0),
-         m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0)),
+         m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0),
+         m.get("sub_gained", 0)),
     )
     conn.commit()
 
@@ -874,30 +884,57 @@ def fasce_coperte(conn: sqlite3.Connection, da: float, a: float) -> List[float]:
         "SELECT quando FROM yt_fasce WHERE quando >= ? AND quando < ?", (da, a))]
 
 
-def esito_esperimento(conn: sqlite3.Connection) -> List[sqlite3.Row]:
-    """Confronto fra i due gruppi, su cio' che e' misurabile.
+def esito_esperimento(conn: sqlite3.Connection,
+                      dal: float = 0.0) -> List[sqlite3.Row]:
+    """Confronto fra i gruppi, su cio' che e' misurabile davvero.
 
-    Si guardano insieme visualizzazioni, like e iscritti perche' l'ipotesi
-    riguarda proprio la differenza fra loro: i like dicono se il video piace,
-    le iscrizioni se la pagina convince. Un registro puo' benissimo alzare i
-    primi e lasciare ferme le seconde — sarebbe gia' una risposta.
+    `viste_per_video` sta prima di tutto il resto perche' e' l'unica metrica
+    che una prova sulla LUNGHEZZA puo' usare come giudice. Le altre due sono
+    entrambe truccate dalla durata, in direzioni opposte:
+
+      · la percentuale premia il corto per costruzione. Due nostri Short
+        segnano 105% e 111% — sopra cento, perche' gli Short vanno in loop e
+        il giro in piu' viene contato. Piu' corto e' il video, piu' gira.
+      · i secondi premiano il lungo per costruzione: un video da 18 secondi
+        non puo' essere guardato per venti.
+
+    Restano in tabella perche' descrivono il MECCANISMO, e leggerle insieme
+    dice cose che il totale nasconde — un gruppo che vince sulle viste ma
+    perde sui secondi sta prendendo clic e non attenzione. Ma non decidono.
+
+    `dal` taglia via le righe della vecchia prova sul registro
+    (osservazione/riconoscimento), che vivono nella stessa tabella. Senza,
+    quattro gruppi finirebbero nello stesso confronto e due di quelli sono
+    congelati da agosto.
+
+    Somme via MAX per video: `reel_metrics` conserva ogni rilevazione, e
+    sommare le righe conterebbe lo stesso video tante volte quante e' stato
+    letto. MAX perche' le viste sono cumulative e non tornano indietro.
     """
     return conn.execute(
         """
         SELECT e.variante,
                COUNT(DISTINCT e.video_id) AS video,
                SUM(x.views)  AS viste,
+               CAST(SUM(x.views) AS REAL)
+                   / MAX(COUNT(DISTINCT e.video_id), 1) AS viste_per_video,
                SUM(x.likes)  AS like_tot,
                SUM(x.commenti) AS commenti,
+               SUM(x.iscritti) AS iscritti,
+               AVG(x.sec)    AS secondi_medi,
                AVG(x.pct)    AS visione_media
         FROM esperimento e
         LEFT JOIN (
             SELECT video_id,
                    MAX(views) AS views, MAX(likes) AS likes,
-                   MAX(comments) AS commenti, MAX(avg_view_pct) AS pct
+                   MAX(comments) AS commenti, MAX(avg_view_pct) AS pct,
+                   MAX(avg_view_sec) AS sec, MAX(sub_gained) AS iscritti
             FROM reel_metrics WHERE platform='youtube' AND video_id IS NOT NULL
             GROUP BY video_id
         ) x ON x.video_id = e.video_id
+        WHERE e.creato >= ?
         GROUP BY e.variante
-        """
+        ORDER BY e.variante
+        """,
+        (dal,),
     ).fetchall()

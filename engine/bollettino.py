@@ -139,6 +139,41 @@ def _youtube(conn: sqlite3.Connection) -> List[str]:
     return fuori
 
 
+def _prova_lunghezza(conn: sqlite3.Connection) -> List[str]:
+    """Una riga al giorno sulla prova aperta, senza doverla andare a cercare.
+
+    Perché in chiaro e non solo in `run.py esperimento`: una prova che dura un
+    mese e si consulta solo a comando è una prova che ci si dimentica di avere
+    aperta, e i video escono in due formati senza che nessuno se ne ricordi.
+
+    Il verdetto NON si scrive qui. Compare il conteggio dei giorni e il numero
+    grezzo, perché il senso della soglia scritta in config è proprio che non si
+    decida guardando il bollettino a metà mese.
+    """
+    from .config import cfg
+    from .db import esito_esperimento
+    from .lines import giorni_di_prova, inizio_prova
+
+    if not cfg.get("esperimento.lunghezza.attiva", False):
+        return []
+    giorni = int(cfg.get("esperimento.lunghezza.giorni", 30))
+    passati = giorni_di_prova()
+    try:
+        dati = {r["variante"]: r for r in esito_esperimento(conn, inizio_prova())}
+    except Exception:
+        return []
+    if not dati:
+        return [f"prova lunghezza: giorno {passati}/{giorni}, nessun video ancora"]
+
+    conteggi = " · ".join(
+        f"{g}: {dati[g]['video']} video, {dati[g]['viste_per_video'] or 0:.0f} "
+        f"viste l'uno" for g in ("corto", "lungo") if g in dati)
+    fuori = [f"prova lunghezza — giorno {passati}/{giorni}", conteggi]
+    if passati >= giorni:
+        fuori.append("⏰ è ora di leggerla:  python3 run.py esperimento")
+    return fuori
+
+
 def componi(conn: sqlite3.Connection) -> str:
     """Il messaggio, in HTML per Telegram."""
     from . import allarme, sito_metriche
@@ -163,6 +198,10 @@ def componi(conn: sqlite3.Connection) -> str:
 
     # 3. I numeri, per le fonti che li danno davvero.
     parti.append("\n<b>YouTube</b>\n" + "\n".join(_youtube(conn)))
+
+    prova = _prova_lunghezza(conn)
+    if prova:
+        parti.append("\n<code>" + "\n".join(prova) + "</code>")
 
     bs = _bluesky()
     if bs:

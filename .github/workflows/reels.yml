@@ -42,6 +42,13 @@ on:
     #
     # Gli altri due orari restano scritti qui sotto, commentati, perché
     # rimetterli è la cosa più probabile che si voglia fare fra due settimane.
+    #
+    # 21 agosto 2026 — i cron NON cambiano, ma da oggi il giro delle 9:45
+    # carica DUE Short invece di uno: `publish.youtube.orari` è tornato a due
+    # fasce (13:00 e 19:00) per la prova sulla lunghezza. Un solo giro basta
+    # perché programma tutte le fasce del giorno ancora scoperte, e alle 9:45
+    # lo sono entrambe. Il giro delle 18:15 resta la rete di sicurezza: se il
+    # mattino salta, recupera almeno le 19:00.
     - cron: "45 7 * * *"     # carica e programma lo Short della giornata
     - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
     # - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA

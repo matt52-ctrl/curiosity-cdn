@@ -168,6 +168,74 @@ def scegli_variante(conn) -> str:
     return "riconoscimento"
 
 
+def scegli_lunghezza(giorno: int, indice_fascia: int) -> str:
+    """Quale gruppo tocca a questa uscita: 'corto' o 'lungo'.
+
+    Prova aperta il 21 agosto 2026. Un video con UNA curiosita' rende piu' di
+    uno con tre? Il ragionamento completo, con i numeri che dicono quanto
+    rumore c'e' e perche' la percentuale di visione non puo' decidere, sta in
+    `config.yaml` sotto `esperimento.lunghezza`. Qui c'e' solo la scelta.
+
+    `giorno` = giorni dall'inizio della prova. `indice_fascia` = 0 per il video
+    delle 13:00, 1 per quello delle 19:00.
+
+    NON e' un sorteggio e NON e' "tocca a chi e' indietro". Il conteggio
+    sembrava la scelta ovvia — bilancia i gruppi — ma su questo disegno e'
+    sbagliato: a fine giornata i due gruppi sono sempre pari, quindi il primo
+    video del giorno dopo tocca sempre allo stesso, che si prende sempre le
+    13:00. Dopo un mese il gruppo corto avrebbe trenta uscite di pranzo e il
+    lungo trenta uscite di sera, e staremmo misurando l'orario.
+
+    La somma `giorno + indice_fascia` risolve entrambe le cose insieme: ogni
+    giornata contiene un video per gruppo (quindi il giorno della settimana non
+    entra), e i gruppi si scambiano la fascia ogni giorno (quindi l'ora non
+    entra). E' deterministica, quindi si puo' anche ricostruire a posteriori
+    quale gruppo AVREBBE dovuto uscire in un giorno in cui il caricamento e'
+    fallito.
+
+    A prova chiusa (`attiva: false`) si torna al comportamento normale: tutto
+    'lungo', cioe' `publish.youtube.facts_per_video`.
+    """
+    if not cfg.get("esperimento.lunghezza.attiva", False):
+        return "lungo"
+    if not cfg.get("esperimento.lunghezza.alterna_fascia", True):
+        indice_fascia = 0
+    return "corto" if (giorno + indice_fascia) % 2 == 0 else "lungo"
+
+
+def data_inizio_prova():
+    """Il giorno di partenza della prova, come `date`. None se non impostato."""
+    import datetime as _dt
+
+    testo = str(cfg.get("esperimento.lunghezza.inizio", "") or "").strip()
+    try:
+        return _dt.datetime.strptime(testo, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def inizio_prova() -> float:
+    """L'istante da cui contare, come tempo unix.
+
+    Serve un taglio netto: nella tabella `esperimento` ci sono ancora le righe
+    della prova sul registro (osservazione/riconoscimento), e senza filtro
+    finirebbero mescolate a queste. Sono distinguibili anche dal valore, ma la
+    data e' la difesa che regge pure se un giorno qualcuno riusa un nome.
+    """
+    import datetime as _dt
+
+    d = data_inizio_prova()
+    return _dt.datetime.combine(d, _dt.time.min).timestamp() if d else 0.0
+
+
+def giorni_di_prova() -> int:
+    """Giorni trascorsi dall'inizio. 0 il primo giorno."""
+    import datetime as _dt
+
+    d = data_inizio_prova()
+    return (_dt.date.today() - d).days if d else 0
+
+
 def _system(variante: str = "osservazione") -> str:
     return f"""You write single lines for {cfg.get('brand.name')} ({cfg.get('brand.handle')}),
 an account about how the human mind actually works.

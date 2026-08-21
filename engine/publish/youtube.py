@@ -396,7 +396,11 @@ def ritenzione(giorni: int = 30) -> Dict[str, Dict]:
             "ids": "channel==MINE",
             "startDate": inizio.isoformat(),
             "endDate": fine.isoformat(),
-            "metrics": "views,averageViewPercentage,averageViewDuration",
+            # `subscribersGained` con `dimensions=video` funziona: verificato
+            # con una chiamata reale il 21 agosto 2026 (200, colonna presente).
+            # Da qualche parte era finito scritto il contrario.
+            "metrics": ("views,averageViewPercentage,averageViewDuration,"
+                        "subscribersGained"),
             "dimensions": "video",
             "sort": "-views",
             "maxResults": 200,
@@ -423,6 +427,7 @@ def ritenzione(giorni: int = 30) -> Dict[str, Dict]:
             "views": int(v.get("views", 0) or 0),
             "avg_view_pct": float(v.get("averageViewPercentage", 0) or 0),
             "avg_view_sec": float(v.get("averageViewDuration", 0) or 0),
+            "sub_gained": int(v.get("subscribersGained", 0) or 0),
         }
     return fuori
 

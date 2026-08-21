@@ -348,7 +348,8 @@ def build_line(
 
 
 def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
-              indice: int, canale: str = "") -> Optional[Path]:
+              indice: int, canale: str = "",
+              domanda: str = "") -> Optional[Path]:
     """Il fotogramma finale: cosa chiediamo a chi è arrivato in fondo.
 
     Perché esiste: fino al 20 agosto 2026 i video finivano e basta. L'ultima
@@ -366,6 +367,10 @@ def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
     Lo sfondo è quello dell'ultima curiosità, già scaricato: cercarne uno nuovo
     costerebbe una chiamata a Pexels per due secondi di video.
 
+    `domanda` arriva da fuori perché non è sempre la stessa: «Which one was new
+    to you?» presuppone che ce ne fosse più di una, e in un video a curiosità
+    singola è una domanda senza senso. Vuota = si usa `cta.domanda`.
+
     ⚠️ I parametri di codifica devono restare IDENTICI a quelli dei segmenti
     del ciclo qui sopra. La concatenazione usa `-c:v copy` e non ricodifica:
     con un fps o un profilo diverso il video esce corrotto e ffmpeg non dice
@@ -373,7 +378,7 @@ def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
     """
     from . import render
 
-    domanda = (cfg.get("cta.domanda", "") or "").strip()
+    domanda = (domanda or cfg.get("cta.domanda", "") or "").strip()
     if not domanda:
         return None
     azione = (cfg.get(f"cta.azione.{canale}", "")
@@ -431,7 +436,8 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
 def build_multi(voci: List[Dict], name: str,
                 totale: Optional[float] = None,
                 massimo: Optional[float] = None,
-                canale: str = "") -> tuple:
+                canale: str = "",
+                domanda_cta: str = "") -> tuple:
     """Ritorna (percorso, voci_effettivamente_montate).
 
     Le due cose vanno insieme: se un filmato non si trova quel segmento salta,
@@ -556,7 +562,8 @@ def build_multi(voci: List[Dict], name: str,
     # non si recupera.
     if ultimo_sfondo is not None:
         try:
-            coda = _coda_cta(ff, ultimo_sfondo, name, tmp, len(segmenti), canale)
+            coda = _coda_cta(ff, ultimo_sfondo, name, tmp, len(segmenti),
+                             canale, domanda_cta)
             if coda:
                 segmenti.append(coda)
                 durata += float(cfg.get("cta.secondi", 2.4))

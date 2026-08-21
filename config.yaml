@@ -325,7 +325,21 @@ publish:
     #
     # Da rivalutare fra un paio di settimane guardando `run.py esperimento`
     # e le iscrizioni in Studio, non le visualizzazioni del singolo video.
-    max_per_day: 1
+    #
+    # Risalito da 1 a 2 il 21 agosto 2026, e SOLO per la durata della prova
+    # sulla lunghezza (vedi `esperimento.lunghezza`). Non e' un ripensamento
+    # sul ragionamento di sopra, che resta valido: serve perche' i due gruppi
+    # devono uscire negli STESSI giorni, altrimenti il giorno della settimana
+    # diventa la vera variabile e il confronto non vale niente.
+    #
+    # Cosa si perde: da oggi il canale non e' piu' confrontabile con il
+    # proprio passato, perche' cambiano insieme lunghezza e cadenza. Cosa NON
+    # si perde: il confronto fra i due gruppi, che vivono entrambi dentro la
+    # stessa cadenza e la subiscono uguale.
+    #
+    # A prova finita torna a 1 se il gruppo lungo vince, resta a 2 solo se
+    # c'e' una ragione nuova.
+    max_per_day: 2
 
     # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
     # workflow: il primo giro della giornata carica tutti e tre i video e li
@@ -350,7 +364,14 @@ publish:
     # ne ha fatte 497. Cinque video non distinguono l'orario dal contenuto —
     # quel video aveva anche l'aggancio migliore — ma punta nella stessa
     # direzione del ragionamento sui fusi, che regge da solo.
-    orari: ["19:00"]
+    #
+    # La seconda fascia e' tornata il 21 agosto 2026 per la prova sulla
+    # lunghezza. Le 13:00 italiane sono la mattina presto sulla costa est e
+    # l'ora di pranzo in Europa: e' la seconda fascia meno peggio, ma resta
+    # peggiore delle 19:00. Per questo i due gruppi se le SCAMBIANO ogni
+    # giorno (vedi `esperimento.lunghezza.alterna_fascia`): se il gruppo corto
+    # prendesse sempre le 19:00 misureremmo l'orario, non la lunghezza.
+    orari: ["13:00", "19:00"]
     fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come
@@ -626,6 +647,101 @@ reel:
 esperimento:
   # Sotto questa soglia per gruppo, la differenza è rumore e non va letta.
   video_minimi: 6
+
+  # ─── PROVA SULLA LUNGHEZZA ─────────────────────────────────────────────────
+  # Domanda: un video con UNA curiosità sola rende più di uno con tre?
+  #
+  # Perché solo su YouTube. TikTok non espone nessun dato di visione, e nemmeno
+  # dopo l'audit Production: `video.list` restituisce viste, like e commenti,
+  # non il tempo guardato. Instagram è fermo sui caroselli. YouTube è l'unico
+  # posto dove la risposta esiste.
+  #
+  # ⚠️ LA TRAPPOLA, che è doppia e va capita prima di leggere i numeri.
+  # · La PERCENTUALE premia il corto per costruzione. Non è teoria: due nostri
+  #   Short hanno averageViewPercentage 105% e 111%. Sopra cento, perché gli
+  #   Short vanno in loop e il giro in più viene contato. Più il video è corto,
+  #   più gira, più il numero si gonfia.
+  # · I SECONDI premiano il lungo per costruzione. Un video da 18 secondi non
+  #   può essere guardato 20 secondi; la nostra mediana attuale è 15 su clip
+  #   da 33.
+  # Quindi nessuna delle due decide. Decide `viste per video`, che è l'unica
+  # non truccata dalla durata — ed è anche la più rumorosa che abbiamo.
+  #
+  # QUANTO RUMORE (misurato sui 21 Short degli ultimi 90 giorni, tutti lunghi
+  # 33,1s con deviazione 0,5 — sono la stessa cosa ripetuta):
+  #   viste            mediana 277, da 80 a 1.276   → CV 0,82
+  #   secondi guardati mediana  15, da 10 a    37   → CV 0,38
+  # Con CV 0,82 sulle viste servono ~30 video per gruppo per vedere una
+  # differenza del 60%, ~42 per vederne una del 50%, ~168 per una del 25%.
+  # Sotto quelle soglie NON stiamo misurando: stiamo leggendo il caso.
+  #
+  # E IL FATTO SCOMODO: sugli stessi 21 video la correlazione fra secondi
+  # guardati e viste è 0,23, e i video sopra i 18 secondi guardati hanno viste
+  # mediane PIÙ BASSE (209) di quelli sotto (296). Con n=21 non è una
+  # smentita, ma la premessa "più ritenzione → YouTube spinge di più" sui
+  # nostri dati non ha appoggio. La prova si fa lo stesso perché la differenza
+  # di durata è grossa (18s contro 47s) e perché un mese costa poco — non
+  # perché ci aspettiamo che vinca.
+  lunghezza:
+    attiva: true
+
+    # 30 giorni a 2 Short al giorno = ~30 video per gruppo, che è la soglia
+    # del 60% qui sopra. Un mese e non due settimane per scelta di Mattia:
+    # cambiare formato ogni quindici giorni disorienta la distribuzione, che
+    # ha bisogno di vedere una cosa costante prima di capire a chi darla.
+    giorni: 30
+    inizio: "2026-08-21"
+
+    # I due gruppi. Cambia SOLO il numero di curiosità: registro, tipografia,
+    # musica, CTA e sorgenti restano identici. Una variabile alla volta.
+    gruppi:
+      corto:
+        fatti: 1
+        # 11,0 e non 16,0, e la differenza NON è un dettaglio.
+        #
+        # Lasciato al valore normale, `build_multi` darebbe a una curiosità
+        # sola min(16, 33/1) = 16 secondi. Ma la rivelazione compare a 3,4s e
+        # poi resta ferma fino alla fine: 12,6 secondi di frase immobile,
+        # contro i 7,6 di oggi. Il gruppo corto arriverebbe alla prova con
+        # dell'aria morta che il gruppo lungo non ha, perderebbe, e noi
+        # concluderemmo «i video corti non funzionano» quando la risposta vera
+        # sarebbe «sedici secondi su una frase sola non funzionano».
+        #
+        # A 11,0 il ritmo per curiosità è IDENTICO nei due gruppi (33/3 = 11).
+        # L'unica cosa che cambia è quante ce ne sono, che è esattamente la
+        # domanda della prova. Video finito: 11 + 2,4 = 13,4 secondi contro
+        # 33 + 2,4 = 35,4 — due volte e mezzo, e i 35,4 tornano con la durata
+        # ricavata dalle analytics dei 21 Short (33,1s di media, prima che la
+        # coda esistesse). I 47 secondi sono il montaggio TikTok, che ha una
+        # finestra sua: qui non c'entra.
+        max_secondi_per_fatto: 11.0
+        # «Which one was new to you?» con un fatto solo non vuol dire niente.
+        domanda: "Did you know this one?"
+      lungo:
+        fatti: 3
+        # Non vincola: con tre curiosità il calcolo dà già 33/3 = 11.
+        max_secondi_per_fatto: 16.0
+        domanda: "Which one was new to you?"
+
+    # Ogni giorno i gruppi si scambiano l'orario di uscita. Senza, l'ora e la
+    # lunghezza cambierebbero insieme e non sapremmo quale delle due leggiamo.
+    alterna_fascia: true
+
+    # ─── LA REGOLA DI DECISIONE, SCRITTA PRIMA ───────────────────────────────
+    # Sta qui e non nella testa di nessuno perché a fine mese la tentazione di
+    # spostare l'asticella per far vincere l'ipotesi che ci piaceva è forte, e
+    # una soglia scritta il primo giorno è l'unica difesa. Si legge SOLO al
+    # giorno 30: guardare a metà e cambiare è il modo di trasformare il rumore
+    # in una conclusione.
+    #
+    # metrica: viste per video, gruppo corto contro gruppo lungo
+    #   corto avanti di ≥ 60%           → si adotta il formato a un fatto
+    #   corto avanti fra 30% e 60%      → non conclusivo: si prolunga di 30 gg
+    #   tutto il resto (incluso pari)   → si chiude, resta il formato a tre
+    # In caso di dubbio non si cambia: il costo di restare è zero, quello di
+    # inseguire un numero che era caso è un formato peggiore tenuto per mesi.
+    soglia_adozione: 0.60
+    soglia_proroga: 0.30
 
 # ─── SITO ─────────────────────────────────────────────────────────────────────
 # Una pagina per curiosità, servita da GitHub Pages: gratis, senza hosting e
