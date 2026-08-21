@@ -163,7 +163,8 @@ def _prova_lunghezza(conn: sqlite3.Connection) -> List[str]:
     except Exception:
         return []
     if passati < 0:
-        return [f"prova lunghezza: parte fra {-passati} giorni"]
+        giorno = "giorno" if passati == -1 else "giorni"
+        return [f"prova lunghezza: parte fra {-passati} {giorno}"]
     if not dati:
         return [f"prova lunghezza: giorno {passati}/{giorni}, nessun video ancora"]
 

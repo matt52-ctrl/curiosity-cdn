@@ -1516,7 +1516,8 @@ def cmd_esperimento(args: argparse.Namespace) -> int:
     print("\n  PROVA SULLA LUNGHEZZA — un fatto per video contro tre"
           if attiva else "\n  PROVA A/B SUL REGISTRO")
     if attiva and passati < 0:
-        print(f"  non è ancora cominciata: parte fra {-passati} giorni")
+        print(f"  non è ancora cominciata: parte fra {-passati} "
+              f"{'giorno' if passati == -1 else 'giorni'}")
     elif attiva:
         print(f"  giorno {passati} di {giorni}"
               + ("" if passati < giorni else "  ← si legge oggi"))
