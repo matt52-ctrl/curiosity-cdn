@@ -932,9 +932,18 @@ def esito_esperimento(conn: sqlite3.Connection,
             FROM reel_metrics WHERE platform='youtube' AND video_id IS NOT NULL
             GROUP BY video_id
         ) x ON x.video_id = e.video_id
+        -- La data da sola non basta, ed e' costato un controllo per
+        -- accorgersene: lo Short che il bot aveva gia' programmato la mattina
+        -- del 21 agosto col codice vecchio porta variante 'riconoscimento' ed
+        -- e' stato creato dentro la finestra. Passava il filtro e compariva
+        -- come terza riga, in un confronto a cui non partecipa. Il verdetto
+        -- non ne sarebbe stato falsato — guarda solo 'corto' e 'lungo' — ma
+        -- una tabella che mostra un gruppo fantasma e' una tabella che si
+        -- smette di leggere con fiducia.
         WHERE e.creato >= ?
+          AND (? = 0 OR e.variante IN ('corto', 'lungo'))
         GROUP BY e.variante
         ORDER BY e.variante
         """,
-        (dal,),
+        (dal, 1 if dal else 0),
     ).fetchall()

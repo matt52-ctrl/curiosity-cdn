@@ -690,7 +690,13 @@ esperimento:
     # cambiare formato ogni quindici giorni disorienta la distribuzione, che
     # ha bisogno di vedere una cosa costante prima di capire a chi darla.
     giorni: 30
-    inizio: "2026-08-21"
+    # Il 22 e non il 21, che è il giorno in cui la prova è stata scritta: il
+    # giro delle 10:27 del 21 aveva già caricato e programmato lo Short delle
+    # 19:00 col codice vecchio, e la fascia delle 13:00 era passata. Il 21 non
+    # produce nessun video dei due gruppi, quindi contarlo come primo giorno
+    # vorrebbe dire chiudere la prova con un giorno di dati in meno di quelli
+    # che le abbiamo promesso.
+    inizio: "2026-08-22"
 
     # I due gruppi. Cambia SOLO il numero di curiosità: registro, tipografia,
     # musica, CTA e sorgenti restano identici. Una variabile alla volta.
