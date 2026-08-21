@@ -140,6 +140,121 @@ What does NOT change:
 }
 
 
+# ─── Prova sull'apertura: il divario contro lo scontro ────────────────────────
+#
+# Il ragionamento completo sta in `config.yaml` sotto `esperimento.apertura`.
+# Qui basta la differenza fra i due modi di aprire, perché è quella che il
+# modello deve capire:
+#
+#   divario   L'aggancio toglie qualcosa. "The thing you're still cringing
+#             about?" non dice niente di falso: lascia un buco e chi guarda
+#             resta per vederlo chiuso. È curiosità, ed è un sentimento tiepido.
+#
+#   scontro   L'aggancio contraddice. "Your closest friend reads you worse than
+#             a stranger does" dice una cosa che chi guarda crede falsa, e resta
+#             per vederla smontare. È obiezione, ed è più forte della curiosità
+#             perché tira in mezzo l'amor proprio.
+#
+# La differenza si gioca tutta nei primi tre secondi — che è esattamente la
+# finestra in cui l'aggancio sta da solo sullo schermo (`reel.reveal_at: 3.4`)
+# ed esattamente ciò che sappiamo misurare bene.
+#
+# ATTENZIONE, e vale più di tutto il resto: lo scontro è la scorciatoia più
+# vicina alla bugia che questo account possa prendere. Un'affermazione è tanto
+# più contestabile quanto più è estrema, quindi il modello ha un incentivo
+# strutturale a esagerare. Per questo il blocco qui sotto spende metà del testo
+# a dire cosa NON è uno scontro. Se la prova la vince ma le frasi hanno smesso
+# di essere vere, abbiamo perso comunque.
+
+APERTURE = ("divario", "scontro")
+
+APERTURA = {
+    # Gruppo di controllo: le TWO BEATS del prompt di sistema, invariate.
+    "divario": "",
+
+    "scontro": """
+
+HOW TO OPEN, FOR THIS BATCH — this replaces nothing above, it sharpens the hook
+
+The hook must not merely withhold the answer. It must state something the
+viewer believes is wrong about themselves — and the reveal then shows the
+research agrees with the hook, not with them.
+
+  withheld (what we usually do):
+      hook:   "Nobody can tell you're panicking."
+      reveal: "Observers spot it about half as often as you feel it."
+
+  collision (what to do here):
+      hook:   "Your closest friend reads you worse than a stranger does."
+      reveal: "Strangers judge from behaviour. Friends judge from who they
+               need you to be."
+
+The test for a hook in this batch: could the viewer answer it back? If the
+natural reaction is "no I don't" or "that's not true", it is working. If the
+natural reaction is "hm, go on", that is the withheld version — rewrite it.
+
+  weak (curiosity):   "Memory does something strange with holidays."
+  strong (collision): "You never remember a holiday. You remember two minutes
+                       of it."
+
+  weak (curiosity):   "There's a reason you reread that message."
+  strong (collision): "Nobody spent the evening thinking about your message."
+
+WHAT A COLLISION IS NOT — read this twice
+
+  Not an overstatement. The clash comes from the finding being genuinely
+  counter-intuitive, never from stretching it. If you have to widen the claim
+  to make it collide, the fact is wrong for this batch: pick another. A line
+  that is 20% more striking and 5% less true is a bad trade for this account,
+  because the whole value here is that everything can be checked.
+
+  Not an insult. "You are bad at X" is a collision only if the research says so
+  about everyone, and only if the reveal explains why it is not a personal
+  failing. Attacking the viewer without paying it off is the register of
+  accounts that farm angry comments. The reveal must land as relief or as
+  explanation, never as a verdict left standing.
+
+  Not a question. No hook ending in a question mark. A question invites
+  waiting; a statement invites disagreement, and disagreement is the point.
+
+  Not a fight with a strawman. "Everyone says X, but science says Y" is the
+  laziest collision there is, and every account uses it. Collide with what the
+  VIEWER believes about themselves, not with what "people say".
+
+The reveal's job changes slightly too: it must resolve the collision, not just
+complete the sentence. Afterwards the viewer should feel the hook was fair —
+not that they were tricked into staying.""",
+}
+
+
+def scegli_apertura(giorno: int, indice_fascia: int) -> str:
+    """Quale apertura tocca a questa uscita: 'divario' o 'scontro'.
+
+    Gira INSIEME alla prova sulla lunghezza, e non e' pigrizia: e' un disegno
+    fattoriale 2x2. Il punto che lo rende conveniente e' che l'effetto
+    principale di ciascun fattore si legge su TUTTI i video, non su meta'. Con
+    60 uscite: 60 video per dire se lo scontro tiene di piu', 60 per dire se il
+    corto rende di piu', e solo l'interazione fra i due — "lo scontro serve di
+    piu' sui video corti?" — resta a 15 per casella. L'interazione e' la
+    domanda a cui teniamo meno, quindi e' quella giusta da sacrificare.
+
+    Perche' `giorno // 2` e non `giorno`: con `giorno` l'apertura cambierebbe
+    allo stesso ritmo della lunghezza, i due fattori sarebbero identici a ogni
+    uscita e non si potrebbero piu' distinguere — misureremmo una cosa sola
+    credendo di misurarne due. Dividendo per due, l'apertura gira a meta'
+    velocita', e su quattro giorni tutte e quattro le combinazioni escono una
+    volta ciascuna.
+
+    A prova chiusa (`attiva: false`) si torna all'aggancio normale, cioe' le
+    TWO BEATS del prompt di sistema senza aggiunte.
+    """
+    if not cfg.get("esperimento.apertura.attiva", False):
+        return "divario"
+    if not cfg.get("esperimento.apertura.alterna_fascia", True):
+        indice_fascia = 0
+    return "scontro" if (giorno // 2 + indice_fascia) % 2 == 0 else "divario"
+
+
 def scegli_variante(conn) -> str:
     """Il registro con cui scrivere. Dal 20 agosto 2026 non e' piu' una prova.
 
@@ -203,18 +318,28 @@ def scegli_lunghezza(giorno: int, indice_fascia: int) -> str:
     return "corto" if (giorno + indice_fascia) % 2 == 0 else "lungo"
 
 
-def data_inizio_prova():
-    """Il giorno di partenza della prova, come `date`. None se non impostato."""
+def data_inizio_prova(prova: str = "lunghezza"):
+    """Il giorno di partenza di una prova, come `date`. None se non impostato.
+
+    Il parametro `prova` esiste da quando le prove sono due. Prima la data era
+    una sola, letta da `esperimento.lunghezza.inizio`, e quando e' arrivata la
+    prova sull'apertura il conteggio dei giorni ha continuato a leggere quella
+    — funzionava, perche' le due date sono uguali per costruzione, ma solo
+    finche' restavano uguali. Due chiavi in `config.yaml` che DEVONO combaciare
+    senza che niente lo controlli sono un guasto che aspetta il giorno in cui
+    qualcuno ne sposta una: la prova sull'apertura avrebbe cambiato gruppo al
+    momento sbagliato e nessuna riga di output lo avrebbe detto.
+    """
     import datetime as _dt
 
-    testo = str(cfg.get("esperimento.lunghezza.inizio", "") or "").strip()
+    testo = str(cfg.get(f"esperimento.{prova}.inizio", "") or "").strip()
     try:
         return _dt.datetime.strptime(testo, "%Y-%m-%d").date()
     except ValueError:
         return None
 
 
-def inizio_prova() -> float:
+def inizio_prova(prova: str = "lunghezza") -> float:
     """L'istante da cui contare, come tempo unix.
 
     Serve un taglio netto: nella tabella `esperimento` ci sono ancora le righe
@@ -224,19 +349,19 @@ def inizio_prova() -> float:
     """
     import datetime as _dt
 
-    d = data_inizio_prova()
+    d = data_inizio_prova(prova)
     return _dt.datetime.combine(d, _dt.time.min).timestamp() if d else 0.0
 
 
-def giorni_di_prova() -> int:
+def giorni_di_prova(prova: str = "lunghezza") -> int:
     """Giorni trascorsi dall'inizio. 0 il primo giorno."""
     import datetime as _dt
 
-    d = data_inizio_prova()
+    d = data_inizio_prova(prova)
     return (_dt.date.today() - d).days if d else 0
 
 
-def _system(variante: str = "osservazione") -> str:
+def _system(variante: str = "osservazione", apertura: str = "divario") -> str:
     return f"""You write single lines for {cfg.get('brand.name')} ({cfg.get('brand.handle')}),
 an account about how the human mind actually works.
 
@@ -326,12 +451,14 @@ HASHTAGS
   In 2026 hashtags no longer drive discovery — Instagram uses them to file
   content by topic, not to distribute it. Thirty tags do nothing that five do
   not, and a wall of them reads as spam. So: five narrow, specific tags that
-  describe the actual mechanism, not the field.""" + REGISTRO.get(variante, "")
+  describe the actual mechanism, not the field.""" + REGISTRO.get(variante, "") \
+        + APERTURA.get(apertura, "")
 
 
 def generate(conn: sqlite3.Connection, count: int,
              imparato: str = "", canale: str = "instagram",
-             variante: str = "osservazione") -> List[Dict[str, Any]]:
+             variante: str = "riconoscimento",
+             apertura: str = "divario") -> List[Dict[str, Any]]:
     """Ricava frasi dai fatti verificati, escludendo quelli gia' usati.
 
     L'esclusione avviene sul FATTO, non sulla frase: due reel possono
@@ -344,6 +471,16 @@ def generate(conn: sqlite3.Connection, count: int,
     curiosita' perche' la percentuale di visione dipende tanto da COME e'
     scritta la frase quanto da cosa racconta: l'aggancio ha due secondi per
     funzionare, e quello e' un fatto di formulazione.
+
+    Il default di `variante` e' "riconoscimento", cioe' il VINCITORE della
+    prova di agosto. Fino al 21 agosto 2026 era "osservazione", il gruppo di
+    controllo, ed e' costato caro: i due punti di chiamata che non passano il
+    parametro — TikTok e i reel Instagram — hanno scritto per un mese nel
+    registro che sapevamo peggiore (41% di visione contro 50%), mentre YouTube
+    usava quello buono. Il valore di default di un parametro e' una decisione
+    presa una volta e poi invisibile: se deve esistere, che sia la scelta
+    giusta, cosi' un punto di chiamata scritto domani non eredita in silenzio
+    un gruppo di controllo chiuso da un pezzo.
     """
     # Esclusione dura su tutto cio' che e' gia' uscito su Instagram, caroselli
     # compresi. Prima era una preferenza — le mai usate venivano prima, ma in
@@ -383,7 +520,7 @@ Return JSON matching the schema."""
     if imparato:
         user += "\n\n" + imparato
 
-    data = ask_json(_system(variante), user, LINES_SCHEMA,
+    data = ask_json(_system(variante, apertura), user, LINES_SCHEMA,
                     effort="medium", max_tokens=8000)
     linee = data.get("lines", [])[:count]
 

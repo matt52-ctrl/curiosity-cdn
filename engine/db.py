@@ -127,6 +127,17 @@ MIGRATIONS = [
     # e' inutile — si registra perche' costa zero e perche' il giorno che il
     # canale cresce diventera' il numero piu' importante che abbiamo.
     "ALTER TABLE reel_metrics ADD COLUMN sub_gained INTEGER DEFAULT 0",
+    # Tenuta al terzo secondo. Il perche' e' scritto per esteso accanto alla
+    # colonna in REEL_METRICS_SCHEMA: in due parole, e' la sola misura che
+    # abbiamo abbastanza silenziosa (CV 0,049) da decidere una prova in un
+    # mese invece che in sei.
+    "ALTER TABLE reel_metrics ADD COLUMN tenuta_3s REAL DEFAULT 0",
+    # Il gruppo di apertura, per i video della prova che parte il 22 agosto
+    # 2026. Sta in una colonna sua e non dentro `variante` perche' le due prove
+    # girano insieme e vanno lette separate: e' tutto il senso del 2x2.
+    # I video precedenti restano con la stringa vuota, che le letture
+    # escludono da sole invece di contarli come un terzo gruppo fantasma.
+    "ALTER TABLE esperimento ADD COLUMN apertura TEXT NOT NULL DEFAULT ''",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -171,6 +182,28 @@ CREATE TABLE IF NOT EXISTS reel_metrics (
     avg_view_pct  REAL DEFAULT 0,
     avg_view_sec  REAL DEFAULT 0,
     sub_gained    INTEGER DEFAULT 0,
+    -- Quanti spettatori sono ancora li' al terzo secondo, come frazione di
+    -- quelli che erano li' al primo istante. Non e' una metrica in piu' fra le
+    -- altre: e' l'unica abbastanza silenziosa da poterci decidere sopra.
+    --
+    -- Misurato sui nostri 22 Shorts il 21 agosto 2026:
+    --     tenuta 3s   mediana 0,923   da 0,823 a 0,977   CV 0,049
+    --     viste       mediana 288                        CV 0,781
+    -- Sedici volte meno rumorosa delle viste. Servono ~15 video per gruppo per
+    -- vedere una differenza del 5%, contro i ~30 che vorrebbero le viste per
+    -- vederne una del 60%.
+    --
+    -- E non e' silenziosa perche' insignificante: correla con log(viste) a
+    -- +0,32, piu' di qualunque altra cosa che sappiamo leggere. La meta' dei
+    -- video con tenuta migliore ha 533 viste mediane, l'altra meta' 276.
+    --
+    -- Viene da `audienceWatchRatio` con `dimensions=elapsedVideoTimeRatio`,
+    -- divisa per il primo punto della stessa curva. La divisione non e' un
+    -- vezzo: sugli Shorts quella curva parte SOPRA 1 (misurati 1,86 / 1,28 /
+    -- 1,13 / 1,07) perche' il loop fa ripassare lo spettatore sullo stesso
+    -- istante e YouTube li conta tutti. Un rapporto fra due punti della stessa
+    -- curva si porta via quel fattore; un valore assoluto no.
+    tenuta_3s     REAL DEFAULT 0,
     UNIQUE(reel_id, platform, collected_at)
 );
 CREATE INDEX IF NOT EXISTS idx_reel_metrics ON reel_metrics(reel_id, platform);
@@ -216,11 +249,24 @@ CREATE TABLE IF NOT EXISTS capitoli (
     pubblicato REAL
 );
 
+-- Due prove girano insieme, quindi servono due colonne e non una.
+--
+-- `variante` porta il gruppo di LUNGHEZZA ('corto' / 'lungo'), e prima ancora
+-- portava il registro ('osservazione' / 'riconoscimento'): e' storia, e resta
+-- leggibile perche' le righe vecchie ci sono ancora.
+-- `apertura` porta il gruppo di APERTURA ('divario' / 'scontro').
+--
+-- Perche' due colonne e non una sola con 'corto-scontro': perche' il disegno
+-- 2x2 vive proprio sul poterle leggere separate. L'effetto della lunghezza si
+-- misura su tutti i video mettendo insieme le due aperture, e viceversa. Con
+-- una colonna sola ogni lettura sarebbe su un quarto dei dati, ed e'
+-- esattamente il vantaggio che si stava cercando di ottenere.
 CREATE TABLE IF NOT EXISTS esperimento (
     video_id  TEXT PRIMARY KEY,
     variante  TEXT NOT NULL,
     creato    REAL NOT NULL,
-    piattaforma TEXT NOT NULL DEFAULT 'youtube'
+    piattaforma TEXT NOT NULL DEFAULT 'youtube',
+    apertura  TEXT NOT NULL DEFAULT ''
 );
 
 -- Fasce YouTube gia' coperte. Serve a sapere quali uscite di oggi esistono
@@ -712,12 +758,12 @@ def salva_metriche_reel(conn: sqlite3.Connection, reel_id: Optional[int],
     conn.execute(
         """INSERT OR REPLACE INTO reel_metrics
            (reel_id, video_id, platform, collected_at, views, likes, comments,
-            avg_view_pct, avg_view_sec, sub_gained)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            avg_view_pct, avg_view_sec, sub_gained, tenuta_3s)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
         (reel_id, video_id, piattaforma, time.time(), m.get("views", 0),
          m.get("likes", 0), m.get("comments", 0),
          m.get("avg_view_pct", 0.0), m.get("avg_view_sec", 0.0),
-         m.get("sub_gained", 0)),
+         m.get("sub_gained", 0), m.get("tenuta_3s", 0.0)),
     )
     conn.commit()
 
@@ -861,11 +907,17 @@ def quanti_liberi(conn: sqlite3.Connection, canale: str) -> int:
 
 
 def segna_variante(conn: sqlite3.Connection, video_id: str, variante: str,
-                   piattaforma: str = "youtube") -> None:
+                   piattaforma: str = "youtube", apertura: str = "") -> None:
+    """Registra a quali gruppi appartiene un video appena caricato.
+
+    Va chiamata DOPO che YouTube ha accettato il caricamento: un video che non
+    esiste non appartiene a nessun gruppo, e contarlo sposterebbe il confronto
+    di una casella per un errore di rete.
+    """
     conn.execute(
-        "INSERT OR REPLACE INTO esperimento (video_id, variante, creato, piattaforma) "
-        "VALUES (?,?,?,?)",
-        (video_id, variante, time.time(), piattaforma),
+        "INSERT OR REPLACE INTO esperimento "
+        "(video_id, variante, creato, piattaforma, apertura) VALUES (?,?,?,?,?)",
+        (video_id, variante, time.time(), piattaforma, apertura),
     )
     conn.commit()
 
@@ -946,4 +998,107 @@ def esito_esperimento(conn: sqlite3.Connection,
         ORDER BY e.variante
         """,
         (dal, 1 if dal else 0),
+    ).fetchall()
+
+
+# Le due letture della prova sull'apertura vivono qui sotto. La query e' quasi
+# la stessa di sopra e la tentazione di unificarle e' forte: non lo faccio
+# perche' le due prove hanno GIUDICI diversi, e mescolarle porterebbe a leggere
+# l'una col metro dell'altra.
+#
+#   lunghezza  si giudica sulle VISTE PER VIDEO, perche' percentuale e secondi
+#              sono truccati dalla durata, che e' la cosa che stiamo cambiando.
+#   apertura   si giudica sulla TENUTA A 3 SECONDI, perche' la durata non
+#              cambia fra i due gruppi e quindi il trucco non c'e'; e perche'
+#              tre secondi sono esattamente la finestra in cui l'aggancio sta
+#              da solo sullo schermo, cioe' la sola cosa che stiamo cambiando.
+#
+# Una funzione sola con un parametro "su cosa giudichi" sarebbe piu' corta e
+# molto piu' facile da usare male fra sei mesi.
+
+_JOIN_METRICHE = """
+        LEFT JOIN (
+            SELECT video_id,
+                   MAX(views) AS views, MAX(likes) AS likes,
+                   MAX(avg_view_pct) AS pct, MAX(avg_view_sec) AS sec,
+                   MAX(tenuta_3s) AS tenuta
+            FROM reel_metrics WHERE platform='youtube' AND video_id IS NOT NULL
+            GROUP BY video_id
+        ) x ON x.video_id = e.video_id"""
+
+
+def esito_apertura(conn: sqlite3.Connection,
+                   dal: float = 0.0) -> List[sqlite3.Row]:
+    """Effetto principale dell'apertura: divario contro scontro.
+
+    Legge su TUTTI i video della finestra, non su meta': e' il vantaggio per
+    cui le due prove girano insieme invece che una dopo l'altra. I video corti
+    e quelli lunghi sono distribuiti in parti uguali fra le due aperture, per
+    costruzione, quindi la lunghezza non e' un fattore di confusione — si
+    elide da sola sommando.
+
+    `tenuta_media` decide. `viste_per_video` compare accanto per un controllo
+    di coerenza: se lo scontro tiene di piu' ma porta meno viste, non e' un
+    dettaglio, e' il segnale che l'aggancio sta trattenendo chi era gia' li'
+    senza convincere l'algoritmo a mostrarlo a qualcun altro.
+
+    `video_con_dati` non e' `video`: la curva di ritenzione arriva solo quando
+    il video ha abbastanza visite, e nei primi giorni la meta' delle righe ha
+    ancora tenuta zero. Contarle come zeri farebbe sembrare in vantaggio il
+    gruppo che ha ricevuto per caso i dati per primo.
+    """
+    return conn.execute(
+        f"""
+        SELECT e.apertura,
+               COUNT(DISTINCT e.video_id) AS video,
+               SUM(CASE WHEN x.tenuta > 0 THEN 1 ELSE 0 END) AS video_con_dati,
+               AVG(CASE WHEN x.tenuta > 0 THEN x.tenuta END) AS tenuta_media,
+               MIN(CASE WHEN x.tenuta > 0 THEN x.tenuta END) AS tenuta_min,
+               MAX(x.tenuta) AS tenuta_max,
+               SUM(x.views) AS viste,
+               CAST(SUM(x.views) AS REAL)
+                   / MAX(COUNT(DISTINCT e.video_id), 1) AS viste_per_video,
+               AVG(x.pct) AS visione_media
+        FROM esperimento e{_JOIN_METRICHE}
+        -- La stringa vuota esclude tutto cio' che e' uscito prima del 22
+        -- agosto 2026: quei video hanno un'apertura, ovviamente, ma nessuno
+        -- l'ha scelta ne' registrata. Contarli come gruppo sarebbe inventarsi
+        -- un braccio di controllo a posteriori.
+        WHERE e.creato >= ? AND e.apertura <> ''
+        GROUP BY e.apertura
+        ORDER BY e.apertura
+        """,
+        (dal,),
+    ).fetchall()
+
+
+def esito_incrocio(conn: sqlite3.Connection,
+                   dal: float = 0.0) -> List[sqlite3.Row]:
+    """Le quattro caselle del 2x2. Serve a vedere l'interazione, non a decidere.
+
+    Con 60 uscite qui ci sono 15 video per casella, ed e' poco: una differenza
+    fra caselle deve essere grossa prima di significare qualcosa. La domanda
+    che risponde — "lo scontro serve di piu' sui video corti?" — e' quella a
+    cui teniamo meno, ed e' per questo che e' stata sacrificata scegliendo il
+    fattoriale invece di due prove in fila.
+
+    Ha comunque un uso serio: se una casella e' molto fuori scala rispetto
+    alle altre tre, gli effetti principali letti sopra diventano sospetti,
+    perche' vorrebbe dire che una media sta nascondendo due comportamenti
+    diversi invece di riassumerne uno.
+    """
+    return conn.execute(
+        f"""
+        SELECT e.variante, e.apertura,
+               COUNT(DISTINCT e.video_id) AS video,
+               AVG(CASE WHEN x.tenuta > 0 THEN x.tenuta END) AS tenuta_media,
+               CAST(SUM(x.views) AS REAL)
+                   / MAX(COUNT(DISTINCT e.video_id), 1) AS viste_per_video
+        FROM esperimento e{_JOIN_METRICHE}
+        WHERE e.creato >= ? AND e.apertura <> ''
+          AND e.variante IN ('corto', 'lungo')
+        GROUP BY e.variante, e.apertura
+        ORDER BY e.variante, e.apertura
+        """,
+        (dal,),
     ).fetchall()

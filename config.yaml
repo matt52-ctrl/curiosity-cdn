@@ -749,6 +749,117 @@ esperimento:
     soglia_adozione: 0.60
     soglia_proroga: 0.30
 
+  # ─── PROVA SULL'APERTURA ───────────────────────────────────────────────────
+  #
+  # L'ipotesi: aprire con uno SCONTRO invece che con un DIVARIO.
+  #
+  #   divario   l'aggancio toglie qualcosa e chi guarda resta per vedere il
+  #             buco riempito.  "The thing you're still cringing about?"
+  #             È curiosità, ed è un sentimento tiepido.
+  #   scontro   l'aggancio afferma una cosa che chi guarda crede falsa su di
+  #             sé, e lui resta per vederla smontare.  "Your closest friend
+  #             reads you worse than a stranger does."
+  #             È obiezione, e tira in mezzo l'amor proprio.
+  #
+  # PERCHÉ QUESTA PROVA VALE PIÙ DELLE ALTRE DUE
+  #
+  # Non per intuizione: perché è l'unica delle tre idee che i nostri dati già
+  # sostengono, ed è l'unica che sappiamo misurare bene. Misurato il 21 agosto
+  # 2026 sui 22 Short con dati:
+  #
+  #                            mediana    intervallo      CV (rumore)
+  #     tenuta a 3 secondi      0,923     0,823 – 0,977      0,049
+  #     viste                     288        80 – 1278       0,781
+  #
+  # Sedici volte meno rumorosa. E non è silenziosa perché non conta niente:
+  # correla con log(viste) a +0,32, più di qualunque altra cosa leggibile. La
+  # metà dei video con tenuta migliore fa 533 viste mediane, l'altra metà 276.
+  #
+  # Il confronto col test sulla lunghezza è impietoso, e vale la pena averlo
+  # scritto: quello poggia su una correlazione di +0,23 fra secondi guardati e
+  # viste, e si giudica sulle viste, che hanno CV 0,78 — servono ~30 video per
+  # gruppo per vedere una differenza del 60%. Questo si giudica su una misura
+  # con CV 0,049: ne bastano ~15 per vedere una differenza del 5%.
+  #
+  # PERCHÉ TRE SECONDI E NON DUE O CINQUE
+  #
+  # Perché è esattamente la finestra in cui l'aggancio sta da solo sullo
+  # schermo: `reel.reveal_at` vale 3,4. Prima di 3,4 secondi lo spettatore ha
+  # visto SOLO la cosa che stiamo cambiando. Dopo ha visto anche la risposta,
+  # il filmato, la musica, e la misura comincia a rispondere a una domanda
+  # diversa da quella che le stiamo facendo.
+  #
+  # PERCHÉ GIRA INSIEME ALLA PROVA SULLA LUNGHEZZA
+  #
+  # Perché in un disegno fattoriale 2x2 non costa niente. L'effetto principale
+  # di ciascun fattore si legge su TUTTI e 60 i video, non su 15: i corti e i
+  # lunghi sono spartiti in parti uguali fra le due aperture, quindi sommando
+  # si elidono. Solo l'INTERAZIONE — "lo scontro serve di più sui corti?" —
+  # resta a 15 per casella, ed è la domanda a cui teniamo meno.
+  # L'alternativa, due prove in fila, costerebbe due mesi invece di uno per
+  # sapere le stesse due cose peggio.
+  #
+  # IL RISCHIO, che è reale e non formale
+  #
+  # Lo scontro è la scorciatoia più vicina alla bugia che questo account possa
+  # prendere: un'affermazione è tanto più contestabile quanto più è estrema,
+  # quindi chi scrive ha un incentivo strutturale a esagerare. Il blocco di
+  # istruzioni in `engine/lines.py` spende metà del testo su cosa NON è uno
+  # scontro proprio per questo. Se la prova la vince ma le frasi hanno smesso
+  # di essere verificabili, abbiamo perso: tutto il valore di questa pagina è
+  # che ogni riga regge un controllo.
+  # Quindi al giorno 30 non si guarda solo il numero. Si rileggono dieci frasi
+  # del gruppo scontro e si controlla che dicano ancora quello che gli studi
+  # dicono. Un vantaggio del 5% non paga una frase falsa.
+  apertura:
+    attiva: true
+    giorni: 30
+    inizio: "2026-08-22"
+    alterna_fascia: true
+
+    # LA REGOLA, scritta prima di vedere i dati.
+    #
+    # metrica: tenuta a 3 secondi, scontro contro divario
+    #   scontro avanti di ≥ 3 punti percentuali  → si adotta ovunque
+    #   scontro avanti fra 1 e 3 punti           → si prolunga di 30 giorni
+    #   tutto il resto (incluso pari)            → si chiude, resta il divario
+    #
+    # Le soglie sono in PUNTI e non in percentuale della differenza perché la
+    # tenuta è già una frazione: passare da 0,92 a 0,95 è "+3 punti", dirlo
+    # come "+3,3%" inviterebbe a confonderlo con le percentuali di visione,
+    # che sono un'altra cosa e stanno nella stessa tabella.
+    #
+    # Perché 3 punti e non 1: perché la deviazione misurata è 0,045, quindi
+    # con 30 video per gruppo l'errore sulla media è circa 0,008. Tre punti
+    # sono quasi quattro errori standard — una differenza che a quel punto è
+    # difficile che sia caso. Un punto solo è dentro il rumore, ed è per
+    # questo che è la soglia della proroga e non quella dell'adozione.
+    soglia_adozione: 0.03
+    soglia_proroga: 0.01
+
+    # Cosa usano i canali CIECHI — Instagram e TikTok — mentre la prova gira.
+    #
+    # Su quei due non possiamo leggere niente, e non è un'opinione: verificato
+    # il 21 agosto 2026 chiedendolo alle API.
+    #   Instagram   reach, likes, comments, saved, shares, plays, views →
+    #               400  "(#10) Application does not have permission"
+    #   TikTok      video/list/ → 401  "scope_not_authorized"
+    # Su Instagram non arrivano nemmeno i like.
+    #
+    # Quindi lì non si alterna. Dividere a metà un canale su cui non si legge
+    # il risultato significa pagare il prezzo di una prova senza ricevere
+    # l'informazione: metà delle uscite in una configurazione incerta, per
+    # niente. La regola per un canale cieco è una sola — si usa sempre la
+    # configurazione migliore fra quelle note.
+    #
+    # E c'è un secondo motivo, che è la ragione per cui questa prova dura 30
+    # giorni e non 14: cambiare formato su tre canali insieme è esattamente ciò
+    # che confonde gli algoritmi. YouTube porta l'incertezza per tutti.
+    #
+    # Il 21 settembre questo valore diventa "scontro" se la prova lo promuove.
+    # È una riga sola perché è lo stesso generatore di frasi per tutti i canali.
+    vincitore: "divario"
+
 # ─── SITO ─────────────────────────────────────────────────────────────────────
 # Una pagina per curiosità, servita da GitHub Pages: gratis, senza hosting e
 # senza approvazioni. È l'unico prodotto che si accumula — un reel muore in due

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import re as _re
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -429,6 +430,119 @@ def ritenzione(giorni: int = 30) -> Dict[str, Dict]:
             "avg_view_sec": float(v.get("averageViewDuration", 0) or 0),
             "sub_gained": int(v.get("subscribersGained", 0) or 0),
         }
+    return fuori
+
+
+def _durate(video_ids: list) -> Dict[str, float]:
+    """Durata in secondi dei video, dalla Data API. Serve a `tenuta_iniziale`.
+
+    Perche' non ci basta la durata che conosciamo al montaggio: quella e' la
+    durata del file che abbiamo caricato, e YouTube ritranscodifica. Le due
+    coincidono quasi sempre, ma "quasi" su una divisione diventa un secchiello
+    di scarto, e qui i secchielli sono l'unita' di misura.
+    """
+    fuori: Dict[str, float] = {}
+    for i in range(0, len(video_ids), 50):        # il massimo per chiamata
+        r = httpx.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            headers=_intestazioni(),
+            params={"part": "contentDetails", "id": ",".join(video_ids[i:i + 50])},
+            timeout=30,
+        )
+        if r.status_code >= 400:
+            continue
+        for it in r.json().get("items", []):
+            testo = it.get("contentDetails", {}).get("duration", "")
+            m = _re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?", testo)
+            if not m:
+                continue
+            ore, minuti, sec = (float(g or 0) for g in m.groups())
+            fuori[it["id"]] = ore * 3600 + minuti * 60 + sec
+    return fuori
+
+
+def tenuta_iniziale(video_ids: list, secondi: float = 3.0,
+                    giorni: int = 90) -> Dict[str, float]:
+    """Quanti spettatori sono ancora li' al terzo secondo, per video.
+
+    E' la misura su cui si decide la prova sull'apertura, e vale la pena
+    sapere esattamente cosa fa, perche' due dettagli la separano da un numero
+    senza senso.
+
+    PRIMO: la curva arriva in RATIO, non in secondi. `elapsedVideoTimeRatio`
+    da' cento punti da 0,01 a 1,00, cioe' centesimi di video. Tre secondi non
+    sono lo stesso punto in tutti i video: su uno da 13 secondi cadono al 23%,
+    su uno da 35 all'8,5%. E' una differenza che conta il doppio adesso, con
+    la prova sulla lunghezza in corso che quei due video li produce apposta.
+    Quindi la conversione si fa con la durata VERA di ciascun video, e il
+    valore si interpola fra i due punti vicini invece di prendere il piu'
+    vicino: un secchiello e' l'1% del video, su tredici secondi sono 0,13s, e
+    arrotondare li' dentro sposterebbe la misura piu' di quanto la prova
+    cerchi di misurare.
+
+    SECONDO, ed e' il punto che rende utilizzabile tutto il resto: il valore
+    si divide per il PRIMO punto della curva, non si legge in assoluto. Sugli
+    Short quella curva parte sopra 1 — misurati 1,86, 1,28, 1,13, 1,07 — perche'
+    il video va in loop e chi resta ripassa sullo stesso istante piu' volte.
+    Il valore assoluto quindi non dice "quanti sono rimasti" ma "quanti sono
+    rimasti, moltiplicato per quanto ha girato il video", e quel secondo
+    fattore e' proprio quello che vogliamo togliere di mezzo. Dividendo per il
+    primo punto della STESSA curva si elide, e resta la frazione.
+
+    Ritorna solo i video per cui la curva esiste davvero. YouTube non la da'
+    finche' il video non ha abbastanza visite, e restituire zero per quelli
+    significherebbe farli entrare nella media come pessimi invece che come
+    ancora-non-pervenuti.
+    """
+    import datetime as dt
+
+    if not video_ids:
+        return {}
+    durate = _durate(list(video_ids))
+    fine = dt.date.today()
+    inizio = fine - dt.timedelta(days=giorni)
+    fuori: Dict[str, float] = {}
+
+    for vid in video_ids:
+        durata = durate.get(vid, 0)
+        # Una durata sotto i secondi che cerchiamo renderebbe la domanda priva
+        # di senso: "quanti restano al terzo secondo" su un video da due.
+        if durata <= secondi:
+            continue
+        try:
+            r = httpx.get(
+                ANALYTICS,
+                params={
+                    "ids": "channel==MINE",
+                    "startDate": inizio.isoformat(),
+                    "endDate": fine.isoformat(),
+                    "metrics": "audienceWatchRatio",
+                    "dimensions": "elapsedVideoTimeRatio",
+                    "filters": f"video=={vid}",
+                    "sort": "elapsedVideoTimeRatio",
+                    "maxResults": 200,
+                },
+                headers=_intestazioni(), timeout=60,
+            )
+            if r.status_code >= 400:
+                continue
+            punti = sorted((float(a), float(b)) for a, b in r.json().get("rows", []))
+        except Exception:
+            continue
+        if len(punti) < 2 or punti[0][1] <= 0:
+            continue
+
+        base = punti[0][1]
+        quota = secondi / durata
+        valore = punti[-1][1]
+        prec = punti[0]
+        for x, y in punti:
+            if x >= quota:
+                valore = y if x == prec[0] else prec[1] + \
+                    (quota - prec[0]) / (x - prec[0]) * (y - prec[1])
+                break
+            prec = (x, y)
+        fuori[vid] = valore / base
     return fuori
 
 

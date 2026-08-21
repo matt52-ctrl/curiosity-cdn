@@ -177,6 +177,47 @@ def _prova_lunghezza(conn: sqlite3.Connection) -> List[str]:
     return fuori
 
 
+def _prova_apertura(conn: sqlite3.Connection) -> List[str]:
+    """Una riga al giorno sulla seconda prova: lo scontro contro il divario.
+
+    Sta accanto all'altra e non dentro, perché sono due domande diverse lette
+    sugli stessi video — è il senso del disegno 2x2 — e perché il giudice è un
+    altro: la lunghezza si decide sulle viste per video, l'apertura sulla
+    tenuta a 3 secondi.
+
+    Qui compare il numero, non il verdetto, per la stessa ragione dell'altra:
+    la soglia è scritta in config apposta perché non si decida guardando il
+    telefono a metà mese.
+
+    `video_con_dati` e non `video`: la curva di ritenzione arriva solo quando
+    il video ha abbastanza visite, e nei primi giorni metà delle righe è
+    ancora a zero. Mostrare il totale farebbe sembrare che stiamo misurando
+    più di quanto stiamo misurando davvero.
+    """
+    from .config import cfg
+    from .db import esito_apertura
+    from .lines import giorni_di_prova, inizio_prova
+
+    if not cfg.get("esperimento.apertura.attiva", False):
+        return []
+    giorni = int(cfg.get("esperimento.apertura.giorni", 30))
+    passati = giorni_di_prova("apertura")
+    try:
+        dati = {r["apertura"]: r for r in esito_apertura(conn, inizio_prova("apertura"))}
+    except Exception:
+        return []
+    if passati < 0:
+        return []          # lo dice già la riga della prova sulla lunghezza
+    if not dati:
+        return [f"prova apertura: giorno {passati}/{giorni}, nessun video ancora"]
+
+    conteggi = " · ".join(
+        f"{g}: {dati[g]['video_con_dati'] or 0}/{dati[g]['video']} video, "
+        f"{(dati[g]['tenuta_media'] or 0) * 100:.1f}% a 3s"
+        for g in ("scontro", "divario") if g in dati)
+    return [f"prova apertura — giorno {passati}/{giorni}", conteggi]
+
+
 def componi(conn: sqlite3.Connection) -> str:
     """Il messaggio, in HTML per Telegram."""
     from . import allarme, sito_metriche
@@ -202,7 +243,7 @@ def componi(conn: sqlite3.Connection) -> str:
     # 3. I numeri, per le fonti che li danno davvero.
     parti.append("\n<b>YouTube</b>\n" + "\n".join(_youtube(conn)))
 
-    prova = _prova_lunghezza(conn)
+    prova = _prova_lunghezza(conn) + _prova_apertura(conn)
     if prova:
         parti.append("\n<code>" + "\n".join(prova) + "</code>")
 

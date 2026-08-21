@@ -151,6 +151,24 @@ def raccogli_youtube(conn: sqlite3.Connection) -> int:
     except Exception as exc:
         print(f"    analytics YouTube fallita: {exc}")
 
+    # Terza fonte: la curva di ritenzione, una chiamata per video. Costa piu'
+    # delle altre due — circa 0,4 secondi a video, quindi meno di mezzo minuto
+    # per un mese di uscite — e si paga solo sui video che stanno dentro una
+    # prova. Chiedere la curva di tutto lo storico ogni notte sarebbe spendere
+    # trenta chiamate per aggiornare un numero che nessuno legge piu'.
+    try:
+        in_prova = [r[0] for r in conn.execute(
+            "SELECT video_id FROM esperimento WHERE apertura <> ''"
+        ).fetchall()]
+        da_leggere = [v for v in in_prova if v in dati] or [
+            v for v in in_prova if v in elenco]
+        for vid, t in yt.tenuta_iniziale(da_leggere).items():
+            dati.setdefault(vid, {})["tenuta_3s"] = t
+        if da_leggere:
+            print(f"    tenuta a 3s letta su {len(da_leggere)} video in prova")
+    except Exception as exc:
+        print(f"    curva di ritenzione non letta: {str(exc)[:60]}")
+
     n = 0
     for vid, m in dati.items():
         salva_metriche_reel(conn, per_reel.get(vid), "youtube", m, video_id=vid)

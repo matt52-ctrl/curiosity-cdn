@@ -766,28 +766,50 @@ def _fabbisogno_giornaliero() -> int:
         for i in range(len(fasce)))
 
 
-def _gruppo_lunghezza(quando: float) -> str:
-    """Il gruppo della prova sulla lunghezza per il video di questa fascia.
+def _indice_fascia(quando: float) -> int:
+    """In quale fascia della giornata esce questo video: 0 = 13:00, 1 = 19:00.
 
-    L'indice della fascia si cerca dentro `_fasce_di_oggi()` e non dentro
-    l'elenco delle fasce ancora da coprire: se il giro del mattino salta, il
-    video delle 19:00 deve restare il video delle 19:00, non diventare il primo
-    della giornata e prendersi il gruppo dell'altro. Cosi' la prova regge anche
-    alle giornate rotte.
+    Si cerca dentro `_fasce_di_oggi()` e non dentro l'elenco delle fasce ancora
+    da coprire: se il giro del mattino salta, il video delle 19:00 deve restare
+    il video delle 19:00, non diventare il primo della giornata e prendersi i
+    gruppi dell'altro. Cosi' le prove reggono anche alle giornate rotte.
 
     Il recupero (`quando` = 0.0, "esci adesso") non combacia con nessuna fascia
     e finisce in posizione 0: e' l'unico caso in cui l'ora di uscita non e'
-    quella prevista, ed e' giusto che erediti il gruppo del primo slot.
+    quella prevista, ed e' giusto che erediti i gruppi del primo slot.
     """
-    from engine.lines import giorni_di_prova, scegli_lunghezza
+    if not quando:
+        return 0
+    for i, f in enumerate(_fasce_di_oggi()):
+        if abs(f - quando) < 60:
+            return i
+    return 0
 
-    indice = 0
-    if quando:
-        for i, f in enumerate(_fasce_di_oggi()):
-            if abs(f - quando) < 60:
-                indice = i
-                break
-    return scegli_lunghezza(giorni_di_prova(), indice)
+
+def _gruppi_di_prova(quando: float) -> tuple:
+    """(lunghezza, apertura) per il video di questa fascia.
+
+    Le due prove leggono lo stesso giorno e la stessa fascia ma girano a
+    velocita' diverse — la lunghezza cambia a ogni uscita, l'apertura ogni due
+    giorni — ed e' quella differenza che permette di distinguerle. Vengono
+    calcolate insieme perche' e' l'unico modo di essere sicuri che vedano
+    davvero lo stesso indice di fascia: due chiamate separate a
+    `_fasce_di_oggi()` a cavallo della mezzanotte potrebbero non vederlo.
+    """
+    from engine.lines import giorni_di_prova, scegli_apertura, scegli_lunghezza
+
+    indice = _indice_fascia(quando)
+    giorno_ap = giorni_di_prova("apertura")
+    # Prima del giorno 0 l'apertura torna vuota, e la stringa vuota significa
+    # "questo video non partecipa". Il filtro sulla data in `esito_apertura` lo
+    # escluderebbe comunque, ma la data da sola non basta ed e' costato un
+    # controllo per accorgersene: lo Short gia' programmato la mattina in cui e'
+    # stata accesa la prova sulla lunghezza compariva come terza riga in un
+    # confronto a cui non partecipava. Meglio non scrivere affatto un gruppo che
+    # nessuno ha scelto, cosi' resta vero anche se un giorno `inizio` si sposta
+    # indietro.
+    return (scegli_lunghezza(giorni_di_prova("lunghezza"), indice),
+            scegli_apertura(giorno_ap, indice) if giorno_ap >= 0 else "")
 
 
 def _pubblica_youtube(conn, imparato: str = "") -> str:
@@ -851,7 +873,8 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
           f"({quando_leggibili} italiane)")
 
     for quando in da_coprire:
-        motivo = _uno_short(conn, imparato, quando, _gruppo_lunghezza(quando))
+        lunghezza, apertura = _gruppi_di_prova(quando)
+        motivo = _uno_short(conn, imparato, quando, lunghezza, apertura)
         if motivo:
             # Il primo intoppo ferma il lotto: le cause sono comuni a tutti i
             # video (scorte, scrittore, ffmpeg), quindi insistere sui
@@ -861,7 +884,7 @@ def _pubblica_youtube(conn, imparato: str = "") -> str:
 
 
 def _uno_short(conn, imparato: str, quando: Optional[float] = None,
-               gruppo: str = "lungo") -> str:
+               gruppo: str = "lungo", apertura: str = "") -> str:
     """Costruisce e pubblica un video YouTube con curiosita' tutte nuove.
 
     Indipendente da Instagram di proposito. Le due piattaforme hanno pubblici
@@ -944,7 +967,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # che servira'. Serve ancora a `generate`, che scrive di conseguenza.
     variante = lines.scegli_variante(conn)
     frasi = lines.generate(conn, quante, imparato=imparato, canale="youtube",
-                           variante=variante)
+                           variante=variante, apertura=apertura or "divario")
     frasi = [f for f in frasi if f.get("fact_id")][:quante]
     if len(frasi) < quante:
         print(f"    solo {len(frasi)} frasi utilizzabili su {quante}: salto")
@@ -992,9 +1015,15 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # tabella `esperimento`: il registro non e' piu' una prova da agosto, e' un
     # valore fisso, quindi registrarlo non direbbe niente. Le righe vecchie
     # restano dove sono e `esito_esperimento` le taglia via con la data.
+    # `apertura` va in una colonna sua e non dentro `variante`: le due prove
+    # girano insieme e vanno lette separate, che e' tutto il senso del 2x2.
+    # Se la prova sull'apertura e' spenta resta la stringa vuota, e le letture
+    # escludono quelle righe invece di contarle come un gruppo che non esiste.
     segna_variante(conn, yt_id,
                    gruppo if cfg.get("esperimento.lunghezza.attiva", False)
-                   else variante)
+                   else variante,
+                   apertura=apertura if cfg.get("esperimento.apertura.attiva",
+                                                False) else "")
     # `is not None` e non `if quando`: nel recupero di una giornata perduta la
     # fascia vale 0.0, che significa "esci adesso" ed e' falsa. Con il vecchio
     # controllo la fascia non veniva segnata, `fasce_coperte` restava vuota e
@@ -1138,7 +1167,26 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
         # devono uscire lo stesso. Prima l'eccezione risaliva e il lotto
         # moriva sul primo video, buttando via anche il lavoro gia' fatto.
         try:
-            frasi = lines.generate(conn, quante, canale="tiktok")
+            # `variante` esplicita e non lasciata al default. Fino al 21
+            # agosto 2026 questa chiamata non la passava e prendeva
+            # "osservazione" — il gruppo di CONTROLLO della prova di agosto,
+            # cioe' quello che aveva perso (41% di visione media contro 50%).
+            # YouTube era passato al vincitore, TikTok e i reel Instagram no,
+            # e nessuno se n'era accorto per un mese perche' su quei due canali
+            # non abbiamo metriche che lo avrebbero gridato.
+            #
+            # Lo scontro qui NON si alterna. Su TikTok non possiamo leggere
+            # niente — `video.list` risponde `scope_not_authorized` — quindi
+            # dividere a meta' sarebbe pagare il prezzo di una prova senza
+            # ricevere l'informazione. La regola per i canali ciechi e' una
+            # sola: si usa sempre la configurazione migliore fra quelle note.
+            # Il 21 settembre YouTube dira' se lo scontro vince, e da quel
+            # giorno arriva anche qui — cambiando una riga, perche' e' lo
+            # stesso generatore.
+            frasi = lines.generate(conn, quante, canale="tiktok",
+                                   variante=lines.scegli_variante(conn),
+                                   apertura=cfg.get("esperimento.apertura.vincitore",
+                                                    "divario"))
         except Exception as exc:
             print(f"  ✗ scrittura fallita: {str(exc)[:90]}")
             falliti += 1
@@ -1539,6 +1587,7 @@ def cmd_esperimento(args: argparse.Namespace) -> int:
         # sopra il 100%), i secondi premiano il lungo — e servono a capire il
         # meccanismo, non a decidere. Sono fra parentesi per ricordarlo.
         _verdetto_lunghezza(righe, passati, giorni)
+        _mostra_apertura(conn)
     else:
         minimo = int(cfg.get("esperimento.video_minimi", 6))
         totale = sum(r["video"] for r in righe)
@@ -1594,6 +1643,102 @@ def _verdetto_lunghezza(righe, passati: int, giorni: int) -> None:
         print(f"  Sotto {proroga:.0%}: si chiude, resta il formato a tre.\n"
               f"  Metti `esperimento.lunghezza.attiva: false` e riporta "
               f"`max_per_day` a 1.")
+
+
+def _mostra_apertura(conn) -> None:
+    """La seconda prova: lo scontro contro il divario, sulla tenuta a 3s.
+
+    Stampata sotto la prima e non al posto suo perché sono due domande diverse
+    lette sugli stessi video — è il senso del fattoriale 2x2. Il giudice qui è
+    un altro: la lunghezza si decide sulle viste per video, l'apertura sulla
+    tenuta a 3 secondi. Il perché sta in `config.yaml` sotto
+    `esperimento.apertura`, e la differenza fra i due giudici è l'unica cosa
+    che questa funzione non deve lasciar confondere.
+    """
+    from engine.db import esito_apertura, esito_incrocio
+    from engine.lines import giorni_di_prova, inizio_prova
+
+    if not cfg.get("esperimento.apertura.attiva", False):
+        return
+    righe = esito_apertura(conn, inizio_prova("apertura"))
+    giorni = int(cfg.get("esperimento.apertura.giorni", 30))
+    passati = giorni_di_prova("apertura")
+
+    print("\n  PROVA SULL'APERTURA — lo scontro contro il divario")
+    if passati < 0:
+        print(f"  non è ancora cominciata: parte fra {-passati} "
+              f"{'giorno' if passati == -1 else 'giorni'}")
+        return
+    print(f"  giorno {passati} di {giorni}"
+          + ("" if passati < giorni else "  ← si legge oggi"))
+    if not righe:
+        print("  nessun video ancora assegnato.")
+        return
+
+    print()
+    print(f"  {'gruppo':10} {'video':>6} {'con dati':>9} {'TENUTA 3s':>11} "
+          f"{'min':>7} {'max':>7} {'(viste/vid)':>12}")
+    print("  " + "-" * 68)
+    for r in righe:
+        print(f"  {r['apertura']:10} {r['video']:>6} {r['video_con_dati'] or 0:>9} "
+              f"{(r['tenuta_media'] or 0) * 100:>10.1f}% "
+              f"{(r['tenuta_min'] or 0) * 100:>6.1f}% "
+              f"{(r['tenuta_max'] or 0) * 100:>6.1f}% "
+              f"{r['viste_per_video'] or 0:>12.0f}")
+
+    dati = {r["apertura"]: r for r in righe}
+    scontro, divario = dati.get("scontro"), dati.get("divario")
+    print()
+    # Le quattro caselle prima del verdetto: se una è molto fuori scala
+    # rispetto alle altre tre, gli effetti principali letti sopra sono medie
+    # che nascondono due comportamenti invece di riassumerne uno.
+    incrocio = esito_incrocio(conn, inizio_prova("apertura"))
+    if len(incrocio) == 4:
+        print("  le quattro caselle (tenuta 3s):")
+        for r in incrocio:
+            print(f"    {r['variante']:6} + {r['apertura']:8} "
+                  f"{r['video']:>3} video   "
+                  f"{(r['tenuta_media'] or 0) * 100:>5.1f}%")
+        print()
+
+    if not scontro or not divario or not divario["tenuta_media"]:
+        print("  Manca ancora un gruppo con dati: il confronto non esiste.")
+        return
+
+    # Differenza in PUNTI, non in percentuale della differenza: la tenuta è già
+    # una frazione, e dirlo come "+3,3%" inviterebbe a confonderlo con le
+    # percentuali di visione, che sono un'altra cosa e stanno due tabelle
+    # sopra.
+    scarto = scontro["tenuta_media"] - divario["tenuta_media"]
+    print(f"  Lo scontro tiene {scarto * 100:+.1f} punti rispetto al divario.")
+
+    if passati < giorni:
+        print(f"  NON si decide oggi: mancano {giorni - passati} giorni.")
+        return
+
+    adozione = float(cfg.get("esperimento.apertura.soglia_adozione", 0.03))
+    proroga = float(cfg.get("esperimento.apertura.soglia_proroga", 0.01))
+    if scarto >= adozione:
+        print(f"  ≥ {adozione * 100:.0f} punti: lo scontro vince.\n"
+              f"  Metti `esperimento.apertura.vincitore: scontro` — vale anche\n"
+              f"  per Instagram e TikTok, è lo stesso generatore — e poi\n"
+              f"  `esperimento.apertura.attiva: false`.")
+    elif scarto >= proroga:
+        print(f"  Fra {proroga * 100:.0f} e {adozione * 100:.0f} punti: non "
+              f"conclusivo.\n  Sposta `inizio` avanti di 30 giorni, o chiudi.")
+    else:
+        print(f"  Sotto {proroga * 100:.0f} punti: si chiude, resta il "
+              f"divario.\n  Metti `esperimento.apertura.attiva: false`.")
+
+    # Il controllo che nessun numero può fare al posto nostro. Sta qui e non in
+    # un commento perché a fine mese si legge questo, non il codice.
+    if passati >= giorni and scarto >= proroga:
+        print("\n  PRIMA di adottarlo: apri dieci frasi del gruppo scontro e\n"
+              "  controlla che dicano ancora quello che gli studi dicono. Un\n"
+              "  aggancio è tanto più contestabile quanto più è esagerato, e\n"
+              "  questa prova premia proprio l'essere contestabili. Un +3 di\n"
+              "  tenuta non paga una frase falsa: tutto il valore di questa\n"
+              "  pagina è che ogni riga regge un controllo.")
 
 
 def cmd_sito(args: argparse.Namespace) -> int:
@@ -2134,7 +2279,17 @@ def cmd_reels(args: argparse.Namespace) -> int:
         print(f"→ genero {quanti} frasi")
         try:
             usate = set(reel_lines_used(conn))
-            nuove = [l for l in lines.generate(conn, quanti + 2, imparato=imparato)
+            # Stessa storia di TikTok: questa chiamata non passava `variante`
+            # e i reel Instagram sono usciti per un mese nel registro perdente.
+            # E stessa regola per l'apertura: Instagram e' cieco quanto TikTok
+            # — le insights rispondono `(#10) Application does not have
+            # permission` su ogni metrica, like compresi — quindi niente
+            # alternanza, solo la configurazione migliore fra quelle note.
+            nuove = [l for l in lines.generate(
+                        conn, quanti + 2, imparato=imparato,
+                        variante=lines.scegli_variante(conn),
+                        apertura=cfg.get("esperimento.apertura.vincitore",
+                                         "divario"))
                      if l["line"] not in usate]
         except Exception as exc:
             print(f"generazione frasi fallita: {exc}")
