@@ -42,8 +42,27 @@ AUTORIZZA = "https://www.tiktok.com/v2/auth/authorize/"
 TOKEN = "https://open.tiktokapis.com/v2/oauth/token/"
 
 # `video.upload` deposita bozze nell'inbox e NON richiede l'audit.
-# `video.publish` pubblicherebbe direttamente ma lo richiede: 2-4 settimane.
-SCOPE = "video.upload"
+# `video.publish` pubblica direttamente, ma lo richiede: 2-4 settimane.
+# `video.list` e `user.info.stats` danno viste, like e follower.
+#
+# ⚠️  LA TRAPPOLA, scritta qui perche' e' il punto in cui si perde una
+# settimana senza capire perche'. L'audit di TikTok e il permesso nel token
+# sono due cose separate. Il giorno che TikTok approva l'app NON succede
+# niente da solo: il refresh token in .env e' stato ottenuto chiedendo
+# `video.upload` e basta, e continuera' a valere solo per quello finche' non
+# si rifa' l'autorizzazione dal browser. Il sistema resterebbe a depositare
+# bozze, senza errori, con l'audit gia' in tasca.
+#
+# Quindi il giorno dell'approvazione servono DUE gesti, in quest'ordine:
+#   1. aggiungere gli scope qui sotto tramite TIKTOK_SCOPE in .env
+#   2. rilanciare  python3 setup_tiktok.py  e riautorizzare dal browser
+# Da li' in poi la config e' gia' su `mode: direct` e non serve altro.
+#
+# Sta in una variabile d'ambiente e non nel codice perche' chiedere uno scope
+# che l'app non ha ancora abilitato fa fallire l'autorizzazione: scriverlo
+# fisso adesso romperebbe l'unica strada che oggi funziona.
+SCOPE_COMPLETO = "video.upload,video.publish,video.list,user.info.stats"
+SCOPE = env("TIKTOK_SCOPE") or "video.upload"
 
 FILE_TOKEN = DATA_DIR / "tiktok_token.json"
 
