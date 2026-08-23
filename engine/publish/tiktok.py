@@ -493,9 +493,27 @@ def pubblica_diretto(video: "Path", titolo: str, token: str = "") -> str:
     permessi = info_creatore(token).get("privacy_level_options") or []
     voluto = cfg.get("publish.tiktok.privacy", "PUBLIC_TO_EVERYONE")
     if voluto not in permessi:
-        raise TikTokError(
-            f"l'account non permette `{voluto}` (opzioni: {permessi or 'nessuna'}). "
-            f"Di solito vuol dire che il profilo TikTok e' privato."
+        # `NonAuditata` e non `TikTokError`, ed e' la differenza fra ripiegare
+        # sulla bozza e non pubblicare niente quel giorno.
+        #
+        # Un client non auditato non riceve un rifiuto quando prova a
+        # pubblicare: gli spariscono le opzioni. La documentazione lo dice
+        # chiaro — «All content posted by unaudited clients will be restricted
+        # to private viewing mode» — quindi `privacy_level_options` torna senza
+        # `PUBLIC_TO_EVERYONE` e il controllo qui sopra scatta. E' la
+        # situazione NORMALE di oggi, e in piu' e' esattamente quella del
+        # Sandbox, dove Direct Post funziona ma pubblica solo SELF_ONLY.
+        # Trattarla come guasto significherebbe che il giorno in cui si accende
+        # il sandbox smettono di uscire anche le bozze che oggi escono.
+        #
+        # L'altra causa possibile — profilo TikTok privato — vuole la stessa
+        # cura: meglio una bozza che un video pubblicato dove non lo vede
+        # nessuno. Per questo il messaggio le nomina tutte e due invece di
+        # indovinare quale sia, e la decisione la prende chi legge.
+        raise NonAuditata(
+            f"`{voluto}` non e' fra le opzioni concesse (ci sono: "
+            f"{permessi or 'nessuna'}). O l'app non ha ancora passato l'audit, "
+            f"o il profilo TikTok e' privato."
         )
 
     url, publish_id = _init(
@@ -537,7 +555,7 @@ def carica(video: "Path", titolo: str = "", token: str = "") -> tuple:
             return pubblica_diretto(video, titolo, token), "direct"
         except (NonAuditata, ScopeMancante) as exc:
             print(f"    TikTok: pubblicazione diretta non ancora abilitata "
-                  f"({str(exc)[:80]}) — deposito come bozza")
+                  f"({str(exc)[:200]}) — deposito come bozza")
     return carica_bozza(video, token), "inbox"
 
 
