@@ -453,6 +453,30 @@ publish:
     # senza trattarlo come un errore — è il ritmo previsto, non un guasto.
     max_bozze_al_giorno: 5
 
+    # ─── BOZZA O PUBBLICAZIONE VERA ─────────────────────────────────────────
+    #   inbox   il video arriva fra le bozze dell'app e lo pubblichi tu.
+    #           Non serve nessun permesso speciale. È dove siamo oggi.
+    #   direct  il video va online da solo, come su YouTube.
+    #
+    # È già su `direct`, e NON è un errore anche se l'audit non c'è ancora.
+    # Il codice prova la pubblicazione diretta, riceve `unaudited_client` o
+    # `scope_not_authorized`, e ripiega da solo sulla bozza — quindi oggi si
+    # comporta esattamente come prima. Il giorno che TikTok approva l'app, il
+    # primo giro utile pubblica da solo senza che nessuno tocchi niente.
+    #
+    # È l'unico modo onesto di scriverlo: l'audit passa in un giorno che non
+    # sappiamo in anticipo, e l'alternativa sarebbe indovinare la data. Chi
+    # indovina tardi perde giorni di pubblicazione automatica; chi indovina
+    # presto pubblica video in visibilità privata — che è il guasto peggiore
+    # perché sembra funzionare e non lo vede nessuno.
+    mode: "direct"
+
+    # Chi vede il video. Non viene scritto e basta: prima di ogni pubblicazione
+    # si chiede a TikTok (`creator_info`) quali visibilità l'account permette,
+    # e se questa non è fra quelle il giro si ferma con un messaggio chiaro.
+    # Di solito significa una cosa sola: il profilo TikTok è privato.
+    privacy: "PUBLIC_TO_EVERYONE"
+
 # ─── COMMENTI ─────────────────────────────────────────────────────────────────
 # Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
 # ogni risposta riporta la persona sul post.

@@ -1501,11 +1501,19 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     fatti = 0
     for v in restanti[:quanti]:
         try:
-            pid = tiktok.carica_bozza(v, token=token)
+            voce = didascalie.get(v.name) or {}
+            pid, modo = tiktok.carica(v, titolo=voce.get("didascalia", ""),
+                                      token=token)
             gia.add(v.name)
             fatti += 1
-            print(f"  ✓ {v.name}  ({v.stat().st_size // 1024 // 1024} MB) → {pid}")
-            _manda_didascalia(didascalie.get(v.name))
+            segno = "→ ONLINE" if modo == "direct" else f"→ {pid}"
+            print(f"  ✓ {v.name}  ({v.stat().st_size // 1024 // 1024} MB) {segno}")
+            # La didascalia su Telegram serve solo se tocca a Mattia
+            # incollarla. Pubblicando in diretta e' gia' dentro il post, e
+            # mandargliela lo stesso addestrerebbe a ignorare quei messaggi —
+            # che e' il modo in cui si perde quello importante.
+            if modo == "inbox":
+                _manda_didascalia(voce)
         except tiktok.LimiteRaggiunto as exc:
             # Non e' un guasto: e' il ritmo previsto. Si smette e basta.
             print(f"  · tetto giornaliero raggiunto, riprovo domani ({exc})")

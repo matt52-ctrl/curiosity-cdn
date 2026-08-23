@@ -229,6 +229,12 @@ def _ponte() -> str:
 
 TOKEN_URL = f"{API}/oauth/token/"
 INBOX_INIT = f"{API}/post/publish/inbox/video/init/"
+# La pubblicazione vera. Stesso protocollo dell'inbox, indirizzo diverso: e'
+# l'unica differenza di trasporto fra "te lo metto fra le bozze" e "lo metto
+# online". Tutto il resto della distanza fra le due e' burocrazia — lo scope
+# `video.publish` e l'audit dell'app.
+DIRECT_INIT = f"{API}/post/publish/video/init/"
+CREATOR_INFO = f"{API}/post/publish/creator_info/query/"
 STATO = f"{API}/post/publish/status/fetch/"
 
 # Vincoli di TikTok sui pezzi: minimo 5 MB, massimo 64 MB. I nostri video
@@ -244,6 +250,25 @@ class TikTokError(RuntimeError):
 
 class LimiteRaggiunto(TikTokError):
     """Le 5 bozze pendenti nelle 24 ore sono esaurite: non è un guasto."""
+
+
+class NonAuditata(TikTokError):
+    """L'app non ha passato l'audit: la pubblicazione diretta non è concessa.
+
+    Non è un guasto ed è per questo che ha una classe sua: è lo stato normale
+    di ogni app finché TikTok non la approva, e va distinta perché chi chiama
+    deve ripiegare sulla bozza invece di fermarsi.
+    """
+
+
+class ScopeMancante(TikTokError):
+    """Il permesso non è mai stato autorizzato: `scope_not_authorized`.
+
+    Diverso da `NonAuditata`, e la differenza dice cosa fare. Qui il permesso
+    non è stato nemmeno CHIESTO — si aggiunge lo scope all'app e si rifà
+    l'autorizzazione dal browser, cosa che dipende da noi. `NonAuditata`
+    invece dipende da TikTok e si può solo aspettare.
+    """
 
 
 class CredenzialiAssenti(TikTokError):
@@ -311,29 +336,20 @@ def _pezzatura(dimensione: int) -> tuple:
     return pezzo, max(1, dimensione // pezzo)
 
 
-def carica_bozza(video: "Path", token: str = "") -> str:
-    """Deposita un video come bozza nell'inbox TikTok. Ritorna il publish_id.
+def _init(url_init: str, corpo: dict, token: str) -> tuple:
+    """Apre un caricamento e ritorna (upload_url, publish_id).
 
-    La bozza NON è pubblicata: arriva come notifica nell'app e sei tu a
-    completarla. È anche il motivo per cui non serve l'audit.
+    Sta fuori dalle due funzioni che la usano perche' l'inbox e la
+    pubblicazione diretta differiscono SOLO per l'indirizzo e per il blocco
+    `post_info`: tutto il resto — la pezzatura, la lettura degli errori, la
+    distinzione fra tetto raggiunto e guasto — e' identico, e duplicarlo
+    significherebbe correggere i bug una volta sola su due.
     """
-    from pathlib import Path as _P
-
-    video = _P(video)
-    if not video.exists():
-        raise TikTokError(f"video non trovato: {video}")
-    dimensione = video.stat().st_size
-    pezzo, quanti = _pezzatura(dimensione)
-    # Il token si puo' passare da fuori: caricando piu' video di fila,
-    # richiederlo ogni volta sarebbe una chiamata sprecata per file.
-    token = token or _token_accesso()
-
     r = httpx.post(
-        INBOX_INIT,
+        url_init,
         headers={"Authorization": f"Bearer {token}",
                  "Content-Type": "application/json; charset=UTF-8"},
-        json={"source_info": {"source": "FILE_UPLOAD", "video_size": dimensione,
-                              "chunk_size": pezzo, "total_chunk_count": quanti}},
+        json=corpo,
         timeout=60,
     )
     d = r.json()
@@ -344,6 +360,8 @@ def carica_bozza(video: "Path", token: str = "") -> str:
         # previsto. Va distinto, o il ciclo manderebbe un allarme ogni giorno.
         if "spam" in errore.lower() or "rate_limit" in errore.lower():
             raise LimiteRaggiunto(f"tetto giornaliero raggiunto ({errore})")
+        if "unaudited_client" in errore or "unaudited_client" in messaggio:
+            raise NonAuditata(f"{errore} — {messaggio[:160]}")
         raise TikTokError(f"init rifiutata: {errore} — {messaggio[:160]}")
 
     dati = d.get("data", {})
@@ -351,9 +369,15 @@ def carica_bozza(video: "Path", token: str = "") -> str:
     publish_id = dati.get("publish_id")
     if not (url and publish_id):
         raise TikTokError(f"risposta senza upload_url: {str(d)[:200]}")
+    return url, publish_id
 
-    # Invio dei byte. Un pezzo solo nel caso normale; il ciclo regge comunque
-    # la frammentazione perche' i video crescono e il limite e' a 64 MB.
+
+def _invia_byte(url: str, video, dimensione: int, pezzo: int, quanti: int) -> None:
+    """Manda i byte del video all'indirizzo aperto dalla init.
+
+    Un pezzo solo nel caso normale; il ciclo regge comunque la frammentazione
+    perche' i video crescono e il limite di TikTok e' a 64 MB.
+    """
     with open(video, "rb") as fh:
         for i in range(quanti):
             inizio = i * pezzo
@@ -375,7 +399,146 @@ def carica_bozza(video: "Path", token: str = "") -> str:
             if u.status_code >= 400:
                 raise TikTokError(f"invio pezzo {i+1}/{quanti} fallito: "
                                   f"{u.status_code} {u.text[:160]}")
+
+
+def _misura(video) -> tuple:
+    """(Path, dimensione, pezzo, quanti) — i conti comuni ai due percorsi."""
+    from pathlib import Path as _P
+
+    video = _P(video)
+    if not video.exists():
+        raise TikTokError(f"video non trovato: {video}")
+    dimensione = video.stat().st_size
+    pezzo, quanti = _pezzatura(dimensione)
+    return video, dimensione, pezzo, quanti
+
+
+def carica_bozza(video: "Path", token: str = "") -> str:
+    """Deposita un video come bozza nell'inbox TikTok. Ritorna il publish_id.
+
+    La bozza NON è pubblicata: arriva come notifica nell'app e sei tu a
+    completarla. È anche il motivo per cui non serve l'audit.
+    """
+    video, dimensione, pezzo, quanti = _misura(video)
+    # Il token si puo' passare da fuori: caricando piu' video di fila,
+    # richiederlo ogni volta sarebbe una chiamata sprecata per file.
+    token = token or _token_accesso()
+
+    url, publish_id = _init(
+        INBOX_INIT,
+        {"source_info": {"source": "FILE_UPLOAD", "video_size": dimensione,
+                         "chunk_size": pezzo, "total_chunk_count": quanti}},
+        token,
+    )
+    _invia_byte(url, video, dimensione, pezzo, quanti)
     return publish_id
+
+
+def info_creatore(token: str = "") -> Dict:
+    """Cosa l'account permette di fare, chiesto a TikTok invece che indovinato.
+
+    Va chiamata PRIMA di ogni pubblicazione diretta, e non e' una formalita':
+    `privacy_level` viene rifiutato se non e' fra le opzioni che questa
+    risposta elenca, e le opzioni dipendono dall'account. Un profilo privato
+    non ha `PUBLIC_TO_EVERYONE`, e scriverlo fisso nel codice significherebbe
+    fallire ogni giorno senza capire perche'.
+
+    Ritorna anche quante pubblicazioni restano nelle 24 ore, che e' l'unico
+    modo che abbiamo di vedere il tetto prima di sbatterci contro.
+    """
+    token = token or _token_accesso()
+    r = httpx.post(
+        CREATOR_INFO,
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json; charset=UTF-8"},
+        json={},
+        timeout=60,
+    )
+    d = r.json()
+    errore = (d.get("error") or {}).get("code", "ok")
+    if errore not in ("ok", "", None):
+        messaggio = (d.get("error") or {}).get("message", "")
+        if "scope_not_authorized" in errore:
+            raise ScopeMancante(
+                "manca lo scope `video.publish`: l'app non e' ancora abilitata "
+                "alla pubblicazione diretta. Finche' e' cosi' si resta su "
+                "`mode: inbox`."
+            )
+        raise TikTokError(f"creator_info rifiutata: {errore} — {messaggio[:160]}")
+    return d.get("data", {})
+
+
+def pubblica_diretto(video: "Path", titolo: str, token: str = "") -> str:
+    """Pubblica davvero, senza passare dall'inbox. Ritorna il publish_id.
+
+    Differenze dalla bozza, tutte e tre necessarie:
+
+    · L'indirizzo e' `/post/publish/video/init/` invece di quello dell'inbox.
+    · Serve `post_info`, e dentro `privacy_level` — che NON si scrive a mano
+      ma si prende da `info_creatore()`, vedi li' il perche'.
+    · Serve lo scope `video.publish` e l'audit dell'app. Senza audit TikTok
+      non rifiuta: accetta e mette il video in visibilita' privata, che e' il
+      modo peggiore di fallire perche' sembra funzionare. Per questo l'errore
+      `unaudited_client` diventa `NonAuditata` e chi chiama puo' ripiegare
+      sulla bozza invece di pubblicare nel vuoto.
+
+    `is_aigc=True` non e' opzionale per noi. I video li scrive un modello, e
+    TikTok chiede che i contenuti generati siano dichiarati. Ometterlo
+    sarebbe una violazione delle loro regole per guadagnare niente — e
+    all'audit ci guardano proprio quello.
+    """
+    video, dimensione, pezzo, quanti = _misura(video)
+    token = token or _token_accesso()
+
+    permessi = info_creatore(token).get("privacy_level_options") or []
+    voluto = cfg.get("publish.tiktok.privacy", "PUBLIC_TO_EVERYONE")
+    if voluto not in permessi:
+        raise TikTokError(
+            f"l'account non permette `{voluto}` (opzioni: {permessi or 'nessuna'}). "
+            f"Di solito vuol dire che il profilo TikTok e' privato."
+        )
+
+    url, publish_id = _init(
+        DIRECT_INIT,
+        {"post_info": {"privacy_level": voluto,
+                       "title": titolo[:2200],
+                       "disable_comment": False,
+                       "disable_duet": False,
+                       "disable_stitch": False,
+                       "is_aigc": True},
+         "source_info": {"source": "FILE_UPLOAD", "video_size": dimensione,
+                         "chunk_size": pezzo, "total_chunk_count": quanti}},
+        token,
+    )
+    _invia_byte(url, video, dimensione, pezzo, quanti)
+    return publish_id
+
+
+def carica(video: "Path", titolo: str = "", token: str = "") -> tuple:
+    """Il punto d'ingresso unico: pubblica o deposita, secondo la config.
+
+    Ritorna (publish_id, modo_effettivo), dove il modo e' 'direct' o 'inbox'.
+    Non e' lo stesso di quello chiesto in config, ed e' il punto di questa
+    funzione: con `mode: direct` ma senza audit, ripiega sulla bozza invece
+    di pubblicare un video che nessuno vedra' mai.
+
+    Perche' il ripiego e non un errore. L'audit arriva in un giorno che non
+    sappiamo in anticipo, e l'unico modo di accorgersene sarebbe provare. Con
+    il ripiego l'interruttore si puo' girare su `direct` SUBITO: finche'
+    l'audit non passa il sistema continua a fare bozze come oggi, e il giorno
+    che passa comincia a pubblicare da solo senza che nessuno tocchi niente.
+    Senza ripiego bisognerebbe indovinare la data, e sbagliarla in un verso
+    significa giorni di video pubblicati in privato.
+    """
+    modo = str(cfg.get("publish.tiktok.mode", "inbox")).lower()
+    token = token or _token_accesso()
+    if modo == "direct":
+        try:
+            return pubblica_diretto(video, titolo, token), "direct"
+        except (NonAuditata, ScopeMancante) as exc:
+            print(f"    TikTok: pubblicazione diretta non ancora abilitata "
+                  f"({str(exc)[:80]}) — deposito come bozza")
+    return carica_bozza(video, token), "inbox"
 
 
 def stato_bozza(publish_id: str) -> Dict:
