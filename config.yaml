@@ -337,9 +337,20 @@ publish:
     # si perde: il confronto fra i due gruppi, che vivono entrambi dentro la
     # stessa cadenza e la subiscono uguale.
     #
-    # A prova finita torna a 1 se il gruppo lungo vince, resta a 2 solo se
-    # c'e' una ragione nuova.
-    max_per_day: 2
+    # Ritornato a 1 il 21 agosto 2026, prima che la prova cominciasse. La
+    # seconda fascia era durata un giorno: serviva a far uscire i due gruppi
+    # negli stessi giorni, ma quel vantaggio non paga il costo sul canale, che
+    # e' il ragionamento di Mattia qui sopra e non e' mai stato smentito. La
+    # prova si adatta allungandosi a 60 giorni — stessi 30 video per gruppo,
+    # un mese in piu' di calendario. Vedi `esperimento.lunghezza.giorni`.
+    #
+    # ATTENZIONE, e' il punto in cui e' facile sbagliare: questo campo NON
+    # decide quanti Short escono. E' un tetto. A far uscire i video e' il
+    # numero di voci in `orari` qui sotto. Cambiarne uno solo lascia il
+    # sistema incoerente — due fasce con tetto 1, o una fascia con tetto 2 —
+    # e nel primo caso il secondo video viene costruito e poi buttato via.
+    # Vanno sempre cambiati insieme.
+    max_per_day: 1
 
     # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
     # workflow: il primo giro della giornata carica tutti e tre i video e li
@@ -366,12 +377,18 @@ publish:
     # direzione del ragionamento sui fusi, che regge da solo.
     #
     # La seconda fascia e' tornata il 21 agosto 2026 per la prova sulla
-    # lunghezza. Le 13:00 italiane sono la mattina presto sulla costa est e
-    # l'ora di pranzo in Europa: e' la seconda fascia meno peggio, ma resta
-    # peggiore delle 19:00. Per questo i due gruppi se le SCAMBIANO ogni
-    # giorno (vedi `esperimento.lunghezza.alterna_fascia`): se il gruppo corto
-    # prendesse sempre le 19:00 misureremmo l'orario, non la lunghezza.
-    orari: ["13:00", "19:00"]
+    # lunghezza, ed e' durata un giorno: le 13:00 italiane sono la mattina
+    # presto sulla costa est e l'ora di pranzo in Europa, cioe' la seconda
+    # fascia meno peggio, ma resta peggiore delle 19:00. Toglierla costa alla
+    # prova un mese di calendario e non le costa un solo video, perche' i 30
+    # video per gruppo si raggiungono lo stesso in 60 giorni.
+    #
+    # In cambio si guadagna una cosa che lo scambio di fasce poteva solo
+    # approssimare: con un orario solo, l'ora di uscita smette proprio di
+    # essere una variabile. Tutti i video di tutti e due i gruppi escono alle
+    # 19:00, quindi non c'e' niente da bilanciare e niente che possa
+    # sbilanciarsi se una giornata salta.
+    orari: ["19:00"]
     fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come
@@ -685,11 +702,43 @@ esperimento:
   lunghezza:
     attiva: true
 
-    # 30 giorni a 2 Short al giorno = ~30 video per gruppo, che è la soglia
-    # del 60% qui sopra. Un mese e non due settimane per scelta di Mattia:
-    # cambiare formato ogni quindici giorni disorienta la distribuzione, che
-    # ha bisogno di vedere una cosa costante prima di capire a chi darla.
-    giorni: 30
+    # 60 giorni a 1 Short al giorno = ~31 video per gruppo. Il numero che
+    # conta è quello — una trentina per gruppo — non la durata: è la
+    # dimensione a cui la soglia del 60% qui sopra separa un effetto vero dal
+    # rumore.
+    #
+    # 31 e non 30 perché il 22 e il 23 agosto la prova è girata a due Short al
+    # giorno, prima del cambio di cadenza. Quei quattro video restano dentro:
+    # sono usciti coi prompt giusti e coprono una casella ciascuna delle
+    # quattro. Il conto verificato sull'intero calendario è 62 video, 31 per
+    # gruppo su tutti e due i fattori, caselle 15/15/16/16.
+    #
+    # L'unico rischio di quei due giorni era l'orario, perché le 13:00 rendono
+    # meno delle 19:00 e i primi quattro video hanno usato tutte e due le
+    # fasce. Sul gruppo lunghezza si annulla da solo — corto e lungo hanno
+    # preso esattamente una fascia delle 13:00 a testa, che è il lavoro per
+    # cui `alterna_fascia` esiste. Sul gruppo apertura le 13:00 sono capitate
+    # entrambe allo scontro, e lì non conta: l'apertura si giudica sulla
+    # tenuta a 3 secondi, che dipende dal video e non da quanta gente lo vede.
+    #
+    # Era 30 giorni a 2 Short al giorno, che dà lo stesso totale. Passato a
+    # 60 x 1 il 23 agosto 2026, per decisione di Mattia: due Short al giorno
+    # su un canale senza pubblico si tolgono spazio a vicenda, perché ognuno
+    # viene provato su un campione piccolo prima di essere distribuito. La
+    # cadenza è una scelta sul canale, non sulla prova, e la prova si adatta.
+    #
+    # Perché allungare invece di dimezzare. Simulando la regola di decisione
+    # con la variabilità vera dei nostri 22 Short, a 15 video per gruppo la
+    # prova sulla lunghezza becca un effetto grosso il 70% delle volte contro
+    # il 78%, e sbaglia ad adottare il 6% contro l'1%. Allungando non si perde
+    # niente tranne tempo, e un mese in più di formato costante va nella
+    # stessa direzione della ragione per cui la prova dura un mese e non due
+    # settimane: la distribuzione ha bisogno di vedere una cosa ferma.
+    #
+    # Un mese e non due settimane per scelta di Mattia: cambiare formato ogni
+    # quindici giorni disorienta la distribuzione, che ha bisogno di vedere
+    # una cosa costante prima di capire a chi darla.
+    giorni: 60
     # Il 22 e non il 21, che è il giorno in cui la prova è stata scritta: il
     # giro delle 10:27 del 21 aveva già caricato e programmato lo Short delle
     # 19:00 col codice vecchio, e la fascia delle 13:00 era passata. Il 21 non
@@ -731,13 +780,21 @@ esperimento:
 
     # Ogni giorno i gruppi si scambiano l'orario di uscita. Senza, l'ora e la
     # lunghezza cambierebbero insieme e non sapremmo quale delle due leggiamo.
+    #
+    # Dal 21 agosto 2026 non ha più niente da fare: con una sola fascia
+    # (`publish.youtube.orari`) l'indice è sempre 0 e non c'è nessuno scambio
+    # da fare. Resta a true perché è la scelta giusta il giorno che le fasce
+    # tornano due, e perché a una sola fascia il valore è inerte: metterlo a
+    # false non cambierebbe un singolo video. Il confondimento con l'orario
+    # adesso è risolto meglio, alla radice — c'è un orario solo, quindi tutti
+    # i video di tutti e due i gruppi lo condividono.
     alterna_fascia: true
 
     # ─── LA REGOLA DI DECISIONE, SCRITTA PRIMA ───────────────────────────────
     # Sta qui e non nella testa di nessuno perché a fine mese la tentazione di
     # spostare l'asticella per far vincere l'ipotesi che ci piaceva è forte, e
     # una soglia scritta il primo giorno è l'unica difesa. Si legge SOLO al
-    # giorno 30: guardare a metà e cambiare è il modo di trasformare il rumore
+    # giorno 60: guardare a metà e cambiare è il modo di trasformare il rumore
     # in una conclusione.
     #
     # metrica: viste per video, gruppo corto contro gruppo lungo
@@ -813,7 +870,17 @@ esperimento:
   # dicono. Un vantaggio del 5% non paga una frase falsa.
   apertura:
     attiva: true
-    giorni: 30
+    # 60 come la prova sulla lunghezza, e le due durate devono restare uguali:
+    # girano sugli STESSI video, quindi chiuderne una prima vorrebbe dire
+    # cambiare i prompt mentre l'altra e' ancora aperta, cioe' spostare una
+    # variabile sotto i piedi di un esperimento in corso.
+    #
+    # Questa prova avrebbe retto anche a 30 giorni: a 15 video per braccio
+    # becca un effetto da 5 punti l'89% delle volte contro il 96%, perche' la
+    # tenuta a 3 secondi e' sedici volte meno rumorosa delle visualizzazioni
+    # (CV 0,049 contro 0,781, misurato su 22 Short). E' la prova sulla
+    # lunghezza a chiedere i 60 giorni. Questa li segue.
+    giorni: 60
     inizio: "2026-08-22"
     alterna_fascia: true
 

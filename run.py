@@ -1641,8 +1641,8 @@ def _verdetto_lunghezza(righe, passati: int, giorni: int) -> None:
               f"entrambe difendibili.")
     else:
         print(f"  Sotto {proroga:.0%}: si chiude, resta il formato a tre.\n"
-              f"  Metti `esperimento.lunghezza.attiva: false` e riporta "
-              f"`max_per_day` a 1.")
+              f"  Metti `esperimento.lunghezza.attiva: false`. La cadenza e'\n"
+              f"  gia' a un video al giorno: non c'e' niente da riportare.")
 
 
 def _mostra_apertura(conn) -> None:
