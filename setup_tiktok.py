@@ -62,9 +62,35 @@ TOKEN = "https://open.tiktokapis.com/v2/oauth/token/"
 # che l'app non ha ancora abilitato fa fallire l'autorizzazione: scriverlo
 # fisso adesso romperebbe l'unica strada che oggi funziona.
 SCOPE_COMPLETO = "video.upload,video.publish,video.list,user.info.stats"
-SCOPE = env("TIKTOK_SCOPE") or "video.upload"
 
 FILE_TOKEN = DATA_DIR / "tiktok_token.json"
+FILE_TOKEN_PROVA = DATA_DIR / "tiktok_token_prova.json"
+
+# `--prova` serve a autorizzare l'app **Sandbox** senza rompere quella vera.
+#
+# Il sandbox di TikTok ha client key e secret propri, e permette Direct Post
+# senza aspettare l'audit — ma pubblica in SELF_ONLY, visibile al solo autore.
+# E' quindi l'unico modo di provare per davvero tutto il percorso della
+# pubblicazione diretta (creator_info, init, invio a pezzi, is_aigc) prima del
+# giorno dell'approvazione, invece di scoprire i difetti quando contano.
+#
+# Senza questo interruttore la prova sarebbe distruttiva, e in un modo
+# silenzioso: `_scrivi_env()` riscrive TIKTOK_REFRESH_TOKEN dentro .env, quindi
+# autorizzare col sandbox sovrascriverebbe il token di produzione. Il
+# caricamento del giorno dopo fallirebbe con la causa lontana ore, che e'
+# esattamente il tipo di guasto che costa una serata.
+#
+# Le credenziali del sandbox non vanno in .env: si passano davanti al comando,
+#   TIKTOK_CLIENT_KEY=... TIKTOK_CLIENT_SECRET=... python3 setup_tiktok.py --prova
+# e restano solo in quel processo, perche' load_dotenv non sovrascrive quello
+# che c'e' gia' nell'ambiente.
+PROVA = "--prova" in sys.argv
+
+# Nel sandbox gli scope pieni ci sono gia' — e' il senso del sandbox — quindi
+# li si chiede senza aspettare TIKTOK_SCOPE. In produzione resta `video.upload`
+# finche' l'audit non passa, perche' chiedere un permesso non abilitato fa
+# fallire l'autorizzazione.
+SCOPE = env("TIKTOK_SCOPE") or (SCOPE_COMPLETO if PROVA else "video.upload")
 
 SPIEGAZIONE = """
 Cosa sblocca questa autorizzazione:
@@ -116,7 +142,14 @@ def main() -> int:
         "state": "curiosity",
     })
 
-    print(SPIEGAZIONE)
+    if PROVA:
+        print("\n── MODALITA' PROVA (Sandbox) ────────────────────────────────")
+        print("  .env non verra' toccato: il token finisce in un file a parte.")
+        print("  Autorizza con l'account gia' registrato fra i Target Users.")
+        print("  Quello che pubblicherai sara' visibile SOLO a te (SELF_ONLY).")
+        print("─" * 62 + "\n")
+    else:
+        print(SPIEGAZIONE)
     print("1. Apro il browser. Autorizza con l'account del canale.\n")
     print(f"   Se non si apre, incolla questo:\n\n   {url}\n")
     try:
@@ -182,8 +215,18 @@ def main() -> int:
         return _errore(f"scambio fallito: {descrizione}{aiuto}")
 
     refresh = d["refresh_token"]
-    FILE_TOKEN.parent.mkdir(parents=True, exist_ok=True)
-    FILE_TOKEN.write_text(json.dumps({"refresh_token": refresh}, indent=2))
+    dove = FILE_TOKEN_PROVA if PROVA else FILE_TOKEN
+    dove.parent.mkdir(parents=True, exist_ok=True)
+    dove.write_text(json.dumps({"refresh_token": refresh,
+                                "scope": d.get("scope", ""),
+                                "prova": PROVA}, indent=2))
+
+    if PROVA:
+        print(f"\n✓ Autorizzato (SANDBOX). .env non e' stato toccato.")
+        print(f"  token in {dove.relative_to(ROOT)}")
+        print(f"  scope concessi da TikTok: {d.get('scope') or '(non dichiarati)'}")
+        _verifica_prova(chiave, segreto, refresh)
+        return 0
 
     _scrivi_env(refresh)
     print("\n✓ Autorizzato. Controllo che funzioni davvero:")
@@ -216,6 +259,61 @@ def _scrivi_env(refresh: str) -> None:
         righe.append(f"TIKTOK_REFRESH_TOKEN={refresh}")
     f.write_text("\n".join(righe) + "\n")
     print("  ✓ scritto in .env")
+
+
+def _verifica_prova(chiave: str, segreto: str, refresh: str) -> None:
+    """Chiede a TikTok cosa concede davvero al sandbox, invece di dedurlo.
+
+    La domanda che conta e' una sola: `privacy_level_options` contiene
+    PUBLIC_TO_EVERYONE oppure solo SELF_ONLY? La documentazione dice che un
+    client non auditato e' confinato alla visibilita' privata, ma la
+    documentazione descrive il caso generale e noi stiamo per pubblicare
+    davvero. Meglio leggerlo dalla loro risposta.
+
+    Non passa da engine.publish.tiktok perche' quel modulo prende le
+    credenziali da .env, cioe' da produzione: userebbe l'app sbagliata e
+    direbbe una verita' su un'altra applicazione.
+    """
+    print("\n  Controllo cosa concede il sandbox:")
+    r = httpx.post(
+        TOKEN,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={"client_key": chiave, "client_secret": segreto,
+              "grant_type": "refresh_token", "refresh_token": refresh},
+        timeout=60,
+    )
+    d = r.json()
+    if "access_token" not in d:
+        print(f"  ✗ rinnovo fallito: {str(d)[:200]}")
+        return
+    print("  ✓ il token si rinnova")
+
+    r = httpx.post(
+        "https://open.tiktokapis.com/v2/post/publish/creator_info/query/",
+        headers={"Authorization": f"Bearer {d['access_token']}",
+                 "Content-Type": "application/json; charset=UTF-8"},
+        json={}, timeout=60,
+    )
+    c = r.json()
+    errore = (c.get("error") or {}).get("code", "")
+    if errore not in ("ok", "", None):
+        print(f"  ✗ creator_info: {errore} — "
+              f"{(c.get('error') or {}).get('message', '')[:160]}")
+        return
+    dati = c.get("data", {})
+    opzioni = dati.get("privacy_level_options") or []
+    print(f"  ✓ creator_info risponde")
+    print(f"      profilo:  {dati.get('creator_username', '?')}")
+    print(f"      privacy:  {opzioni or 'nessuna'}")
+    print(f"      residui:  {dati.get('max_video_post_duration_sec', '?')}s max "
+          f"per video")
+    if "PUBLIC_TO_EVERYONE" in opzioni:
+        print("\n  → il sandbox concede la visibilita' pubblica: `carica()` "
+              "pubblicherebbe davvero.")
+    else:
+        print("\n  → niente PUBLIC_TO_EVERYONE, come da documentazione per i "
+              "client non auditati.\n     E' il caso che `carica()` gestisce "
+              "ripiegando sulla bozza.")
 
 
 def _verifica() -> None:

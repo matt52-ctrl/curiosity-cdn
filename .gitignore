@@ -29,6 +29,13 @@ assets/music/
 # canale. GitHub blocca il push se ci finisce dentro — giustamente.
 data/youtube_token.json
 
+# Stessa ragione per TikTok, e la stessa che vale per .env. `setup_tiktok.py`
+# scrive qui il refresh token — che dura un anno e basta da solo a pubblicare
+# sul canale. Finora non era ignorato e non e' mai finito nel repo, ma solo
+# perche' il file non esisteva ancora: e' fortuna, non progetto.
+data/tiktok_token.json
+data/tiktok_token_prova.json
+
 # Il sito generato. Non va versionato qui: ha un repo suo
 # (oddlywired/oddlywired.github.io) dove la pipeline lo spinge a ogni ciclo.
 # Tenerlo anche qui significava rigenerare 78 file a ogni giro e collidere con
