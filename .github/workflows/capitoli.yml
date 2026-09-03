@@ -1,0 +1,142 @@
+# Magazzino dei capitoli da ~10 minuti — la scorta da cui partono le dirette.
+#
+# Perché un workflow separato e non un pezzo di lungo.yml: sono due formati
+# diversi con due destini diversi. `lungo` monta e PUBBLICA un episodio da
+# ~4 minuti che riusa i campi corti degli Short; `capitolo` SCRIVE un copione
+# originale da duemila parole, con una tesi e gli studi nominati a voce, e non
+# pubblica niente. L'ordine è quello deciso da Mattia: prima i capitoli passano
+# tutti in diretta, poi escono uno ogni due giorni. Un workflow che montasse e
+# caricasse nello stesso giro renderebbe quella sequenza impossibile.
+#
+# PERCHÉ SOLO IL TESTO, e non anche il montaggio.
+# Un capitolo montato è un file da centinaia di megabyte. Questo repo è anche
+# la CDN delle immagini e conserva il database: i reel già vengono cancellati
+# dopo la pubblicazione (i commit "prune posts/reel-NN/reel.mp4" nella storia)
+# proprio perché il video pesa. Accumulare dieci capitoli montati vorrebbe dire
+# un paio di gigabyte dentro git, che non si tolgono più dalla storia.
+# Il copione invece costa diecimila caratteri: il magazzino si riempie qui, e
+# il montaggio si fa a richiesta sul capitolo che sta per andare in onda —
+# con `monta: true` qui sotto, o in locale con `run.py capitolo`.
+#
+# COSTO IN QUOTA. Ogni capitolo è una chiamata con la ricerca web accesa, che
+# gira su `pipeline.model_ricerca` (gemini-2.5-flash) e NON tocca la quota di
+# `pipeline.model`, che regge Short, reel e TikTok. Sono due quote separate —
+# misurato il 3 settembre 2026 — quindi questo workflow non toglie niente ai
+# canali che già pubblicano. È la ragione per cui può girare ogni giorno.
+
+name: Curiosity capitoli
+
+on:
+  schedule:
+    # ~5:15 italiane, e l'ora è scelta per stare lontana da tutto il resto.
+    #
+    # Questo workflow condivide il gruppo di concorrenza `curiosity-state` con
+    # gli altri, e due giri dello stesso gruppo accodati insieme non aspettano
+    # il proprio turno: GitHub ne tiene uno solo in attesa e ANNULLA l'altro.
+    # È successo il 19 agosto e costò la giornata YouTube.
+    #
+    # Il vicino più prossimo è TikTok alle 6:15 UTC. Scrivere due capitoli
+    # richiede una decina di minuti, ma i cron di GitHub partono in ritardo
+    # fino a 64 minuti misurati: da 5:15 il giro potrebbe cominciare alle 6:19
+    # e finire dentro la finestra di TikTok. Da 3:15 il caso peggiore è
+    # 4:19-4:35, con quasi due ore di margine.
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+    inputs:
+      quanti:
+        description: "Quanti capitoli scrivere in questo giro"
+        type: string
+        default: "2"
+      monta:
+        description: "Monta anche i video (lento e pesante: solo prima di una diretta)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  # STESSO gruppo degli altri: scrivono tutti lo stesso database, e due
+  # esecuzioni sovrapposte lo corromperebbero o perderebbero uno stato.
+  group: curiosity-state
+  cancel-in-progress: false
+
+jobs:
+  capitoli:
+    runs-on: ubuntu-latest
+    # 45 col solo testo ne bastano una decina; il tetto serve al caso `monta`,
+    # dove ogni capitolo è dieci minuti di voce sintetizzata e di ffmpeg.
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze
+        timeout-minutes: 12
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -r requirements.txt
+          # Serve solo quando si monta, ma installarlo sempre costa poco ed
+          # evita che il giro con `monta: true` muoia sul primo capitolo.
+          playwright install --with-deps chromium
+
+      - name: Scarica font e musica
+        run: |
+          python setup_fonts.py
+          python setup_music.py
+
+      # Scrive, controlla la lingua, verifica gli studi su Europe PMC e mette
+      # in magazzino. Un capitolo con uno studio INESISTENTE non entra: in
+      # questo formato le fonti si dicono a voce dentro il copione, quindi una
+      # fonte falsa non è un metadato da correggere dopo, è una frase detta ad
+      # alta voce dentro il video.
+      - name: Scrivi i capitoli
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          python run.py capitolo \
+            --quanti ${{ inputs.quanti || 2 }} \
+            ${{ inputs.monta && ' ' || '--solo-testo' }}
+
+      - name: Mostra il magazzino
+        if: always()
+        run: python run.py capitolo --lista
+
+      - name: Salva lo stato
+        if: always()
+        run: |
+          git config user.name  "curiosity-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/engine.db
+          git diff --staged --quiet && exit 0
+          git commit -m "capitoli: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          for i in 1 2 3 4 5; do
+            if git push; then echo "stato salvato"; exit 0; fi
+            echo "push respinto, tentativo $i"
+            git fetch origin main
+            # NON si rebasa e non si usa `reset --soft`. Il primo risolve i
+            # conflitti buttando via il database appena scritto (durante un
+            # rebase "ours" è il ramo su cui si rebasa, cioè il remoto); il
+            # secondo lascia in indice i file del commit precedente e li
+            # registra come cancellati. Sono costati entrambi dati veri, ad
+            # agosto. Qui l'indice torna al remoto, i file di questo runner
+            # non si toccano, e si ristagna solo lo stato.
+            git reset -q origin/main
+            git add data/engine.db
+            if git diff --staged --quiet; then
+              echo "nulla da salvare"; exit 0
+            fi
+            git commit -q -m "capitoli: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            sleep 5
+          done
+          echo "::error::stato NON salvato: i capitoli scritti andrebbero persi"
+          exit 1

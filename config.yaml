@@ -184,6 +184,28 @@ pipeline:
   # quella di uno, cambiare modello qui riparte subito senza aspettare.
   model: "gemini-3.1-flash-lite"
 
+  # Il modello usato SOLO quando una chiamata accende la ricerca web. Oggi
+  # e' un punto solo: `capitolo.scrivi`, che deve scegliere studi veri prima
+  # di scriverci sopra dodici minuti.
+  #
+  # Perche' serve un campo a parte, misurato il 3 settembre 2026 mandando la
+  # STESSA richiesta con `google_search` acceso e con la chiave di Mattia:
+  #
+  #     gemini-3.1-flash-lite   429      <- il modello qui sopra
+  #     gemini-3.5-flash        429
+  #     gemini-2.5-flash        200
+  #
+  # Gli stessi due modelli rispondono 200 alla stessa richiesta senza
+  # ricerca, e reggono decine di chiamate al giorno. Quindi la quota di
+  # grounding e' separata da quella di testo, ed e' per coppia (modello,
+  # funzionalita'): aspettare domani o cambiare `model` non risolve, e il
+  # commento di agosto qui sotto — "il grounding richiede fatturazione,
+  # free tier zero" — era vero per i modelli provati allora, non per tutti.
+  #
+  # Il primo capitolo e' fallito quattro volte per questo, con il messaggio
+  # "Quota Gemini esaurita" che mandava a cercare nel posto sbagliato.
+  model_ricerca: "gemini-2.5-flash"
+
   # Come si verificano i fatti.
   #   native     il modello cerca da solo. Su Anthropic è incluso; su Google
   #              il grounding richiede fatturazione attiva (free tier zero).
@@ -658,10 +680,39 @@ cta:
   # promessa sta in quattro parole invece che in una frase: è la stessa dei
   # testi qui sotto, compressa. "We name every study" dice in mezzo secondo
   # ciò che nessun'altra pagina di curiosità può dire.
+  # CAMBIATE il 3 settembre 2026. Cosa si è misurato prima di toccarle: in 23
+  # giorni e 42 video, 13.091 visualizzazioni hanno prodotto 11 iscritti e 6
+  # commenti. Sono 0,84 iscritti ogni mille viste, contro una media di 2,27
+  # per gli Short e un 5 considerato buono. La promessa di credibilità ha
+  # avuto tre settimane per funzionare e ha convertito un terzo della media.
+  #
+  # PERCHÉ CAMBIA IL TIPO DI PROMESSA, non solo le parole. "We name every
+  # study" dice perché fidarsi di questo video. Non dice cosa ricevi domani, e
+  # l'iscrizione è una scommessa su domani: si preme perché si vuole ancora
+  # QUELLA cosa, non perché il video appena visto era fatto bene. Le due righe
+  # nuove promettono la ricorrenza ("one a day") e il registro che ha vinto la
+  # prova di agosto — il riconoscimento, "una cosa su di te" — invece della
+  # verificabilità.
+  #
+  # La verificabilità NON si perde: resta per intero in `testo` qui sotto, che
+  # va nella descrizione, dove lo spazio c'è. Sul fotogramma no, perché sono
+  # due righe lette in 2,4 secondi e non ci stanno tutte e due le promesse.
+  # La lunghezza è la stessa di prima (32 caratteri contro 30), quindi il
+  # confronto non è inquinato dal tempo di lettura.
+  #
+  # Come si legge l'esito: iscritti ogni mille viste sui video usciti DOPO il
+  # 3 settembre, contro gli 0,84 di prima. Non i like, che nei due gruppi di
+  # agosto erano identici (0,7%) mentre la visione cambiava — i like qui non
+  # misurano niente. Serve un mese: a 2 Short al giorno sono ~60 video.
+  #
+  # ⚠️ Questa riga NON confonde le due prove in corso (lunghezza e apertura):
+  # cambia per tutti i video di tutti e quattro i bracci nello stesso giorno,
+  # quindi si elide nel confronto fra gruppi. Rompe invece il paragone col
+  # passato del canale, ed è il prezzo accettato.
   azione:
-    youtube: "Subscribe. We name every study."
-    tiktok: "Follow. We name every study."
-    default: "We name every study."
+    youtube: "Subscribe. One a day, about you."
+    tiktok: "Follow. One a day, about you."
+    default: "One a day, about you."
 
   # Le stesse richieste in forma di testo, per descrizioni e didascalie.
   #
@@ -683,10 +734,17 @@ cta:
   # curiosità esce senza fonte, questa riga diventa una bugia stampata sotto a
   # ogni video. È anche il motivo per cui `bluesky.componi` si rifiuta di
   # pubblicare un fatto senza `source_hint`.
+  # Nella descrizione lo spazio non è il vincolo, quindi qui stanno TUTTE e
+  # tre le promesse invece delle due che entrano sul fotogramma: cosa ricevi
+  # domani (ricorrenza), di cosa parla (tu), e perché fidarsi (lo studio
+  # nominato). L'ordine è quello: la ragione per iscriversi sta davanti, la
+  # ragione per credere dietro — chi legge la descrizione di uno Short si
+  # ferma dopo poche parole, e finora la prima cosa che leggeva era una
+  # promessa di metodo.
   testo:
-    youtube: "Subscribe — one of these every day, and every one names the study it came from. When a finding is contested, it says so."
-    tiktok: "Follow — one a day, and every one names the study it came from."
-    instagram: "Follow @oddlywireddaily — one a day, and every one names the study it came from. When a finding is contested, it says so."
+    youtube: "Subscribe — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
+    tiktok: "Follow — one a day, and every one is about something you already do without noticing. Every one names the study it came from."
+    instagram: "Follow @oddlywireddaily — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
 
   # Bluesky non ha spazio: i post stanno a 290-296 caratteri su 300, e lo
   # spazio che manca lo paga già la spiegazione, che esce troncata. Una riga

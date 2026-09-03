@@ -2142,6 +2142,30 @@ def cmd_capitolo(args: argparse.Namespace) -> int:
         print(f"  {parole} parole → ~{parole / 140:.1f} minuti, "
               f"{len(testo['fonti'])} studi dichiarati\n")
 
+        # Il copione deve essere in inglese, e ogni tanto non lo e'.
+        #
+        # Successo davvero al primo lotto vero, il 3 settembre 2026: su tre
+        # capitoli uno e' uscito integralmente in italiano, titolo compreso
+        # ("La Tirannia dell'Abbondanza: Perche' Troppe Scelte ci..."), pur
+        # avendo il prompt che chiede "in English" e il sistema in inglese.
+        # Non e' un caso limite da ignorare: e' un capitolo su tre, e la voce
+        # e' `en-GB-RyanNeural`, che l'italiano lo legge con accento inglese —
+        # quindi il difetto non si sente in fase di montaggio, si scopre in
+        # diretta.
+        #
+        # Il controllo e' volutamente grezzo: parole funzione italiane che in
+        # un testo inglese non compaiono mai. Non serve una libreria — servono
+        # zero dipendenze nuove e un verdetto certo su un testo di duemila
+        # parole, dove la frequenza rende il segnale inequivocabile.
+        spie = (" che ", " perche", " della ", " degli ", " questo ",
+                " sono ", " non ", " nostra ", " nella ", " piu' ", " più ")
+        campione = (" " + testo["copione"][:3000].lower() + " ")
+        colpi = sum(campione.count(s) for s in spie)
+        if colpi >= 8:
+            print(f"  ✗ copione NON in inglese ({colpi} spie italiane): "
+                  f"capitolo scartato")
+            continue
+
         esiti = fo.verifica_capitolo(testo["fonti"])
         falsi = [e for e in esiti if e["verdetto"] == "inesistente"]
         if falsi:

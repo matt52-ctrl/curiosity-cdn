@@ -23,6 +23,12 @@ from .config import cfg, env, require_env
 PROVIDER = cfg.get("pipeline.provider", "anthropic")
 MODEL = cfg.get("pipeline.model", "claude-opus-5")
 
+# Il modello per le sole chiamate che accendono la ricerca web. Vedi
+# `_chiedi_con_ritenta`: la quota di grounding e' separata da quella di testo
+# e su gemini-3.1-flash-lite e' a zero. Vale solo per Gemini; su Anthropic la
+# ricerca non ha una quota sua e questo campo non viene letto.
+MODEL_RICERCA = cfg.get("pipeline.model_ricerca", "gemini-2.5-flash")
+
 
 # ─── Parsing comune ───────────────────────────────────────────────────────────
 
@@ -146,7 +152,8 @@ PASSEGGERI = {500, 502, 503, 504}
 ATTESE = [3, 8, 20, 45]
 
 
-def _chiedi_con_ritenta(key: str, body: Dict[str, Any]) -> "httpx.Response":
+def _chiedi_con_ritenta(key: str, body: Dict[str, Any],
+                        modello: str = "") -> "httpx.Response":
     """Interroga Gemini ritentando sugli errori passeggeri.
 
     Il 429 e' un caso a parte: puo' voler dire "troppe richieste al minuto"
@@ -154,13 +161,26 @@ def _chiedi_con_ritenta(key: str, body: Dict[str, Any]) -> "httpx.Response":
     domani). Non essendo distinguibili dal codice, si ritenta una volta sola
     con un'attesa lunga: se era il primo caso si risolve, se era il secondo si
     sono persi trenta secondi invece di un ciclo intero.
+
+    `modello` esiste perche' la quota NON e' una sola: e' per coppia
+    (modello, funzionalita'). Misurato il 3 settembre 2026 con la chiave di
+    Mattia, una richiesta identica con `google_search` acceso:
+
+        gemini-3.1-flash-lite   429    <- il modello della pipeline
+        gemini-3.5-flash        429
+        gemini-2.5-flash        200
+
+    Gli stessi modelli che danno 429 rispondono 200 alla stessa richiesta
+    SENZA ricerca. Quindi non e' la quota di testo a essere finita, e non
+    serve aspettare domani: serve un altro modello per le sole chiamate
+    che cercano.
     """
     ultimo = None
     for tentativo, attesa in enumerate([*ATTESE, None]):
         try:
             with httpx.Client(timeout=300) as client:
                 resp = client.post(
-                    f"{GEMINI_URL}/{MODEL}:generateContent",
+                    f"{GEMINI_URL}/{modello or MODEL}:generateContent",
                     headers={"x-goog-api-key": key, "Content-Type": "application/json"},
                     json=body,
                 )
@@ -237,27 +257,60 @@ def _gemini_ask_json(
         body["generationConfig"]["responseMimeType"] = "application/json"
         body["generationConfig"]["responseSchema"] = _gemini_schema(schema)
 
-    resp = _chiedi_con_ritenta(key, body)
+    # Quante volte si rifà la domanda se il JSON torna rotto. Vale SOLO con la
+    # ricerca accesa, e il motivo è nel vincolo di Gemini spiegato qui sopra:
+    # ricerca e output strutturato si escludono, quindi in quel caso lo schema
+    # è una richiesta scritta nel prompt e non una garanzia del formato. Su
+    # una risposta corta si nota poco; su un copione da milleottocento parole
+    # dentro una stringa JSON basta una virgoletta non protetta e l'oggetto
+    # non si apre più.
+    #
+    # Misurato il 3 settembre 2026 sullo stesso capitolo: la prima
+    # generazione è uscita rotta ("Expecting ',' delimiter", riga 4), la
+    # seconda valida. Non è un difetto sistematico da correggere nel parser —
+    # il punto di rottura cade ogni volta altrove — è rumore del modello, e
+    # alla domanda rifatta risponde bene. Senza ricerca il formato lo impone
+    # `responseSchema` e un ritentativo non servirebbe a niente.
+    tentativi = 3 if use_web_search else 1
+    ultimo_errore = None
 
-    data = resp.json()
-    candidates = data.get("candidates") or []
-    if not candidates:
-        raise RuntimeError(f"Gemini non ha restituito candidati: {str(data)[:300]}")
+    for giro in range(tentativi):
+        resp = _chiedi_con_ritenta(
+            key, body, MODEL_RICERCA if use_web_search else "")
 
-    reason = candidates[0].get("finishReason", "")
-    parts = candidates[0].get("content", {}).get("parts", [])
-    text = "".join(p.get("text", "") for p in parts)
+        data = resp.json()
+        candidates = data.get("candidates") or []
+        if not candidates:
+            raise RuntimeError(
+                f"Gemini non ha restituito candidati: {str(data)[:300]}")
 
-    if reason == "MAX_TOKENS":
-        raise RuntimeError(
-            "Risposta troncata dal limite di token: il JSON risulta incompleto. "
-            "Alza pipeline.thinking_budget al contrario — cioè abbassalo — "
-            "oppure riduci la lunghezza del materiale di riferimento."
-        )
-    if not text.strip():
-        raise RuntimeError(f"Gemini ha restituito testo vuoto (finishReason={reason})")
+        reason = candidates[0].get("finishReason", "")
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts)
 
-    return parse_json(text)
+        if reason == "MAX_TOKENS":
+            raise RuntimeError(
+                "Risposta troncata dal limite di token: il JSON risulta incompleto. "
+                "Alza pipeline.thinking_budget al contrario — cioè abbassalo — "
+                "oppure riduci la lunghezza del materiale di riferimento."
+            )
+        if not text.strip():
+            raise RuntimeError(
+                f"Gemini ha restituito testo vuoto (finishReason={reason})")
+
+        try:
+            return parse_json(text)
+        except (ValueError, json.JSONDecodeError) as exc:
+            ultimo_errore = exc
+            if giro + 1 < tentativi:
+                print(f"    JSON rotto ({exc}), rifaccio la domanda "
+                      f"(tentativo {giro + 2}/{tentativi})")
+
+    raise RuntimeError(
+        f"Gemini ha restituito JSON non valido {tentativi} volte di fila "
+        f"(ultimo: {ultimo_errore}). Con la ricerca accesa il formato non è "
+        f"garantito: se capita spesso, conviene spegnerla per questa chiamata."
+    )
 
 
 # ─── Interfaccia unica ────────────────────────────────────────────────────────
