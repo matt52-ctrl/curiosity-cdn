@@ -163,6 +163,14 @@ def silenzio(conn, ore: float | None = None) -> None:
         # caroselli dal 19 agosto, in attesa che Meta tolga il blocco.
         if nome == "Instagram post" and not cfg.get("publish.instagram.enabled", True):
             continue
+        # Stessa cosa per l'episodio lungo, spento il 3 settembre 2026 dopo
+        # tre uscite da 3, 2 e 3 visualizzazioni. Senza questa riga la guardia
+        # avrebbe cominciato a segnalarlo intorno al 20 settembre, cioe' 22
+        # giorni dopo l'ultimo episodio: la soglia funziona, e' il canale a
+        # non doverci essere piu'.
+        if nome == "YouTube episodio" and not cfg.get(
+                "publish.youtube.episodio_lungo_attivo", True):
+            continue
         if ore is not None:
             soglia = ore
         try:

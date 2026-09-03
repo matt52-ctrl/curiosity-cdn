@@ -312,6 +312,22 @@ publish:
     # ~33 secondi. Sotto i 30 il video esce dalla finestra che YouTube premia,
     # sopra i 45 la percentuale di visione crolla.
     facts_per_video: 3
+
+    # L'episodio lungo settimanale (lungo.yml, ~5 minuti con narrazione).
+    # ACCESO — il cron del sabato in lungo.yml gira.
+    #
+    # Questo campo NON fa uscire l'episodio: a farlo uscire e' quel cron.
+    # Serve a engine/allarme.py, che ha "YouTube episodio" fra i canali
+    # sorvegliati con una soglia di 22 giorni. Finche' i due valori dicono la
+    # stessa cosa non succede niente; il giorno che si commenta il cron senza
+    # toccare questo campo, la guardia comincia a segnalare ogni giorno un
+    # canale spento di proposito.
+    #
+    # E' il guasto del 19 agosto in miniatura: una guardia che grida al lupo
+    # non smette di funzionare, smette di essere letta — e la volta che il
+    # guasto c'e' davvero non se ne accorge nessuno. Vanno cambiati insieme,
+    # come max_per_day e orari.
+    episodio_lungo_attivo: true
     # Tetto di video al giorno. Non è la quota API (sei caricamenti al giorno,
     # ne servono tre): oltre i due-tre Short quotidiani la spinta per video
     # cala, perché ognuno viene provato su un piccolo pubblico prima di essere
@@ -350,7 +366,39 @@ publish:
     # sistema incoerente — due fasce con tetto 1, o una fascia con tetto 2 —
     # e nel primo caso il secondo video viene costruito e poi buttato via.
     # Vanno sempre cambiati insieme.
-    max_per_day: 1
+    #
+    # RISALITO A 2 il 3 settembre 2026, e questa volta con i dati in mano.
+    #
+    # Il taglio del 19 agosto poggiava su un'ipotesi esplicita: con tre Short
+    # al giorno su un canale senza pubblico i video si tolgono spazio a
+    # vicenda, quindi uno solo dovrebbe rendere di piu'. L'ipotesi prevedeva
+    # che le viste PER VIDEO salissero. Misurate a parita' di eta' (viste al
+    # terzo giorno dalla pubblicazione, che e' l'unico confronto onesto fra un
+    # video di ieri e uno di tre settimane fa):
+    #
+    #     14-18 agosto   3 video/giorno   media 345 viste   ~1.035 al giorno
+    #     25-31 agosto   1 video/giorno   media 257 viste   ~257  al giorno
+    #
+    # Le viste per video sono SCESE del 25%, non salite. E gli iscritti ogni
+    # mille viste sono rimasti fermi: 0,81 prima, 0,85 dopo. La prova ha
+    # falsificato la propria ipotesi. Il taglio e' costato due terzi della
+    # copertura e non ha comprato niente di misurabile.
+    #
+    # Due e non tre per scelta di Mattia: e' la via di mezzo fra la cadenza
+    # che i dati premiano e il non tornare di colpo al massimo, e resta il
+    # punto in cui il ritmo era stato analizzato in dettaglio ad agosto —
+    # 2 al giorno x 2 curiosita' dava 60 video al mese con 1,29 riusi medi e
+    # zero video quasi identici.
+    #
+    # Effetto sulle due prove in corso (lunghezza e apertura): nessuno sul
+    # confronto fra i gruppi, che e' il punto. La cadenza cambia per tutti e
+    # due i bracci insieme, quindi si elide — ed e' esattamente quello che
+    # dice gia' il commento del 21 agosto qui sopra. Cambia in meglio la
+    # potenza: i ~31 video per gruppo arrivano in ~30 giorni invece di 60.
+    # A due fasce le formule di `scegli_lunghezza` e `scegli_apertura` sono
+    # nel loro caso nativo: ogni giornata contiene un video per gruppo e i
+    # gruppi si scambiano la fascia, quindi l'ora non entra nel confronto.
+    max_per_day: 2
 
     # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
     # workflow: il primo giro della giornata carica tutti e tre i video e li
@@ -388,7 +436,40 @@ publish:
     # essere una variabile. Tutti i video di tutti e due i gruppi escono alle
     # 19:00, quindi non c'e' niente da bilanciare e niente che possa
     # sbilanciarsi se una giornata salta.
-    orari: ["19:00"]
+    #
+    # TORNATE DUE il 3 settembre 2026, insieme a `max_per_day` (i due campi
+    # vanno sempre cambiati insieme — vedi l'avvertenza qui sopra).
+    #
+    # DODICI ORE ESATTE, per scelta di Mattia. Le 11:00 e le 23:00 e non
+    # un'altra coppia: il vincolo non e' editoriale, e' meccanico, e lascia
+    # pochissimo spazio.
+    #
+    # Gli Short non escono quando gira il workflow: il giro del mattino li
+    # carica e li PROGRAMMA. Una fascia e' programmabile solo se manca piu' di
+    # dieci minuti (il margine in `_fasce_da_coprire`), e quel giro parte alle
+    # 9:45 italiane con ritardi di coda GitHub misurati fino a 64 minuti —
+    # quindi nel caso peggiore comincia verso le 10:50. La prima fascia non
+    # puo' stare prima delle 11:00 senza rischiare di essere scartata proprio
+    # nei giorni in cui GitHub e' lento. E la seconda, a dodici ore esatte,
+    # non puo' superare le 23:59, perche' `_fasce_di_oggi()` costruisce le
+    # fasce di OGGI e la mezzanotte sarebbe gia' domani.
+    # Fra le 11:00 e le 11:59 di partenza possibili, le 11:00 tonde.
+    #
+    # ⚠️ IL COSTO, scritto perche' non venga scoperto fra un mese guardando i
+    # numeri. Le 23:00 sono ottime: le 17:00 a New York e le 22:00 a Londra.
+    # Le 11:00 sono la fascia peggiore della giornata — le 5:00 del mattino a
+    # New York — ed e' esattamente il difetto per cui le vecchie 7:15 e 11:15
+    # erano state tolte il 13 agosto. Dodici ore esatte lo impongono: la
+    # finestra buona per un canale in inglese (18:00-01:00 italiane) e' larga
+    # sette ore, quindi due uscite equidistanti non ci stanno dentro tutte e
+    # due. Si sta scambiando una fascia forte con la copertura di mezza
+    # giornata in piu'.
+    #
+    # Se fra due settimane le 11:00 rendono molto meno delle 23:00, la
+    # spiegazione piu' probabile e' questa e non il contenuto: la coppia da
+    # provare allora e' 19:00 + 23:00, che rinuncia all'equidistanza e tiene
+    # tutte e due le uscite dentro la finestra buona.
+    orari: ["11:00", "23:00"]
     fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come

@@ -767,7 +767,10 @@ def _fabbisogno_giornaliero() -> int:
 
 
 def _indice_fascia(quando: float) -> int:
-    """In quale fascia della giornata esce questo video: 0 = 13:00, 1 = 19:00.
+    """In quale fascia della giornata esce questo video: 0 = la prima, 1 = la
+    seconda. L'elenco lo detta `publish.youtube.orari` — dal 3 settembre 2026
+    sono le 11:00 e le 23:00 — e qui non c'e' niente legato al loro numero:
+    la funzione enumera quello che trova.
 
     Si cerca dentro `_fasce_di_oggi()` e non dentro l'elenco delle fasce ancora
     da coprire: se il giro del mattino salta, il video delle 19:00 deve restare
