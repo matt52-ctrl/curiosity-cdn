@@ -134,8 +134,36 @@ visuals:
   # Il codice limita comunque a 8, ma non alzarlo qui pensando di guadagnarci.
   # Su questo modello la qualità si migliora dal prompt, non dai passi.
   steps: 8
-  ai_model: ""            # vuoto = default del provider
+  ai_model: ""            # vuoto = default del provider (o la rotazione qui sotto)
   ai_quality: "low"       # solo openai: low | medium | high
+
+  # I modelli Cloudflare in rotazione. Tutti e tre sullo stesso free tier di
+  # Workers AI, tutti e tre scelti da Mattia il 3 settembre 2026 guardando la
+  # stessa immagine generata dai tre ("belle tutte e tre, alterniamole").
+  #
+  # LA ROTAZIONE È PER GIORNO, non per slide. Un carosello con cinque slide
+  # uscite da tre modelli diversi non sembra vario, sembra sbagliato: lo stile
+  # cambierebbe dentro lo stesso post, che è l'unico posto in cui la coerenza
+  # serve davvero. Così ogni post resta uniforme al suo interno e a variare è
+  # il profilo visto dall'alto, che è dove la monotonia si nota.
+  #
+  # ⚠️ NON accettano lo stesso corpo, e il codice lo tiene in conto — se ne
+  # aggiungi uno, controlla prima quale forma vuole. Misurato il 3/9/2026:
+  #   flux-1-schnell   rifiuta width/height, vuole steps → 1024x1024
+  #   lucid-origin     accetta width/height, niente steps → 1080x1350
+  #   phoenix-1.0      accetta width/height, niente steps → 1080x1350
+  # Sbagliare il corpo non dà un errore visibile: Cloudflare risponde 400 e la
+  # catena ripiega su pollinations, che è peggiore. Si vede come "ogni tanto
+  # le immagini escono brutte", ed è il guasto più difficile da riconoscere.
+  cloudflare_modelli:
+    - "@cf/black-forest-labs/flux-1-schnell"
+    - "@cf/leonardo/lucid-origin"
+    - "@cf/leonardo/phoenix-1.0"
+
+  # Dimensioni chieste ai modelli che le accettano. 1080x1350 è il 4:5 pieno
+  # di Instagram: chiedendolo nativamente il ritaglio non toglie più niente.
+  larghezza: 1080
+  altezza: 1350
 
   # Lo stile viene accodato a ogni prompt. È la ragione per cui venti immagini
   # generate in giorni diversi sembrano la stessa pagina invece di venti post

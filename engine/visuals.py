@@ -24,7 +24,7 @@ import hashlib
 import re
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -356,43 +356,88 @@ def _generate_pollinations(prompt: str, model: str) -> Optional[bytes]:
         return None
 
 
+def _modello_cloudflare_di_oggi() -> str:
+    """Quale dei modelli in rotazione tocca oggi.
+
+    Perché a rotazione e non uno fisso: i tre danno immagini ugualmente buone
+    ma diverse, e alternarli rompe la monotonia della griglia senza costare
+    niente — girano tutti sullo stesso free tier di Workers AI.
+
+    Perché la rotazione è PER GIORNO e non per slide. Un carosello con cinque
+    slide generate da tre modelli diversi non sembra vario, sembra sbagliato:
+    lo stile cambia dentro lo stesso post, che è l'unico posto in cui la
+    coerenza serve davvero. Ruotando sul giorno, ogni post resta uniforme al
+    suo interno e a variare è il profilo visto dall'alto — che è quello che
+    Mattia guarda quando dice che la pagina è monotona.
+
+    Deterministica e senza stato salvato, come `scegli_lunghezza`: dallo
+    stesso giorno esce sempre lo stesso modello, quindi si può ricostruire a
+    posteriori con quale è stata fatta un'immagine.
+    """
+    import datetime as _dt
+
+    modelli = cfg.get("visuals.cloudflare_modelli", []) or [
+        "@cf/black-forest-labs/flux-1-schnell"]
+    if not isinstance(modelli, list) or not modelli:
+        return "@cf/black-forest-labs/flux-1-schnell"
+    return modelli[_dt.date.today().toordinal() % len(modelli)]
+
+
 def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
-    """Cloudflare Workers AI — FLUX.1-schnell sul free tier.
+    """Cloudflare Workers AI sul free tier: tre modelli a rotazione.
 
     10.000 neuroni al giorno gratis, che a questi volumi non si esauriscono
     mai. Serve un account Cloudflare gratuito: da lì Account ID e un API token
     con permesso Workers AI.
+
+    ⚠️ I modelli NON accettano lo stesso corpo, e sbagliarlo costa l'immagine
+    intera — Cloudflare risponde 400 e la catena ripiega in silenzio.
+    Verificato il 3 settembre 2026 sulla chiave di Mattia:
+
+        flux-1-schnell   width/height RIFIUTATI, vuole `steps` (max 8)
+                         → esce 1024x1024, il ritaglio a 4:5 toglie un quinto
+        lucid-origin     width/height accettati → 1080x1350 nativi
+        phoenix-1.0      width/height accettati → 1080x1350 nativi
+
+    Il verticale nativo non è un dettaglio estetico: sono 262 px di larghezza
+    che con flux-1-schnell si buttavano nel ritaglio.
     """
     account = env("CLOUDFLARE_ACCOUNT_ID")
     token = env("CLOUDFLARE_API_TOKEN")
     if not (account and token):
         return None
 
-    model = model or "@cf/black-forest-labs/flux-1-schnell"
+    model = model or _modello_cloudflare_di_oggi()
 
-    # Niente width/height. Lo schema del modello non li prevede più e li
-    # rifiuta con un 400: "Additional or unevaluated properties '/width,
-    # /height' at '/' not allowed". Il cambio è stato distribuito a scaglioni,
-    # e questo lo rendeva quasi invisibile — su sei richieste identiche cinque
-    # venivano respinte e una passava. Non si vedeva come un guasto ma come
-    # immagini che ogni tanto uscivano peggiori: Cloudflare falliva, la catena
-    # ripiegava in silenzio su pollinations, e nessuno lo diceva.
-    #
-    # Si perde il verticale nativo: esce 1024×1024 e il ritaglio a 4:5 toglie
-    # un quinto della larghezza. Resta comunque il provider migliore — 818 px
-    # di base dopo il ritaglio contro i 686 di pollinations.
+    corpo: Dict[str, Any] = {"prompt": prompt[:2000]}
+
+    if "flux-1-schnell" in model:
+        # Niente width/height per questo modello. Lo schema non li prevede più
+        # e li rifiuta con un 400: "Additional or unevaluated properties
+        # '/width, /height' at '/' not allowed". Il cambio è stato distribuito
+        # a scaglioni, e questo lo rendeva quasi invisibile — su sei richieste
+        # identiche cinque venivano respinte e una passava. Non si vedeva come
+        # un guasto ma come immagini che ogni tanto uscivano peggiori:
+        # Cloudflare falliva, la catena ripiegava in silenzio su pollinations,
+        # e nessuno lo diceva.
+        #
+        # Cloudflare rifiuta con 400 qualunque `steps` sopra 8, e il rifiuto
+        # fa fallire l'immagine intera: va limitato qui invece di fidarsi
+        # della configurazione.
+        corpo["steps"] = max(1, min(8, int(cfg.get("visuals.steps", 8))))
+    else:
+        # I modelli Leonardo (lucid-origin, phoenix-1.0) accettano le
+        # dimensioni e danno il verticale nativo. `steps` NON si passa: non
+        # sta nel loro schema e ricadremmo nello stesso 400 di sopra.
+        corpo["width"] = int(cfg.get("visuals.larghezza", 1080))
+        corpo["height"] = int(cfg.get("visuals.altezza", 1350))
+
     try:
         with httpx.Client(timeout=180) as client:
             resp = client.post(
                 f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
                 headers={"Authorization": f"Bearer {token}"},
-                json={
-                    "prompt": prompt[:2000],
-                    # Cloudflare rifiuta con 400 qualunque valore sopra 8, e
-                    # il rifiuto fa fallire l'intera immagine: va limitato qui
-                    # invece di fidarsi della configurazione.
-                    "steps": max(1, min(8, int(cfg.get("visuals.steps", 8)))),
-                },
+                json=corpo,
             )
             resp.raise_for_status()
             data = resp.json()
