@@ -981,6 +981,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # sapere se ci sono significa scaricarli due volte — quota Pexels doppia e
     # sei clip marcate come usate per un video che ne mostra tre.
     voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
+             "image_query": f.get("image_query", ""),
              "_frase": f} for f in frasi]
 
     import hashlib as _h
@@ -1203,6 +1204,7 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
             break
 
         voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
+                 "image_query": f.get("image_query", ""),
                  "_frase": f} for f in frasi]
         import hashlib as _h
         nome = "tt-" + _h.sha1(frasi[0]["line"].encode()).hexdigest()[:8]

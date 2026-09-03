@@ -347,7 +347,16 @@ def build_line(
     return out
 
 
-def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
+def _ingresso(sfondo: Path, e_immagine: bool, durata: float) -> List[str]:
+    """Come si apre lo sfondo in ffmpeg. Un filmato si ricicla in loop fino a
+    coprire la durata; un'immagine ferma va aperta con `-loop 1`, perché
+    `-stream_loop` su un file a fotogramma singolo non produce niente e il
+    segmento esce vuoto senza che ffmpeg lo dica."""
+    modo = ["-loop", "1"] if e_immagine else ["-stream_loop", "-1"]
+    return modo + ["-t", f"{durata}", "-i", str(sfondo)]
+
+
+def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
               indice: int, canale: str = "",
               domanda: str = "") -> Optional[Path]:
     """Il fotogramma finale: cosa chiediamo a chi è arrivato in fondo.
@@ -395,8 +404,7 @@ def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
     w, h = REEL_SIZE
     seg = tmp / f"{indice:02d}.mp4"
     filtro = (
-        f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{h},{_gradazione()}format=yuv420p[bg];"
+        f"{_fondo(sfondo, e_immagine, dur, w, h, indice)};"
         # Entra subito ma non di colpo: 0,35 di dissolvenza. Su due secondi e
         # mezzo un ingresso più lento mangerebbe il tempo di lettura.
         f"[1:v]format=rgba,fade=t=in:st=0:d=0.35:alpha=1,"
@@ -405,7 +413,7 @@ def _coda_cta(ff: str, sfondo: Path, nome: str, tmp: Path,
     )
     _run([
         ff, "-y",
-        "-stream_loop", "-1", "-t", f"{dur}", "-i", str(sfondo),
+        *_ingresso(sfondo, e_immagine, dur),
         "-loop", "1", "-t", f"{dur}", "-i", str(overlay),
         "-filter_complex", filtro, "-map", "[v]",
         "-t", f"{dur}",
@@ -431,6 +439,112 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
         music = None
 
     return compose(frames, out, music)
+
+
+def _sfondo_generato(voce: Dict, seme: str) -> Optional[Path]:
+    """L'immagine generata per questa curiosita', o None per usare l'archivio.
+
+    PERCHE' UN'IMMAGINE E NON UN FILMATO. Non e' un ripiego estetico: e' la
+    prima volta che lo sfondo parla della curiosita'. `footage.per_frase` della
+    frase usa SOLO il seme casuale, e sceglie il filmato guardando l'umore —
+    quindi il video sul "rifiuti le idee che non sono tue" e quello sul
+    "confondi la paura con l'attrazione" pescano dallo stesso mucchio. Con
+    `image_query` scritto dallo scrittore, invece, dietro alla frase finisce
+    una scena che la riguarda.
+
+    Perche' non i video generativi, che erano la richiesta iniziale: al 3
+    settembre 2026 non esiste nessuna API di generazione video con un piano
+    gratuito utilizzabile a questi volumi. Verificato provider per provider.
+    Le immagini generate sono cio' che resta, e costano 163 neuroni l'una.
+
+    Ritorna None senza lamentarsi in tutti i casi dubbi. Uno sfondo mancante
+    non deve MAI costare l'uscita di una fascia oraria: si torna al filmato
+    d'archivio, che e' il comportamento di sempre.
+    """
+    if not cfg.get("reel.sfondo_generato", False):
+        return None
+    query = (voce.get("image_query") or "").strip()
+    if not query:
+        return None
+
+    from . import neuroni, visuals
+
+    try:
+        # Sempre il modello economico, mai la rotazione del giorno. Quattro
+        # sfondi al giorno su un modello Leonardo sarebbero undicimila
+        # neuroni — l'intera quota — spesi dietro a del testo, sotto una
+        # gradazione che li scurisce. La rotazione resta nei caroselli, dove
+        # l'immagine e' il contenuto e non lo sfondo.
+        #
+        # `generate` tiene gia' una cache su disco per prompt e modello:
+        # rimontare lo stesso video non ricompra l'immagine, e i neuroni non
+        # si spendono due volte per la stessa scena.
+        immagine = visuals.generate(query, modello=neuroni.ECONOMICO)
+    except Exception as exc:
+        print(f"    immagine non generata ({str(exc)[:60]}): uso l'archivio")
+        return None
+    if not immagine or not immagine.path or not immagine.path.exists():
+        return None
+    return immagine.path
+
+
+def _fondo(sfondo: Path, e_immagine: bool, durata: float, w: int, h: int,
+           indice: int = 0) -> str:
+    """La catena di filtri che porta lo sfondo a [bg], filmato o immagine.
+
+    ⚠️ LA CARRELLATA C'E' SOLO SULLE IMMAGINI, e la differenza e' misurata.
+    Sui FILMATI era stata provata e bocciata: sullo stesso filmato, con e
+    senza, riduceva il movimento invece di aumentarlo (3,63 → 2,59 su 255).
+    Lo scala-e-riscala sfoca il dettaglio fine e lo zoom e' troppo lento per
+    compensare — su un filmato che gia' si muove da solo si perde e basta.
+
+    Su un'immagine ferma il conto e' opposto: senza carrellata il movimento e'
+    esattamente zero, e undici secondi di fotografia immobile si leggono come
+    una diapositiva. Qui lo zoom non compete con nessun movimento: e' l'unico
+    che c'e'. E' la stessa ragione per cui `compose` ce l'ha da sempre.
+
+    PERCHE' LA CARRELLATA E' PIU' AMPIA CHE IN `compose` (1,40 invece di 1,14,
+    e con una deriva diagonale invece che centrata). Misurato il 3 settembre
+    2026 sulla stessa immagine, stesso metro dell'agosto scorso — differenza
+    media fra fotogrammi consecutivi, su 255:
+
+        zoom 1,14 centrato          0,60      <- quello di `compose`
+        zoom 1,25 centrato          0,69
+        zoom 1,25 + deriva          1,48
+        zoom 1,40 + deriva          1,91
+        filmato d'archivio          3,63
+
+    La deriva rende piu' dello zoom: 1,25 con la deriva batte 1,40 senza. E
+    costa quasi niente in nitidezza — misurata sull'energia dei bordi a zoom
+    massimo, 0,53 a 1,14 contro 0,51 a 1,40. Il dettaglio fine se n'e' gia'
+    andato prima, nell'ingrandimento del quadrato 1024 al 9:16: una volta
+    pagato quello, allargare la carrellata e' gratis.
+
+    Resta il fatto che 1,91 e' meta' di un filmato vero. E' il prezzo delle
+    immagini generate, e va saputo: si guadagna uno sfondo che parla della
+    curiosita' e si perde movimento. Da qui si spegne con
+    `reel.sfondo_generato: false`.
+    """
+    if not e_immagine:
+        return (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},{_gradazione()}format=yuv420p[bg]")
+
+    n = max(1, int(durata * 30))
+    zoom = float(cfg.get("reel.carrellata_zoom", 1.40))
+    passo = max(0.0001, (zoom - 1.0) / n)
+
+    # Direzione alternata, come lo zoom in/out di `compose`: tre segmenti che
+    # derivano tutti verso lo stesso angolo si leggono come un unico movimento
+    # lungo, e il taglio fra l'uno e l'altro sparisce.
+    verso = indice % 4
+    dx = f"(iw-iw/zoom)*on/{n}" if verso in (0, 3) else f"(iw-iw/zoom)*(1-on/{n})"
+    dy = f"(ih-ih/zoom)*on/{n}" if verso in (0, 1) else f"(ih-ih/zoom)*(1-on/{n})"
+
+    return (
+        f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
+        f"zoompan=z='min(zoom+{passo:.6f},{zoom})':d={n}:x='{dx}':y='{dy}'"
+        f":s={w}x{h}:fps=30,{_gradazione()}format=yuv420p[bg]"
+    )
 
 
 def build_multi(voci: List[Dict], name: str,
@@ -502,16 +616,26 @@ def build_multi(voci: List[Dict], name: str,
 
     segmenti: List[Path] = []
     montate: List[Dict] = []
-    ultimo_sfondo: Optional[Path] = None
+    # (percorso, è_un_immagine): la coda con la CTA riusa lo sfondo dell'ultima
+    # curiosità e deve sapere quale dei due tipi ha in mano, perché un'immagine
+    # si apre con `-loop 1` e un filmato con `-stream_loop`.
+    ultimo_sfondo: Optional[tuple] = None
     for i, v in enumerate(voci):
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
-        sfondo = footage.per_frase(v.get("mood", "reflective"), hook + str(i))
+
+        # Prima l'immagine generata sul soggetto di QUESTA curiosita', poi il
+        # filmato d'archivio. L'ordine e' quello e non l'inverso perche'
+        # l'archivio non sa di cosa parla il video: sceglie per umore.
+        sfondo = _sfondo_generato(v, hook + str(i))
+        e_immagine = sfondo is not None
+        if sfondo is None:
+            sfondo = footage.per_frase(v.get("mood", "reflective"), hook + str(i))
         if not sfondo:
-            print(f"    nessun filmato per la curiosita' {i+1}: la salto")
+            print(f"    nessuno sfondo per la curiosita' {i+1}: la salto")
             continue
         montate.append(v)
-        ultimo_sfondo = sfondo
+        ultimo_sfondo = (sfondo, e_immagine)
 
         overlays = render.render_slides(
             [
@@ -523,12 +647,10 @@ def build_multi(voci: List[Dict], name: str,
 
         seg = tmp / f"{i:02d}.mp4"
         filtro = (
-            # Niente carrellata qui, e non per dimenticanza: provata e misurata
-            # sullo STESSO filmato, con e senza. Riduce il movimento invece di
-            # aumentarlo (3,63 → 2,59 su 255): lo scala-e-riscala sfoca il
-            # dettaglio fine, e lo zoom e' troppo lento per compensare.
-            f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-            f"crop={w}:{h},{_gradazione()}format=yuv420p[bg];"
+            # La carrellata sta dentro `_fondo`, e c'e' SOLO sulle immagini:
+            # sui filmati era stata provata e bocciata a misura. La nota lunga
+            # con i numeri e' li'.
+            f"{_fondo(sfondo, e_immagine, per_voce, w, h, i)};"
             f"[1:v]format=rgba,fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
             f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
             f"fade=t=out:st={per_voce - 0.5:.2f}:d=0.4:alpha=1[b];"
@@ -537,7 +659,7 @@ def build_multi(voci: List[Dict], name: str,
         )
         _run([
             ff, "-y",
-            "-stream_loop", "-1", "-t", f"{per_voce}", "-i", str(sfondo),
+            *_ingresso(sfondo, e_immagine, per_voce),
             "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[0]),
             "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[1]),
             "-filter_complex", filtro, "-map", "[v]",
@@ -562,8 +684,8 @@ def build_multi(voci: List[Dict], name: str,
     # non si recupera.
     if ultimo_sfondo is not None:
         try:
-            coda = _coda_cta(ff, ultimo_sfondo, name, tmp, len(segmenti),
-                             canale, domanda_cta)
+            coda = _coda_cta(ff, ultimo_sfondo[0], ultimo_sfondo[1], name, tmp,
+                             len(segmenti), canale, domanda_cta)
             if coda:
                 segmenti.append(coda)
                 durata += float(cfg.get("cta.secondi", 2.4))

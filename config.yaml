@@ -98,8 +98,10 @@ visuals:
   #                 dimensione chiedi, quindi c'è un ingrandimento sulle slide;
   #                 su sfondo desaturato si nota poco. Servizio pubblico: da
   #                 considerare "spesso disponibile", non garantito.
-  #   cloudflare    FLUX.1-schnell sul free tier di Workers AI (10.000 neuroni
-  #                 al giorno, a questi volumi inesauribili). Qualità e
+  #   cloudflare    Tre modelli a rotazione sul free tier di Workers AI
+  #                 (10.000 neuroni al giorno — NON inesauribili: vedi
+  #                 neuroni_al_giorno più sotto, due dei tre modelli ne
+  #                 bruciano più di duemila a immagine). Qualità e
   #                 risoluzione migliori. Serve un account gratuito:
   #                 CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN.
   #
@@ -113,9 +115,10 @@ visuals:
   ai_provider: "cloudflare"
 
   # Secondo provider, usato solo se il primo non produce nulla. Serve perché
-  # il margine su Cloudflare è sottile: 10.000 neuroni al giorno coprono
-  # giusto le dieci immagini dei due caroselli, e una prova in più esaurisce
-  # la quota. Senza questa rete si ripiegherebbe sulla ricerca stock, che su
+  # il margine su Cloudflare è sottile: con flux ci stanno una sessantina di
+  # immagini al giorno, ma con i due modelli Leonardo se ne fanno tre o quattro
+  # e la quota finisce dentro il primo carosello.
+  # Senza questa rete si ripiegherebbe sulla ricerca stock, che su
   # questa nicchia restituisce repertorio fuori tema — cioè esattamente il
   # motivo per cui prefer_generated è acceso.
   # "none" per disattivarla.
@@ -164,6 +167,30 @@ visuals:
   # di Instagram: chiedendolo nativamente il ritaglio non toglie più niente.
   larghezza: 1080
   altezza: 1350
+
+  # ─── IL TETTO DEI NEURONI ───────────────────────────────────────────────
+  # Workers AI regala 10.000 neuroni al giorno. Qui ce ne stanno 9.000 perché
+  # il conteggio di Cloudflare arriva con qualche minuto di ritardo e il
+  # margine serve a coprire le immagini fatte e non ancora contate.
+  #
+  # NON è un limite teorico messo per prudenza: i tre modelli qui sopra
+  # costano in modo enormemente diverso, misurato il 3 settembre 2026
+  # interrogando aiInferenceAdaptiveGroups dopo aver generato immagini vere.
+  #
+  #     flux-1-schnell    163 neuroni/immagine  →  61 immagini al giorno
+  #     phoenix-1.0     2.340 neuroni/immagine  →   4 immagini al giorno
+  #     lucid-origin    2.837 neuroni/immagine  →   3 immagini al giorno
+  #
+  # Diciassette volte tanto. Tre immagini non bastano nemmeno per UN carosello
+  # da cinque slide: nei giorni Leonardo la rotazione, da sola, finiva la quota
+  # a metà del primo post e le slide restanti ripiegavano su pollinations senza
+  # che nessuno lo dicesse. Da qui in poi ci pensa engine/neuroni.py, che
+  # prima di generare chiede quanto è rimasto e retrocede a flux invece di
+  # sbattere contro il 429.
+  #
+  # Il costo dei Leonardo si paga a pixel: alzando larghezza/altezza qui sopra
+  # salgono anche quei numeri, e la tabella in engine/neuroni.py va rimisurata.
+  neuroni_al_giorno: 9000
 
   # Lo stile viene accodato a ogni prompt. È la ragione per cui venti immagini
   # generate in giorni diversi sembrano la stessa pagina invece di venti post
@@ -834,6 +861,36 @@ reel:
   # far registrare la frase: senza, la rivelazione arriva addosso all'ultima
   # parola e si perdono entrambe.
   respiro: 0.7
+
+  # ─── SFONDO GENERATO INVECE DEL FILMATO D'ARCHIVIO ──────────────────────
+  # true  → dietro ogni curiosità va un'immagine generata sul SUO soggetto,
+  #         animata da una lenta carrellata.
+  # false → filmato di Pexels, come si è sempre fatto.
+  #
+  # PERCHÉ. Non è un capriccio estetico, è l'unico modo perché lo sfondo parli
+  # del video. `footage.per_frase` riceve la frase e la usa SOLO come seme
+  # casuale: sceglie il filmato guardando l'umore, quindi il video su "rifiuti
+  # le idee che non sono tue" e quello su "confondi la paura con l'attrazione"
+  # pescano dallo stesso mucchio e possono scambiarsi la clip senza che
+  # cambi niente. Con `image_query` — scritto dallo scrittore nella stessa
+  # chiamata di sempre, quindi a costo zero — l'immagine riguarda la frase.
+  #
+  # QUANTO COSTA. 163 neuroni a immagine su flux-1-schnell (misurato, vedi
+  # visuals.neuroni_al_giorno). Con 2 Short al giorno, uno a una curiosità e
+  # uno a tre, sono 4 immagini = 652 neuroni: dentro il tetto senza sforzo,
+  # e restano in cache, quindi rimontare lo stesso video non ricompra niente.
+  #
+  # IL PREZZO VERO è la nitidezza. flux-1-schnell fa solo 1024x1024 — il suo
+  # schema non prevede width/height, verificato sull'endpoint /ai/models/schema
+  # il 3 settembre 2026 — e portare un quadrato al 9:16 vuol dire ingrandire
+  # di 1,9× e buttare via il 44% della larghezza. Su uno sfondo scurito dalla
+  # gradazione e coperto da un titolo grande si vede poco, ma si vede.
+  # I due modelli Leonardo darebbero il verticale nativo e costano 2.340 e
+  # 2.837 neuroni: tre immagini e la giornata è finita. Per questo qui gira
+  # sempre il modello economico.
+  #
+  # Se un giorno non piace, questa riga a false rimette tutto com'era.
+  sfondo_generato: true
 
   long_target_seconds: 33.0
   # Tetto per singola curiosità: la durata di ciascuna si ricava dividendo il

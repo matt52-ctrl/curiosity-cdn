@@ -373,14 +373,23 @@ def _modello_cloudflare_di_oggi() -> str:
     Deterministica e senza stato salvato, come `scegli_lunghezza`: dallo
     stesso giorno esce sempre lo stesso modello, quindi si può ricostruire a
     posteriori con quale è stata fatta un'immagine.
+
+    ⚠️ Non del tutto deterministica, da oggi: se i neuroni rimasti non bastano
+    per il modello di turno si ripiega sul più economico. È la differenza fra
+    un'immagine peggiore e nessuna immagine — i due Leonardo costano più di
+    duemila neuroni l'uno e ne bastano tre a finire la giornata. Vedi
+    `engine/neuroni.py` per le misure.
     """
     import datetime as _dt
+
+    from . import neuroni
 
     modelli = cfg.get("visuals.cloudflare_modelli", []) or [
         "@cf/black-forest-labs/flux-1-schnell"]
     if not isinstance(modelli, list) or not modelli:
         return "@cf/black-forest-labs/flux-1-schnell"
-    return modelli[_dt.date.today().toordinal() % len(modelli)]
+    di_turno = modelli[_dt.date.today().toordinal() % len(modelli)]
+    return neuroni.modello_possibile(di_turno)
 
 
 def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
@@ -452,6 +461,13 @@ def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
     if not b64:
         print(f"    cloudflare: nessuna immagine nella risposta ({str(data)[:160]})")
         return None
+
+    # Segnata subito, non a fine giro: il conteggio di Cloudflare arriva con
+    # qualche minuto di ritardo e senza questa riga le immagini di uno stesso
+    # carosello si crederebbero tutte le prime della giornata.
+    from . import neuroni
+    neuroni.registra(model)
+
     return base64.b64decode(b64)
 
 
@@ -481,9 +497,17 @@ def _generate_openai(prompt: str, model: str) -> Optional[bytes]:
     return None
 
 
-def generate(subject: str) -> Optional[Image]:
+def generate(subject: str, modello: str = "") -> Optional[Image]:
     """Genera un'immagine per il soggetto. None se il provider non è
-    configurato o fallisce — il chiamante ripiega sulla ricerca."""
+    configurato o fallisce — il chiamante ripiega sulla ricerca.
+
+    `modello` scavalca sia `visuals.ai_model` sia la rotazione del giorno, e
+    serve a un caso solo: gli sfondi dei video, che sono quattro al giorno e
+    devono costare poco. Nei giorni in cui la rotazione tocca un modello
+    Leonardo, quattro sfondi sarebbero undicimila neuroni — l'intera quota
+    giornaliera, spesa dietro a del testo scurito dalla gradazione. La
+    rotazione resta dov'è utile: nei caroselli, dove l'immagine è il contenuto.
+    """
     provider = cfg.get("visuals.ai_provider", "none")
     if provider in ("none", "", None):
         return None
@@ -511,9 +535,20 @@ def generate(subject: str) -> Optional[Image]:
     if ripiego and ripiego not in ("none", provider):
         catena.append(ripiego)
 
+    # `provider` viene riscritto più sotto col nome di chi ha davvero prodotto
+    # l'immagine, per il credito. Il valore di partenza serve prima, e va
+    # tenuto da parte adesso.
+    provider_iniziale = provider
+
     raw = None
     for i, nome in enumerate(catena):
-        model = cfg.get("visuals.ai_model", "") or _AI_MODELS.get(nome, "")
+        # Il modello imposto vale solo per il provider a cui appartiene: se la
+        # catena ripiega su pollinations, passargli un nome di modello
+        # Cloudflare non avrebbe senso.
+        if modello and nome == provider_iniziale:
+            model = modello
+        else:
+            model = cfg.get("visuals.ai_model", "") or _AI_MODELS.get(nome, "")
         raw = generatori.get(nome, lambda *_: None)(prompt, model)
         if raw:
             if i:
@@ -524,7 +559,11 @@ def generate(subject: str) -> Optional[Image]:
     if not raw:
         return None
 
-    digest = hashlib.sha1(prompt.encode()).hexdigest()[:16]
+    # Il modello entra nella chiave, non solo il prompt: da quando la
+    # rotazione esiste, lo stesso soggetto reso da flux e da lucid-origin è
+    # due immagini diverse, e con la chiave sul solo prompt la seconda
+    # ritroverebbe in cache la prima.
+    digest = hashlib.sha1(f"{prompt}|{modello}".encode()).hexdigest()[:16]
     target = CACHE_DIR / f"ai-{digest}.png"
     target.write_bytes(raw)
 

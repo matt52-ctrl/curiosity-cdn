@@ -54,8 +54,22 @@ LINES_SCHEMA = {
                         "additionalProperties": False,
                     },
                     "hashtags": {"type": "array", "items": {"type": "string"}},
+                    # Il soggetto visivo dello sfondo. Non e' una decorazione:
+                    # fino a oggi lo sfondo dei video usciva da
+                    # `footage.per_frase`, che della frase usa SOLO il seme
+                    # casuale e sceglie il filmato in base all'umore. Cioe':
+                    # il video su "rifiuti le idee che non sono tue" e quello
+                    # su "confondi la paura con l'attrazione" pescavano dallo
+                    # stesso mucchio, e capitava che si scambiassero il
+                    # filmato senza che cambiasse nulla.
+                    #
+                    # Con un soggetto scritto qui l'immagine puo' finalmente
+                    # parlare della curiosita'. Costa zero: e' un campo in
+                    # piu' in una chiamata che si fa comunque.
+                    "image_query": {"type": "string"},
                 },
-                "required": ["source_index", "hook", "reveal", "mood", "caption", "hashtags"],
+                "required": ["source_index", "hook", "reveal", "mood", "caption",
+                             "hashtags", "image_query"],
                 "additionalProperties": False,
             },
         }
@@ -616,6 +630,13 @@ are not suitable here.
 
 {materiale}
 
+For image_query, describe the SCENE that will sit behind the line as a photo:
+one concrete, ordinary moment a camera could have caught, in 6-12 words. A
+person or a place doing something, not an idea. "a hand hovering over a light
+switch in a dark hallway", not "indecision" or "the human mind". Never name an
+emotion, a concept or a field of study, and never ask for text, signs, charts
+or diagrams in the frame.
+
 Return JSON matching the schema."""
 
     # Va in coda al messaggio utente e non nel prompt di sistema: il sistema
@@ -654,6 +675,10 @@ Return JSON matching the schema."""
         l["line"] = f"{l['hook']} {l['reveal']}"
         if l.get("mood") not in MOODS:
             l["mood"] = "reflective"
+        # Vuoto e' ammesso: chi monta il video ripiega sul filmato d'archivio,
+        # che e' il comportamento di sempre. Un campo mancante non deve mai
+        # costare l'uscita di una fascia oraria.
+        l["image_query"] = (l.get("image_query") or "").strip()
         tag: List[str] = []
         for t in list(pinned) + l.get("hashtags", []):
             t = t.lstrip("#").strip().lower().replace(" ", "")
