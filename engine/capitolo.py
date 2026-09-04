@@ -51,7 +51,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from .config import OUTPUT_DIR, cfg
 from .llm import ask_json
@@ -259,8 +259,68 @@ def scrivi(argomento: str, semi: Optional[List[Dict]] = None) -> Dict:
         f"Anything under eighteen hundred words is a failed chapter and will "
         f"be thrown away."
     )
-    return ask_json(SYSTEM_TESTO, user, SCHEMA_TESTO, max_tokens=16000,
-                    use_web_search=True, pazienza=True)
+    return _completo(ask_json(SYSTEM_TESTO, user, SCHEMA_TESTO,
+                              max_tokens=16000, use_web_search=True,
+                              pazienza=True))
+
+
+# Parole sotto le quali il copione non e' un capitolo corto, e' un capitolo
+# rotto. La voce legge a centosessantasei parole al minuto misurate, quindi
+# ottocento parole sono meno di cinque minuti: meta' del formato.
+#
+# La soglia e' bassa di proposito, e non e' quella scritta nel prompt. Al
+# modello si chiedono duemila parole e si dice che sotto le milleottocento il
+# capitolo si butta, perche' chiedere tanto fa scrivere tanto; ma buttare
+# davvero un copione da millequattrocento parole — otto minuti e mezzo letti,
+# dentro il formato — vorrebbe dire bruciare una chiamata con la ricerca
+# accesa per rifare qualcosa di gia' usabile. Qui si scarta solo il troncato.
+PAROLE_MINIME = 800
+
+
+def _completo(testo: Any) -> Dict:
+    """Il capitolo, o un errore se il modello ha risposto a meta'.
+
+    Serve perche' con la ricerca web accesa Gemini NON garantisce lo schema:
+    `responseSchema` e `google_search` si escludono, quindi SCHEMA_TESTO qui
+    e' una richiesta scritta nel prompt, non un contratto. Il 4 settembre 2026
+    un capitolo e' tornato con titolo e copione ma senza `fonti`, e il comando
+    e' morto con un KeyError a meta' lotto: il capitolo scritto prima si era
+    salvato, quello dopo non e' mai stato tentato.
+
+    Un dizionario incompleto non e' un caso raro da lasciare esplodere: qui
+    diventa un'eccezione come le altre, che chi chiama gia' sa gestire
+    saltando al prossimo argomento.
+    """
+    if not isinstance(testo, dict):
+        raise RuntimeError(
+            f"il modello non ha restituito un oggetto ma {type(testo).__name__}")
+
+    mancanti = [k for k in ("titolo", "copione") if not str(testo.get(k) or "").strip()]
+    if mancanti:
+        raise RuntimeError(
+            f"capitolo incompleto, manca {' e '.join(mancanti)}")
+
+    parole = len(str(testo["copione"]).split())
+    if parole < PAROLE_MINIME:
+        raise RuntimeError(
+            f"copione troncato: {parole} parole, sotto il minimo di "
+            f"{PAROLE_MINIME}")
+
+    testo["tesi"] = str(testo.get("tesi") or "").strip()
+
+    # Le fonti mancanti NON annullano il capitolo. Un capitolo senza studi
+    # dichiarati e' piu' povero, ma e' un capitolo: `verifica_capitolo` di una
+    # lista vuota ritorna una lista vuota, e a schermo semplicemente non
+    # comparira' nessuna citazione. Annullarlo butterebbe duemila parole buone
+    # per un campo che il modello ha dimenticato di allegare.
+    fonti = testo.get("fonti")
+    if not isinstance(fonti, list):
+        fonti = []
+    testo["fonti"] = [
+        f for f in fonti
+        if isinstance(f, dict) and str(f.get("studio") or "").strip()
+    ]
+    return testo
 
 
 SCHEMA_SCENE = {
