@@ -946,6 +946,25 @@ reel:
   # sempre il modello economico.
   #
   # Se un giorno non piace, questa riga a false rimette tutto com'era.
+  # PRIMA di tutto si prova un FILMATO che parli della curiosita', usando la
+  # stessa `image_query` che serve a generare l'immagine — una descrizione di
+  # scena filmabile e' esattamente cio' che si digita in una libreria video.
+  #
+  # Perche' viene prima. Il 4 settembre la scelta era fra due cose imperfette:
+  # un filmato che si muove ma parla d'altro (l'archivio sceglie per umore) e
+  # un'immagine ferma ma in tema. Si scelse la seconda, pagando il movimento —
+  # 1,13 contro 3,63 su 255, misurato. Il terzo caso mancava solo perche' non
+  # avevamo la domanda giusta da fare all'archivio. Provato su sette scene
+  # vere: sette filmati pertinenti su sette, col filtro di pertinenza acceso.
+  #
+  # Un filmato in tema vince su TUTTE le misure prese, quindi l'immagine
+  # generata scala al secondo posto invece di sparire: resta per le scene che
+  # nessuna libreria ha.
+  #
+  # false = si torna all'ordine del 4 settembre (immagine generata, poi
+  # archivio per umore).
+  sfondo_a_tema: true
+
   sfondo_generato: true
 
   long_target_seconds: 33.0

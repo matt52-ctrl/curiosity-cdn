@@ -441,6 +441,56 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
     return compose(frames, out, music)
 
 
+def _sfondo_a_tema(voce: Dict) -> Optional[Path]:
+    """Un filmato d'archivio che parla DI QUESTA curiosita'. None se non c'e'.
+
+    Perche' viene prima dell'immagine generata, ribaltando l'ordine del 4
+    settembre. Quel giorno la scelta era fra due cose imperfette: un filmato
+    che si muove ma parla d'altro (`per_frase` sceglie per umore, non per
+    argomento) e un'immagine ferma ma in tema. Si era scelta la seconda,
+    pagando il movimento — misurato: 1,13 contro 3,63 su 255.
+
+    Il terzo caso non lo avevamo perche' non avevamo la domanda giusta da
+    fare all'archivio. Ora ce l'abbiamo: `image_query` descrive una scena
+    filmabile, ed e' esattamente cio' che si digita in una libreria di
+    filmati. Un filmato in tema vince su TUTTE le misure prese — si muove
+    come l'archivio e parla dell'argomento come l'immagine — quindi non e'
+    un compromesso diverso, e' la casella che mancava.
+
+    `esigente=True` non e' un dettaglio: senza, Pexels restituisce il primo
+    risultato qualunque sia, e "in tema" tornerebbe a essere una parola. Con
+    il filtro acceso si accetta di tornare a mani vuote, e in quel caso si
+    scende all'immagine generata.
+    """
+    if not cfg.get("reel.sfondo_a_tema", True):
+        return None
+    query = (voce.get("image_query") or "").strip()
+    if not query:
+        return None
+    # L'import sta qui dentro come in tutto il resto del file: `footage` tira
+    # dietro httpx e ffmpeg, e chi importa `reel` per una funzione di montaggio
+    # non deve pagarli.
+    from . import footage
+    try:
+        clip = footage.cerca(query, orientamento="portrait", esigente=True)
+        if not clip:
+            return None
+        path = footage.scarica(clip)
+    except Exception as exc:
+        print(f"    filmato in tema non cercato ({str(exc)[:60]})")
+        return None
+    if not path:
+        return None
+    # Lo stesso controllo di leggibilita' che fa `per_frase`: sopra a un fondo
+    # troppo chiaro o troppo affollato il testo non si legge, e un video
+    # illeggibile e' peggio di uno sfondo fuori tema.
+    if not footage.si_vede(path):
+        print("    filmato in tema illeggibile: provo l'immagine generata")
+        return None
+    print(f"    sfondo in tema: {query[:60]}")
+    return path
+
+
 def _sfondo_generato(voce: Dict, seme: str) -> Optional[Path]:
     """L'immagine generata per questa curiosita', o None per usare l'archivio.
 
@@ -624,11 +674,21 @@ def build_multi(voci: List[Dict], name: str,
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
 
-        # Prima l'immagine generata sul soggetto di QUESTA curiosita', poi il
-        # filmato d'archivio. L'ordine e' quello e non l'inverso perche'
-        # l'archivio non sa di cosa parla il video: sceglie per umore.
-        sfondo = _sfondo_generato(v, hook + str(i))
-        e_immagine = sfondo is not None
+        # Tre tentativi, dal migliore al peggiore.
+        #
+        #   1. un filmato d'archivio CHE PARLA di questa curiosita': si muove
+        #      ed e' in tema, quindi vince su entrambe le misure;
+        #   2. l'immagine generata: in tema ma ferma, con la carrellata a
+        #      simulare il movimento;
+        #   3. il filmato scelto per umore: si muove ma parla d'altro.
+        #
+        # Il terzo e' il comportamento storico e resta come rete: uno sfondo
+        # mancante non deve mai costare l'uscita di una fascia oraria.
+        sfondo = _sfondo_a_tema(v)
+        e_immagine = False
+        if sfondo is None:
+            sfondo = _sfondo_generato(v, hook + str(i))
+            e_immagine = sfondo is not None
         if sfondo is None:
             sfondo = footage.per_frase(v.get("mood", "reflective"), hook + str(i))
         if not sfondo:
