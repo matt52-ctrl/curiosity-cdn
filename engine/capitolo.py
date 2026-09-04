@@ -234,6 +234,16 @@ def scrivi(argomento: str, semi: Optional[List[Dict]] = None) -> Dict:
     teneva spenta, con un commento che diceva che sul piano gratuito il
     grounding ha quota zero. Era una misura sbagliata — c'era un altro
     progetto che consumava la stessa chiave, e i 429 venivano da li'.
+
+    `pazienza` e' acceso qui e in nessun altro punto della pipeline. Il primo
+    giro vero del workflow, il 4 settembre 2026, e' morto su un 503 di
+    `gemini-2.5-flash` durato piu' del minuto scarso che la scala corta
+    aspetta: zero capitoli su due. Un capitolo non ha un'ora di uscita — sta
+    in magazzino finche' non serve — quindi qui aspettare otto minuti non
+    costa niente, mentre arrendersi costa la giornata. E aspettare e' l'unica
+    mossa possibile: con la ricerca accesa gli altri modelli rispondono 429
+    (verificato di nuovo il 4 settembre), quindi non c'e' un ripiego a cui
+    passare, c'e' solo questo modello e la sua capacita' del momento.
     """
     righe = "\n".join(
         f"- {s.get('hook','')} {s.get('fact','')} ({s.get('source_hint','')})"
@@ -250,7 +260,7 @@ def scrivi(argomento: str, semi: Optional[List[Dict]] = None) -> Dict:
         f"be thrown away."
     )
     return ask_json(SYSTEM_TESTO, user, SCHEMA_TESTO, max_tokens=16000,
-                    use_web_search=True)
+                    use_web_search=True, pazienza=True)
 
 
 SCHEMA_SCENE = {

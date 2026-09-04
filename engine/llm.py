@@ -151,9 +151,24 @@ PASSEGGERI = {500, 502, 503, 504}
 # risponde, insistere ogni due secondi non aiuta e consuma soltanto.
 ATTESE = [3, 8, 20, 45]
 
+# La scala paziente, per le chiamate che possono permettersi di aspettare.
+#
+# Serve perche' la scala qui sopra copre settantasei secondi in tutto, e non
+# tutti i 503 durano cosi' poco. Il 4 settembre 2026 il primo giro vero del
+# workflow dei capitoli e' morto proprio cosi': quattro tentativi bruciati in
+# poco piu' di un minuto su entrambi i capitoli, zero scritti, giro fallito.
+# Mezz'ora dopo lo stesso modello rispondeva in due secondi — era un picco di
+# carico, non un guasto.
+#
+# Non si allunga ATTESE per tutti: un ciclo di reel condivide il gruppo di
+# concorrenza con gli altri workflow, e restare fermo dieci minuti su una
+# chiamata li tiene in coda. Chi non ha fretta lo dice chiedendo `pazienza`.
+ATTESE_LUNGHE = [10, 30, 60, 120, 240]
+
 
 def _chiedi_con_ritenta(key: str, body: Dict[str, Any],
-                        modello: str = "") -> "httpx.Response":
+                        modello: str = "",
+                        pazienza: bool = False) -> "httpx.Response":
     """Interroga Gemini ritentando sugli errori passeggeri.
 
     Il 429 e' un caso a parte: puo' voler dire "troppe richieste al minuto"
@@ -175,8 +190,9 @@ def _chiedi_con_ritenta(key: str, body: Dict[str, Any],
     serve aspettare domani: serve un altro modello per le sole chiamate
     che cercano.
     """
+    scala = ATTESE_LUNGHE if pazienza else ATTESE
     ultimo = None
-    for tentativo, attesa in enumerate([*ATTESE, None]):
+    for tentativo, attesa in enumerate([*scala, None]):
         try:
             with httpx.Client(timeout=300) as client:
                 resp = client.post(
@@ -206,11 +222,11 @@ def _chiedi_con_ritenta(key: str, body: Dict[str, Any],
         # non bastano a farlo scadere.
         pausa = 35 if (resp is not None and resp.status_code == 429) else attesa
         print(f"    Gemini {ultimo}, riprovo fra {pausa}s "
-              f"(tentativo {tentativo + 1}/{len(ATTESE)})")
+              f"(tentativo {tentativo + 1}/{len(scala)})")
         time.sleep(pausa)
 
     raise RuntimeError(
-        f"Gemini non risponde dopo {len(ATTESE)} tentativi (ultimo: {ultimo}). "
+        f"Gemini non risponde dopo {len(scala)} tentativi (ultimo: {ultimo}). "
         f"Se persiste, cambia pipeline.model in config.yaml: ogni modello ha "
         f"la sua quota indipendente."
     )
@@ -223,6 +239,7 @@ def _gemini_ask_json(
     schema: Dict[str, Any],
     max_tokens: int,
     use_web_search: bool,
+    pazienza: bool = False,
 ) -> Any:
     key = env("GEMINI_API_KEY") or env("GOOGLE_API_KEY")
     if not key:
@@ -276,7 +293,7 @@ def _gemini_ask_json(
 
     for giro in range(tentativi):
         resp = _chiedi_con_ritenta(
-            key, body, MODEL_RICERCA if use_web_search else "")
+            key, body, MODEL_RICERCA if use_web_search else "", pazienza)
 
         data = resp.json()
         candidates = data.get("candidates") or []
@@ -324,13 +341,22 @@ def ask_json(
     max_tokens: int = 16000,
     use_web_search: bool = False,
     cache_system: bool = True,
+    pazienza: bool = False,
 ) -> Any:
     """Una richiesta → un oggetto JSON conforme allo schema.
 
     `effort` e `cache_system` valgono solo per Anthropic; Gemini li ignora.
+
+    `pazienza` dice che questa chiamata può aspettare a lungo un modello
+    sovraccarico invece di arrendersi in un minuto. Va acceso solo dove il
+    ritardo non danneggia nessuno — un magazzino che si riempie di notte, non
+    un ciclo che tiene in coda gli altri workflow. Oggi lo usa solo la
+    scrittura dei capitoli; su Anthropic non ha effetto, perché lì i ritentativi
+    li fa l'SDK.
     """
     if PROVIDER == "gemini":
-        return _gemini_ask_json(system, user, schema, max_tokens, use_web_search)
+        return _gemini_ask_json(system, user, schema, max_tokens,
+                                use_web_search, pazienza)
     if PROVIDER == "anthropic":
         return _anthropic_ask_json(
             system, user, schema, effort, max_tokens, use_web_search, cache_system
