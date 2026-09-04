@@ -441,6 +441,48 @@ def build(slides: List[Dict[str, str]], name: str) -> Path:
     return compose(frames, out, music)
 
 
+def _apertura_animata(voce: Dict, nome: str, indice: int,
+                      canale: str) -> Optional[Path]:
+    """L'apertura generata, quando tocca a questo video. None quasi sempre.
+
+    Perche' SOLO il primo segmento e SOLO un canale: la quota gratuita e' di
+    due minuti di calcolo al giorno — non di video — e vale due o tre clip in
+    tutto. Spenderla sul secondo segmento, che sta sotto al testo e che quasi
+    nessuno raggiunge, sarebbe spenderla peggio.
+
+    L'immagine generata si passa allo Space perche' animarla costa meno che
+    far inventare la scena da zero, e soprattutto tiene lo stile che il canale
+    ha gia'. Se non c'e', il secondo Space dell'elenco lavora di solo testo.
+
+    Tutto quello che va storto qui vale None: chi chiama scende alle tre vie
+    di sempre e il video esce comunque.
+    """
+    if not cfg.get("animazione.attiva", False):
+        return None
+    if cfg.get("animazione.solo_primo", True) and indice != 0:
+        return None
+    canali = cfg.get("animazione.canali", []) or []
+    if canali and canale not in canali:
+        return None
+    query = (voce.get("image_query") or "").strip()
+    if not query:
+        return None
+
+    from . import animazione
+    # Si passa la FUNZIONE, non l'immagine: `anima` la chiama solo se arriva
+    # a uno Space che la vuole. Prepararla comunque significherebbe pagare
+    # 163 neuroni di Cloudflare a ogni giro in cui la GPU gratuita e'
+    # esaurita — cioe' quasi tutti — per poi buttarla, visto che allo sfondo
+    # ci pensa il filmato in tema.
+    try:
+        return animazione.anima(
+            lambda: _sfondo_generato(voce, f"{nome}-apertura"),
+            query, f"{nome}-{indice}")
+    except Exception as exc:
+        print(f"    apertura animata saltata ({str(exc)[:60]})")
+        return None
+
+
 def _sfondo_a_tema(voce: Dict) -> Optional[Path]:
     """Un filmato d'archivio che parla DI QUESTA curiosita'. None se non c'e'.
 
@@ -674,8 +716,9 @@ def build_multi(voci: List[Dict], name: str,
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
 
-        # Tre tentativi, dal migliore al peggiore.
+        # Quattro tentativi, dal migliore al peggiore.
         #
+        #   0. l'apertura generata (solo primo segmento, solo YouTube);
         #   1. un filmato d'archivio CHE PARLA di questa curiosita': si muove
         #      ed e' in tema, quindi vince su entrambe le misure;
         #   2. l'immagine generata: in tema ma ferma, con la carrellata a
@@ -684,8 +727,15 @@ def build_multi(voci: List[Dict], name: str,
         #
         # Il terzo e' il comportamento storico e resta come rete: uno sfondo
         # mancante non deve mai costare l'uscita di una fascia oraria.
-        sfondo = _sfondo_a_tema(v)
+        # Zero: l'apertura generata, che esiste solo per il primo segmento
+        # di un canale solo — la quota gratuita e' di due o tre clip al
+        # giorno, non di piu'. Sta davanti a tutto perche' e' l'unica scena
+        # in tema che si muove come nessun archivio puo' fare, non essendo
+        # in nessun archivio.
+        sfondo = _apertura_animata(v, name, i, canale)
         e_immagine = False
+        if sfondo is None:
+            sfondo = _sfondo_a_tema(v)
         if sfondo is None:
             sfondo = _sfondo_generato(v, hook + str(i))
             e_immagine = sfondo is not None

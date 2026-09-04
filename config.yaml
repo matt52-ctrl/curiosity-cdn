@@ -865,6 +865,88 @@ cta:
   # c'è mai stato un rimando a YouTube, TikTok o Instagram.
   bluesky_coda: "One checked fact a day. Every one names the study, the authors and the year — and says so when a finding is contested."
 
+# ─── ANIMAZIONE ───────────────────────────────────────────────────────────────
+# L'apertura del video, generata invece che cercata.
+#
+# Gira sulle GPU gratuite degli Space di Hugging Face (hardware `zero-a10g`),
+# chiamati come li chiamerebbe un browser. Nessun fornitore, nessuna carta,
+# nessun account: si resta ANONIMI, per scelta di Mattia del 4 settembre 2026.
+#
+#     anonimo    2 minuti di GPU al giorno
+#     gratuito   5 minuti
+#     PRO        40 minuti ($9/mese)
+#
+# ⚠️ SONO MINUTI DI CALCOLO, NON DI VIDEO. Un clip da due secondi tiene
+# occupata la scheda per decine di secondi: la giornata anonima vale due o tre
+# clip, non un filmato intero. Ed e' il motivo per cui si anima UNA apertura e
+# non il video: `solo_primo` qui sotto.
+#
+# ⚠️ E I MODELLI NON FANNO VIDEO LUNGHI comunque. Tetti letti dalla
+# configurazione degli Space il 4 settembre 2026:
+#     wan2-1-fast           3,4 s        ltx-video-distilled   8,5 s
+#     nava (con audio)     10   s
+# Non c'e' il parametro per chiederne trenta. Trenta secondi sarebbero nove
+# chiamate, cioe' nove inquadrature slegate: uno slideshow, non una ripresa.
+#
+# ⚠️ NON ANCORA PROVATO IN PRODUZIONE quando e' stato scritto: tre tentativi
+# anonimi sono falliti con lo stesso errore muto, e la spiegazione (quota
+# esaurita dai tentativi stessi) e' una deduzione, non una misura. Per questo
+# `engine/animazione.py` ritorna sempre None invece di rompersi: a strada
+# chiusa i video escono con lo sfondo di prima.
+animazione:
+  attiva: true
+
+  # Solo il PRIMO segmento del video. I primi secondi decidono se uno scorre
+  # via; sul resto c'e' il testo sopra, e un fondo che si muove troppo lo rende
+  # illeggibile — difetto gia' visto il 4 settembre su un filmato con la nebbia
+  # chiara. Con la quota anonima non ci sarebbe comunque spazio per di piu'.
+  solo_primo: true
+
+  # Un solo canale, per non spendere due volte la stessa quota giornaliera.
+  # YouTube e non TikTok perche' e' l'unico posto dove possiamo LEGGERE se ha
+  # funzionato: su TikTok `video.list` risponde `scope_not_authorized`.
+  # Cosi' l'altro Short della giornata resta il gruppo di controllo — stesso
+  # giorno, stesso pubblico, unica differenza l'apertura.
+  canali: ["youtube"]
+
+  # In anonimo la coda ha priorita' bassa e l'attesa e' di minuti. Si puo'
+  # accettare solo perche' lo sfondo si prepara ore prima che il video esca:
+  # il giro del mattino carica e PROGRAMMA, non pubblica.
+  attesa_massima: 420
+
+  # Provati in ordine, dal primo che risponde. Sono di terzi e cadono: dei 188
+  # Space video controllati il 4 settembre, 101 erano accesi e 40 in errore.
+  # L'elenco e' la difesa: se cade il primo si scende al secondo, e se cadono
+  # tutti si torna al filmato in tema.
+  #
+  # `campi` e' la lista degli argomenti nell'ordine che vuole quell'endpoint.
+  # `@immagine` = l'immagine gia' generata in tema, `@soggetto` = image_query.
+  # Tutto il resto sono valori fissi. Cambiare Space e' una riga qui, non una
+  # riga di codice.
+  spazi:
+    # PRIMO quello che NON vuole l'immagine, e non e' un dettaglio d'ordine:
+    # arriva a 8,5 secondi contro 3,4 — quasi un segmento intero invece di un
+    # terzo — e soprattutto non fa spendere i 163 neuroni Cloudflare
+    # dell'immagine di partenza nei giri in cui la GPU gratuita e' esaurita.
+    # Con l'ordine inverso quell'immagine si pagava e si buttava due volte al
+    # giorno, mentre allo sfondo pensava comunque il filmato in tema.
+    - host: "lightricks-ltx-video-distilled.hf.space"
+      endpoint: "text_to_video"
+      vuole_immagine: false
+      campi: ["@soggetto",
+              "worst quality, inconsistent motion, blurry, jittery, distorted",
+              null, null, 704, 512, "text-to-video", 8.5, 9, 42]
+
+    # Secondo: anima la NOSTRA immagine invece di inventare la scena, quindi
+    # tiene lo stile che il canale ha gia'. Ci si arriva solo se il primo non
+    # risponde, ed e' li' che l'immagine viene generata per la prima volta.
+    - host: "multimodalart-wan2-1-fast.hf.space"
+      endpoint: "generate_video"
+      vuole_immagine: true
+      campi: ["@immagine", "@soggetto", 704, 512,
+              "bright tones, overexposed, static, blurry, jittery, distorted",
+              3.4, 1.0, 4, 42, true]
+
 # ─── REEL ─────────────────────────────────────────────────────────────────────
 # Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti
 # diversi. Se i video si rompono, i post continuano a uscire.
