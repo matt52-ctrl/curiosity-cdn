@@ -52,6 +52,22 @@ import httpx
 from .config import OUTPUT_DIR, cfg
 
 
+# Quante aperture sono gia' uscite da questo processo.
+#
+# Il conto sta in memoria e non su disco, e regge lo stesso: il giro del
+# mattino carica e programma TUTTI gli Short della giornata in una sola
+# esecuzione, quindi "una per processo" e "una al giorno" sono la stessa cosa.
+# Su disco sarebbe peggio, non meglio: i runner di GitHub sono usa e getta e
+# un contatore in un file finirebbe committato nel database per niente.
+#
+# Serve a garantire il GRUPPO DI CONTROLLO. Senza, i due Short della giornata
+# ci provano tutti e due e a decidere chi lo prende e' la quota — cioe' il
+# caso. Con il tetto, il secondo Short non ce l'ha mai: stesso giorno, stesso
+# pubblico, unica differenza l'apertura, ed e' l'unico modo di leggere fra tre
+# settimane se e' servita a qualcosa.
+_fatte = 0
+
+
 class NienteGPU(RuntimeError):
     """Lo Space non ha prodotto niente. Non e' un guasto: e' il caso normale
     quando la quota gratuita del giorno e' finita."""
@@ -179,10 +195,14 @@ def anima(fai_immagine, soggetto: str, nome: str) -> Optional[Path]:
     Non alza mai eccezioni verso il montaggio. Uno sfondo mancante non deve
     costare l'uscita di una fascia oraria: chi chiama ripiega e va avanti.
     """
+    global _fatte
     if not cfg.get("animazione.attiva", False):
         return None
     soggetto = (soggetto or "").strip()
     if not soggetto:
+        return None
+    tetto = int(cfg.get("animazione.max_al_giorno", 1))
+    if _fatte >= tetto:
         return None
 
     attesa = float(cfg.get("animazione.attesa_massima", 420))
@@ -263,6 +283,7 @@ def anima(fai_immagine, soggetto: str, nome: str) -> Optional[Path]:
 
         video = _scarica(host, indirizzo, out, attesa=180)
         if video:
+            _fatte += 1
             print(f"    apertura animata da {etichetta} "
                   f"({time.time() - t0:.0f}s)")
             return video

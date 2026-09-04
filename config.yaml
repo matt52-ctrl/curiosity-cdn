@@ -902,6 +902,14 @@ animazione:
   # chiara. Con la quota anonima non ci sarebbe comunque spazio per di piu'.
   solo_primo: true
 
+  # Quante aperture animate al giorno. UNA, e non e' la quota a deciderlo: e'
+  # il gruppo di controllo. Da stamattina escono due Short al giorno; se ci
+  # provassero tutti e due, a scegliere quale la ottiene sarebbe la GPU
+  # disponibile, cioe' il caso. Con il tetto a uno il secondo Short non ce
+  # l'ha mai — stesso giorno, stesso pubblico, unica differenza l'apertura —
+  # ed e' l'unico modo di sapere fra tre settimane se e' servita a qualcosa.
+  max_al_giorno: 1
+
   # Un solo canale, per non spendere due volte la stessa quota giornaliera.
   # YouTube e non TikTok perche' e' l'unico posto dove possiamo LEGGERE se ha
   # funzionato: su TikTok `video.list` risponde `scope_not_authorized`.
