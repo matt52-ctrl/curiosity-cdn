@@ -10,9 +10,10 @@ name: Curiosity reels
 on:
   schedule:
     # Orari italiani desiderati: 13:00, 19:00, 23:00.
-    # Sono in UTC (d'estate Italia = UTC+2) e anticipati di 45 minuti, perché
-    # GitHub accoda i job schedulati e parte in ritardo — misurato fino a 64
-    # minuti. Anticipare è l'unico modo di centrare mediamente la finestra.
+    # Sono in UTC (d'estate Italia = UTC+2) e anticipati, perché GitHub accoda
+    # i job schedulati e parte in ritardo. ⚠️ Il "fino a 64 minuti" scritto qui
+    # per settimane era una misura vecchia: al 4 settembre 2026 il ritardo
+    # vero e' fra 162 e 272 minuti — vedi la nota sul primo cron piu' sotto.
     #
     # Perché queste tre e non le 8:00/12:00/20:00 di prima: il canale è in
     # inglese, e su Shorts l'inglese pesca soprattutto da Stati Uniti e Regno
@@ -30,8 +31,8 @@ on:
     # tre qui e programmati su YouTube per le 13:00, 19:00 e 23:00 italiane
     # (publish.youtube.orari). Questo giro non tocca Instagram — i reel non si
     # possono programmare e alle 9:45 italiane sarebbero fuori dalla finestra
-    # scelta. Oltre tre ore di margine sulla prima fascia, perché GitHub parte
-    # in ritardo fino a un'ora.
+    # scelta. Il margine sulla prima fascia va tenuto largo, perché GitHub
+    # parte in ritardo di ore e non di minuti.
     #
     # RIDOTTO il 19 agosto 2026: da quattro giri a due, cioè da tre reel e tre
     # Short al giorno a uno e uno. Prova a tempo, decisa guardando che il
@@ -49,7 +50,34 @@ on:
     # perché programma tutte le fasce del giorno ancora scoperte, e alle 9:45
     # lo sono entrambe. Il giro delle 18:15 resta la rete di sicurezza: se il
     # mattino salta, recupera almeno le 19:00.
-    - cron: "45 7 * * *"     # carica e programma lo Short della giornata
+    # ANTICIPATO a 1:15 UTC il 4 settembre 2026, ed e' una correzione, non un
+    # cambio di strategia. Il ritardo dello scheduler di GitHub qui sopra e'
+    # scritto come "misurato fino a 64 minuti": era vero quando fu misurato,
+    # non lo e' piu'. Rilevato su sei giri consecutivi, con `created_at`
+    # identico a `run_started_at` — quindi e' lo scheduler, non la coda dei
+    # runner:
+    #
+    #     cron 07:45  parte 12:15, 12:16, 12:17   (+270, +271, +272 minuti)
+    #     cron 16:15  parte 18:57, 19:16, 19:21   (+162, +181, +186 minuti)
+    #
+    # Cosa costava. Il giro del mattino arrivava alle 14:15 italiane, e a
+    # quell'ora la fascia delle 11:00 e' passata da tre ore: `_fasce_da_coprire`
+    # la scarta per il margine dei dieci minuti e resta solo quella delle
+    # 23:00. Da qui UNO Short al giorno invece di due, dal 3 settembre, con
+    # `max_per_day: 2` e due orari in configurazione che sembravano rispettati.
+    # Si vede nei fatti: gli ultimi otto Short sono tutti caricati fra le 14:18
+    # e le 14:48 e programmati tutti per una fascia sola.
+    #
+    # Perche' anticipare non costa niente: da quando gli Short si PROGRAMMANO,
+    # l'ora del giro non e' l'ora di uscita. Un giro che parte alle 4 del
+    # mattino carica gli stessi due video e li mette alle 11:00 e alle 23:00
+    # esattamente come uno che parte alle 9. L'unico requisito e' arrivare
+    # prima della prima fascia, e con +270 minuti l'1:15 arriva alle 5:45 UTC
+    # (7:45 italiane) nel caso peggiore misurato.
+    #
+    # L'ora 1 e' libera da altri workflow: il piu' vicino e' capitoli alle
+    # 3:15, che condivide il gruppo di concorrenza `curiosity-state`.
+    - cron: "15 1 * * *"     # carica e programma i due Short della giornata
     - cron: "15 16 * * *"    # ~19:00 italiane — sera Europa, pomeriggio USA
     # - cron: "15 10 * * *"    # ~13:00 italiane — pranzo in Europa, mattina in USA
     # - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
