@@ -131,6 +131,14 @@ jobs:
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+          # Le stesse credenziali che ha reels.yml. Senza, `visuals.generate`
+          # non trova l'account e ritorna None: il montaggio non si romperebbe
+          # — ripiega sul filmato d'archivio, com'è sempre stato — ma TikTok
+          # resterebbe l'unico canale con lo sfondo scelto a caso per umore,
+          # e nessuno se ne accorgerebbe guardando i log.
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
         # Uno per giro. Quattro giri al giorno restano sotto il tetto di
         # cinque bozze ogni 24 ore, con un margine per un recupero manuale.
         run: python run.py tiktok --quanti 1 --max-generazioni 1

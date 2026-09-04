@@ -122,6 +122,11 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Sola lettura dell'analitica: serve a engine/neuroni.py per sapere
+          # quanti neuroni restano prima di generare. Senza, il guardiano non
+          # puo' misurare, lascia passare tutto e si torna a scoprire la quota
+          # finita dal 429 — cioe' da immagini che peggiorano in silenzio.
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # Senza questi, con publish.youtube.enabled a true il caricamento
@@ -159,6 +164,11 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Sola lettura dell'analitica: serve a engine/neuroni.py per sapere
+          # quanti neuroni restano prima di generare. Senza, il guardiano non
+          # puo' misurare, lascia passare tutto e si torna a scoprire la quota
+          # finita dal 429 — cioe' da immagini che peggiorano in silenzio.
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # Senza questi, con publish.youtube.enabled a true il caricamento
