@@ -24,7 +24,7 @@ Limiti: max 35 foto per post, 6 richieste/minuto per access token,
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import httpx
 
@@ -468,7 +468,8 @@ def info_creatore(token: str = "") -> Dict:
     return d.get("data", {})
 
 
-def pubblica_diretto(video: "Path", titolo: str, token: str = "") -> str:
+def pubblica_diretto(video: "Path", titolo: str, token: str = "",
+                     opzioni: Optional[Dict] = None) -> str:
     """Pubblica davvero, senza passare dall'inbox. Ritorna il publish_id.
 
     Differenze dalla bozza, tutte e tre necessarie:
@@ -490,17 +491,25 @@ def pubblica_diretto(video: "Path", titolo: str, token: str = "") -> str:
     video, dimensione, pezzo, quanti = _misura(video)
     token = token or _token_accesso()
 
+    opzioni = dict(opzioni or {})
     permessi = info_creatore(token).get("privacy_level_options") or []
-    voluto = cfg.get("publish.tiktok.privacy", "PUBLIC_TO_EVERYONE")
+    voluto = opzioni.pop("privacy_level", "") or cfg.get(
+        "publish.tiktok.privacy", "PUBLIC_TO_EVERYONE")
     if voluto not in permessi:
         # `NonAuditata` e non `TikTokError`, ed e' la differenza fra ripiegare
         # sulla bozza e non pubblicare niente quel giorno.
         #
         # Un client non auditato non riceve un rifiuto quando prova a
-        # pubblicare: gli spariscono le opzioni. La documentazione lo dice
-        # chiaro — «All content posted by unaudited clients will be restricted
-        # to private viewing mode» — quindi `privacy_level_options` torna senza
-        # `PUBLIC_TO_EVERYONE` e il controllo qui sopra scatta. E' la
+        # pubblicare: gli spariscono le opzioni.
+        #
+        # ⚠️ MISURATO IL 4 SETTEMBRE 2026, e va diversamente da come questa
+        # nota diceva: con l'app NON auditata `creator_info` elenca lo stesso
+        # tutte e tre le privacy, `PUBLIC_TO_EVERYONE` compresa. Il rifiuto
+        # arriva dopo, dalla init, col codice
+        # `unaudited_client_can_only_post_to_private_accounts` — che
+        # `_init` traduce in `NonAuditata`. Quindi il controllo qui sotto NON
+        # e' quello che ci protegge dall'audit mancante: protegge dal profilo
+        # privato e dai casi in cui l'opzione sparisce davvero. E' la
         # situazione NORMALE di oggi, e in piu' e' esattamente quella del
         # Sandbox, dove Direct Post funziona ma pubblica solo SELF_ONLY.
         # Trattarla come guasto significherebbe che il giorno in cui si accende
@@ -523,7 +532,11 @@ def pubblica_diretto(video: "Path", titolo: str, token: str = "") -> str:
                        "disable_comment": False,
                        "disable_duet": False,
                        "disable_stitch": False,
-                       "is_aigc": True},
+                       "is_aigc": True,
+                       # Quello che la schermata di `engine/ttconsole.py` ha
+                       # fatto scegliere a mano. Vuoto nel ciclo automatico,
+                       # dove valgono i valori qui sopra.
+                       **opzioni},
          "source_info": {"source": "FILE_UPLOAD", "video_size": dimensione,
                          "chunk_size": pezzo, "total_chunk_count": quanti}},
         token,

@@ -1606,6 +1606,22 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ttconsole(args: argparse.Namespace) -> int:
+    """La schermata di pubblicazione, in locale. Serve a chiedere l'audit.
+
+    Il ciclo automatico non ne ha bisogno e non la usa. Ma TikTok toglie il
+    limite `unaudited_client_can_only_post_to_private_accounts` solo dopo un
+    audit, e l'audit vuole un filmato che mostri una schermata conforme alle
+    Content Sharing Guidelines: nickname del creator, privacy senza default,
+    permessi spenti, informativa sul contenuto commerciale, Music Usage
+    Confirmation, anteprima e consenso esplicito. Questa e' quella schermata.
+    """
+    from engine import ttconsole
+
+    ttconsole.avvia(int(getattr(args, "porta", 0) or ttconsole.PORTA))
+    return 0
+
+
 def _manda_didascalia(voce) -> None:
     """La didascalia della bozza appena depositata, su Telegram.
 
@@ -3541,6 +3557,11 @@ def main() -> int:
     p.add_argument("--quanti", type=int, default=0,
                    help="quante bozze inviare (default e massimo: 5, tetto di TikTok)")
     p.set_defaults(func=cmd_ttcarica)
+
+    p = sub.add_parser("ttconsole",
+                       help="schermata di pubblicazione TikTok (serve per l'audit)")
+    p.add_argument("--porta", type=int, default=8723)
+    p.set_defaults(func=cmd_ttconsole)
 
     p = sub.add_parser("esperimento", help="confronto fra i due registri della prova A/B")
     p.set_defaults(func=cmd_esperimento)
