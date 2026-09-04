@@ -687,17 +687,41 @@ comments:
   primo_commento: true
 
   # {studio} = la fonte della curiosita' (facts.source_hint), {domanda} = la
-  # stessa che sta sul fotogramma finale.
+  # stessa che sta sul fotogramma finale, presa dal braccio giusto della prova.
   #
-  # Perche' lo studio davanti e la domanda dietro: chi apre i commenti di un
+  # PERCHE' SONO PIU' D'UNA. Un commento identico sotto ogni video e' la firma
+  # piu' riconoscibile di un bot che esista — piu' del testo in se'. E' lo
+  # stesso difetto che il prompt delle risposte, in engine/comments.py, elenca
+  # per primo: "ogni risposta della stessa lunghezza, la stessa mossa
+  # d'apertura, sempre". Bastano due persone che scorrono due nostri video per
+  # vederlo. La forma si sceglie dall'identificativo del video: sempre la
+  # stessa per quel video — quindi riproducibile e non ballerina fra un giro e
+  # l'altro — ma diversa dal video prima.
+  #
+  # PERCHE' LO STUDIO DAVANTI E LA DOMANDA DIETRO. Chi apre i commenti di un
   # video di curiosita' sta quasi sempre cercando di capire se e' vero. Dargli
-  # subito il nome dello studio e' l'unica risposta che le pagine concorrenti
-  # non sanno dare, e mette la domanda nel momento in cui uno ha appena
-  # ricevuto qualcosa invece che nel momento in cui gli si chiede e basta.
+  # il nome dello studio e' l'unica risposta che le pagine concorrenti non
+  # sanno dare, e mette la domanda dopo aver dato qualcosa, invece di chiedere
+  # e basta.
   #
-  # Se lo studio manca, resta la sola domanda: un commento che dice "fonte:"
-  # e non la dice sarebbe peggio del silenzio.
-  primo_commento_testo: "Source: {studio}. {domanda}"
+  # Il registro e' quello di `voice.guide`: niente entusiasmo, niente emoji,
+  # frasi corte. Un commento che grida sotto un video che non grida stona.
+  #
+  # NON si usa `facts.detail` per allungarlo, per quanto sarebbe utile avere
+  # "il pezzo che non entrava nei dodici secondi": quel campo non e' sempre
+  # rivolto al pubblico. Su una curiosita' vera contiene una nota interna di
+  # correzione — "...was published by Prentice and Miller in 1993, not 1991" —
+  # che sotto un video non significa niente.
+  primo_commento_forme:
+    - "The paper is {studio}, if you want to read the original. {domanda}"
+    - "This one comes from {studio}. {domanda}"
+    - "If you want to check it yourself: {studio}. {domanda}"
+    - "Source, as always: {studio}. {domanda}"
+    - "{studio} — that is where this one comes from. {domanda}"
+
+  # Quando la curiosita' non porta una fonte resta la sola domanda. Un
+  # commento che annuncia una fonte e poi non la dice e' peggio del silenzio.
+  primo_commento_senza_fonte: "{domanda}"
 
 caption:
   max_chars: 900

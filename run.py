@@ -574,7 +574,15 @@ def cmd_comments(args: argparse.Namespace) -> int:
         if (c["platform"] == "youtube" and not yt_spento
                 and cfg.get("comments.primo_commento", False)
                 and not cm.gia_avviato(conn, c["media"], "youtube")):
-            modello = cfg.get("comments.primo_commento_testo", "") or ""
+            # La forma si sceglie dall'identificativo del video: stabile
+            # per quel video, diversa dal video prima. Un commento identico
+            # sotto ogni Short e' la firma piu' riconoscibile di un bot.
+            forme = cfg.get("comments.primo_commento_forme", []) or []
+            if isinstance(forme, str):
+                forme = [forme]
+            import hashlib as _hc
+            modello = (forme[int(_hc.sha1(c["media"].encode()).hexdigest(), 16)
+                              % len(forme)] if forme else "")
             # La domanda e' quella del braccio a cui il video appartiene, non
             # quella generica: su uno Short a UNA curiosita' «Which one was new
             # to you?» chiede di sceglierne una fra una sola, e chi legge non
@@ -589,8 +597,10 @@ def cmd_comments(args: argparse.Namespace) -> int:
                 or cfg.get("cta.domanda", "") or "").strip()
             # Senza studio resta la sola domanda: un commento che annuncia una
             # fonte e non la dice e' peggio del silenzio.
+            senza = cfg.get("comments.primo_commento_senza_fonte", "{domanda}")
             testo_avvio = (modello.format(studio=fonte, domanda=domanda).strip()
-                           if fonte else domanda)
+                           if (fonte and modello)
+                           else str(senza).format(domanda=domanda).strip())
             if testo_avvio:
                 try:
                     from engine.publish import youtube as yt
