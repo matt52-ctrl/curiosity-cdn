@@ -472,6 +472,36 @@ def _contenuti_da_sorvegliare(conn, ore: float) -> list:
                           "platform": "youtube", "source": "reel",
                           "etichetta": f"YouTube #{r['id']}"})
 
+    # Gli Short NON stanno in `reels`.
+    #
+    # Questa riga esisteva da sempre e non ha mai trovato niente: su 48 reel
+    # solo 2 hanno un `youtube_id`, e nessuno dei 32 Short pubblicati ce l'ha.
+    # Il motivo e' che `_pubblica_youtube` e' un percorso a se' — genera le
+    # proprie frasi, carica, e registra il video in `yt_fasce` e `esperimento`,
+    # non nella tabella dei reel Instagram. Risultato: la lettura dei commenti
+    # YouTube era scritta, collegata al workflow e girava a ogni pubblicazione
+    # senza mai avere un video da guardare. Quattro commenti registrati in
+    # tutto, tutti e quattro di Instagram.
+    #
+    # Si parte da `yt_fasce.quando`, che e' l'ora in cui il video diventa
+    # PUBBLICO, non quella in cui e' stato caricato: uno Short caricato alle
+    # 12 ed esposto alle 23 non ha commenti da leggere prima delle 23, e
+    # nemmeno un posto dove scrivere il nostro.
+    for v in conn.execute(
+        """SELECT f.video_id, f.quando,
+                  (SELECT u.fact_id FROM fact_uses u
+                    WHERE u.ref = 'yt-' || f.video_id
+                    ORDER BY u.used_at LIMIT 1) AS fact_id
+             FROM yt_fasce f
+            WHERE f.quando <= ? AND f.quando >= ?
+            ORDER BY f.quando DESC"""
+        , (time.time(), limite)
+    ).fetchall():
+        fuori.append({"riga_id": 0, "fact_id": v["fact_id"],
+                      "media": v["video_id"], "platform": "youtube",
+                      "source": "short",
+                      "etichetta": f"Short {v['video_id']}"})
+
     return fuori
 
 
@@ -533,6 +563,47 @@ def cmd_comments(args: argparse.Namespace) -> int:
                 fonte = f["source_hint"] or ""
                 if not gancio:
                     gancio, fatto = f["hook"], f["fact"]
+
+        # Il primo commento lo scriviamo noi, prima di leggere.
+        #
+        # Sta QUI e non subito dopo il caricamento perche' gli Short escono
+        # programmati: su un video non ancora pubblico YouTube rifiuta il
+        # commento. Questo ciclo invece gira sui contenuti gia' usciti, e gira
+        # in coda a ogni pubblicazione — quindi il commento arriva al primo
+        # giro utile dopo che il video e' diventato visibile.
+        if (c["platform"] == "youtube" and not yt_spento
+                and cfg.get("comments.primo_commento", False)
+                and not cm.gia_avviato(conn, c["media"], "youtube")):
+            modello = cfg.get("comments.primo_commento_testo", "") or ""
+            # La domanda e' quella del braccio a cui il video appartiene, non
+            # quella generica: su uno Short a UNA curiosita' «Which one was new
+            # to you?» chiede di sceglierne una fra una sola, e chi legge non
+            # capisce cosa gli si stia chiedendo. Il braccio sta in
+            # `esperimento`, scritto al momento della pubblicazione.
+            riga_var = conn.execute(
+                "SELECT variante FROM esperimento WHERE video_id=?",
+                (c["media"],)).fetchone()
+            gruppo_v = riga_var["variante"] if riga_var else ""
+            domanda = str(
+                cfg.get(f"esperimento.lunghezza.gruppi.{gruppo_v}.domanda", "")
+                or cfg.get("cta.domanda", "") or "").strip()
+            # Senza studio resta la sola domanda: un commento che annuncia una
+            # fonte e non la dice e' peggio del silenzio.
+            testo_avvio = (modello.format(studio=fonte, domanda=domanda).strip()
+                           if fonte else domanda)
+            if testo_avvio:
+                try:
+                    from engine.publish import youtube as yt
+                    nuovo_id = yt.commenta_video(c["media"], testo_avvio)
+                    if nuovo_id:
+                        cm.segna_avvio(conn, nuovo_id, c["media"],
+                                       testo_avvio, "youtube")
+                        print(f"  · {c['etichetta']}: aperto il discorso — "
+                              f"{testo_avvio[:60]}")
+                except Exception as exc:
+                    # Non ferma il giro: leggere e rispondere ai commenti veri
+                    # vale piu' di aprirne uno nostro.
+                    print(f"  · {c['etichetta']}: primo commento saltato ({exc})")
 
         try:
             if c["platform"] == "youtube":

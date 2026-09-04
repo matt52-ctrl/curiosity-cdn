@@ -337,6 +337,61 @@ def rispondi_commento(comment_id: str, testo: str) -> Optional[str]:
     return r.json().get("id")
 
 
+
+def commenta_video(video_id: str, testo: str) -> Optional[str]:
+    """Il primo commento sotto un proprio video, scritto dal canale.
+
+    Perche' esiste. Su 18 Short recenti: 3.786 visualizzazioni, 36 like, UN
+    commento. La ritenzione non era il problema — quei video si guardavano dal
+    35 all'88 per cento — e nemmeno la richiesta, che dal 20 agosto c'e' e sta
+    scritta sul fotogramma finale. Il problema e' che sotto ogni video c'era
+    una sezione commenti vuota, e una sezione vuota comunica che qui non si
+    commenta. Rispondere a qualcuno costa un tocco; aprire il discorso da soli
+    ne costa molti di piu', e quasi nessuno lo fa.
+
+    Perche' proprio noi e perche' quel testo. Il commento non chiede niente di
+    nuovo: nomina lo studio da cui viene la curiosita' e rifa' la domanda. E'
+    l'unica cosa che questo canale ha e le pagine di curiosita' non hanno, e
+    nel posto dove serve — chi arriva ai commenti sta gia' cercando di capire
+    se fidarsi.
+
+    Non si puo' fissare in cima: l'API di YouTube non espone il "pin", e' una
+    funzione della sola interfaccia. Su un video con pochi commenti il proprio
+    compare comunque fra i primi, e chiedere a Mattia di fissarlo a mano
+    sarebbe lavoro manuale quotidiano — cioe' esattamente cio' che questo
+    progetto non fa.
+
+    ⚠️ Il video dev'essere gia' PUBBLICO. Gli Short escono programmati, e su un
+    video ancora privato YouTube rifiuta il commento (403). Per questo la
+    chiamata sta nel ciclo dei commenti, che gira sui contenuti gia' usciti, e
+    non subito dopo il caricamento.
+    """
+    if not (video_id and testo.strip()):
+        return None
+    r = httpx.post(
+        f"{API}/commentThreads",
+        params={"part": "snippet"},
+        json={"snippet": {"videoId": video_id, "topLevelComment": {
+            "snippet": {"textOriginal": testo[:9000]}}}},
+        headers=_intestazioni(), timeout=40,
+    )
+    if r.status_code == 403:
+        testo_err = r.text[:200]
+        if "insufficient" in testo_err.lower() or "Scope" in testo_err:
+            raise PermessoMancante(
+                "il token YouTube non copre i commenti (manca youtube.force-ssl). "
+                "Rilancia una volta:  python3 setup_youtube.py"
+            )
+        # Commenti chiusi sul video, o video non ancora pubblico: non e' un
+        # guasto da segnalare, e' il caso normale di un video programmato.
+        print(f"    primo commento non accettato: {testo_err[:100]}")
+        return None
+    if r.status_code >= 400:
+        print(f"    primo commento rifiutato: {r.status_code} {r.text[:120]}")
+        return None
+    return (r.json().get("snippet", {}).get("topLevelComment", {}).get("id")
+            or r.json().get("id"))
+
 # ─── Statistiche ──────────────────────────────────────────────────────────────
 
 ANALYTICS = "https://youtubeanalytics.googleapis.com/v2/reports"

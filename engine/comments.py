@@ -284,6 +284,11 @@ CREATE TABLE IF NOT EXISTS comments (
 MIGRAZIONI = [
     "ALTER TABLE comments ADD COLUMN platform TEXT NOT NULL DEFAULT 'instagram'",
     "ALTER TABLE comments ADD COLUMN source TEXT NOT NULL DEFAULT 'post'",
+    # L'identificativo del contenuto sulla piattaforma (media Instagram, video
+    # YouTube). `post_id` non basta: gli Short non hanno una riga in `reels` —
+    # ce l'ha solo il reel Instagram — quindi per sapere se sotto un dato video
+    # abbiamo gia' scritto serve la chiave della piattaforma, non la nostra.
+    "ALTER TABLE comments ADD COLUMN media TEXT NOT NULL DEFAULT ''",
 ]
 
 
@@ -327,6 +332,40 @@ def invia_risposta(riga, testo: str) -> Optional[str]:
         from .publish.youtube import rispondi_commento
         return rispondi_commento(riga["id"], testo)
     return post_reply(riga["id"], testo)
+
+
+def gia_avviato(conn: sqlite3.Connection, media: str, platform: str) -> bool:
+    """Il canale ha gia' aperto lui il discorso sotto questo contenuto?
+
+    Si guarda in tabella e non fra i commenti veri perche' YouTube, leggendo,
+    non dice quale commento sia nostro: `authorDisplayName` e' un nome che
+    chiunque puo' copiare, e confrontare stringhe per decidere se scrivere di
+    nuovo vorrebbe dire riscrivere il commento ogni volta che qualcuno cambia
+    nome. La riga in tabella e' un fatto, non un indizio.
+    """
+    return conn.execute(
+        "SELECT 1 FROM comments WHERE media=? AND platform=? AND source='seed'",
+        (media, platform),
+    ).fetchone() is not None
+
+
+def segna_avvio(conn: sqlite3.Connection, comment_id: str, media: str,
+                testo: str, platform: str) -> None:
+    """Registra il primo commento come gia' visto, non come da rispondere.
+
+    Lo `status` e' 'sent' e non 'pending' di proposito: la riga serve a due
+    cose insieme — a non riscrivere il commento al giro dopo, e a non far
+    rispondere il bot a se' stesso quando lo rilegge fra i commenti del video.
+    """
+    conn.execute(
+        """INSERT OR IGNORE INTO comments
+           (id, post_id, username, text, seen_at, category, draft, needs_human,
+            status, platform, source, media)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (comment_id, 0, cfg.get("brand.handle", ""), testo, time.time(),
+         "seed", "", 0, "sent", platform, "seed", media),
+    )
+    conn.commit()
 
 
 def already_seen(conn: sqlite3.Connection, comment_id: str) -> bool:

@@ -667,6 +667,38 @@ comments:
   # curiosità. Quelli oltre il tetto restano nuovi e toccano al giro dopo.
   max_drafts_per_run: 20
 
+  # ─── Il primo commento, scritto dal canale ─────────────────────────────────
+  #
+  # Cosa si e' misurato prima di aggiungerlo: su 18 Short, 3.786 viste hanno
+  # prodotto 36 like, UN commento e 2 iscritti. La ritenzione di quei video
+  # andava dal 35 all'88 per cento, quindi non e' che non si guardino; ed e'
+  # dal 20 agosto che il fotogramma finale chiede qualcosa. Sotto ogni video
+  # c'era pero' una sezione commenti vuota, e una sezione vuota dice a chi
+  # arriva che qui non si commenta. Rispondere costa un tocco, aprire il
+  # discorso ne costa molti di piu'.
+  #
+  # PERCHE' NON SPORCA LE DUE PROVE IN CORSO (lunghezza e apertura): non tocca
+  # il video, non tocca la durata e non tocca il fotogramma finale. Un
+  # commento sotto al video e' fuori dal montato, quindi vale identico per
+  # tutti e quattro i bracci e si elide nel confronto.
+  #
+  # NON si puo' fissare in cima: il "pin" non esiste nell'API di YouTube, e
+  # farlo fare a mano ogni giorno sarebbe lavoro manuale quotidiano.
+  primo_commento: true
+
+  # {studio} = la fonte della curiosita' (facts.source_hint), {domanda} = la
+  # stessa che sta sul fotogramma finale.
+  #
+  # Perche' lo studio davanti e la domanda dietro: chi apre i commenti di un
+  # video di curiosita' sta quasi sempre cercando di capire se e' vero. Dargli
+  # subito il nome dello studio e' l'unica risposta che le pagine concorrenti
+  # non sanno dare, e mette la domanda nel momento in cui uno ha appena
+  # ricevuto qualcosa invece che nel momento in cui gli si chiede e basta.
+  #
+  # Se lo studio manca, resta la sola domanda: un commento che dice "fonte:"
+  # e non la dice sarebbe peggio del silenzio.
+  primo_commento_testo: "Source: {studio}. {domanda}"
+
 caption:
   max_chars: 900
   hashtag_count: 12
