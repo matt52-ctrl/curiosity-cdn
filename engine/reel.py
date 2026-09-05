@@ -747,9 +747,31 @@ def build_multi(voci: List[Dict], name: str,
         montate.append(v)
         ultimo_sfondo = (sfondo, e_immagine)
 
+        # La domanda sta SOTTO l'aggancio, e sotto quello soltanto.
+        #
+        # Perche' esiste: in 3.786 visualizzazioni e' arrivato un commento. La
+        # tenuta a 3 secondi era del 94-97% e la visione media sopra il 50%,
+        # quindi non si trattava di gente che scappava: si trattava di gente a
+        # cui non avevamo chiesto niente. Ogni frase era un'affermazione
+        # chiusa su di lei, e l'unica reazione possibile era annuire.
+        #
+        # Perche' all'INIZIO e non alla fine, che era la scelta ovvia: chi
+        # arriva in fondo ha gia' avuto tutto e non ha piu' niente da
+        # aggiungere. Chiesta al terzo secondo, invece, per tutto il resto del
+        # video lo spettatore tiene in mano una risposta che sa solo lui — e
+        # commenta subito, invece di ricordarsene alla fine (osservazione di
+        # Mattia, 5 settembre 2026).
+        #
+        # Perche' nel `body` e non in un fotogramma suo: allungare costa. La
+        # visione si misura in secondi e un terzo tempo per curiosita' li
+        # aggiunge a tutti i video. Il campo c'era gia', vuoto dal primo
+        # giorno; sulla rivelazione resta vuoto, perche' li' la domanda ha
+        # gia' avuto risposta e ripeterla toglierebbe spazio all'unica riga
+        # che conta.
+        domanda = (v.get("domanda") or "").strip()
         overlays = render.render_slides(
             [
-                {"kicker": "", "headline": hook, "body": ""},
+                {"kicker": "", "headline": hook, "body": domanda},
                 {"kicker": "", "headline": reveal or hook, "body": ""},
             ],
             f"yt-{name}-{i}", "line", size=REEL_SIZE, transparent=True,
@@ -793,6 +815,18 @@ def build_multi(voci: List[Dict], name: str,
     # vale la perdita dell'intero montaggio — e la fascia oraria di uno Short
     # non si recupera.
     if ultimo_sfondo is not None:
+        # Con UNA sola curiosita' il fotogramma finale richiude la SUA
+        # domanda, non ne pone una nuova. Chiedere «Which one was new to
+        # you?» dopo aver chiesto «quanti se ne sono accorti?» sono due
+        # domande diverse in dodici secondi: la seconda cancella la prima, e
+        # quella a cui lo spettatore ha una risposta pronta e' la prima.
+        #
+        # Con tre curiosita' resta la domanda del braccio: le domande sono
+        # state tre, e ripeterne una sola sceglierebbe arbitrariamente fra
+        # quelle a cui ha risposto.
+        if len(montate) == 1:
+            propria = (montate[0].get("domanda") or "").strip()
+            domanda_cta = propria or domanda_cta
         try:
             coda = _coda_cta(ff, ultimo_sfondo[0], ultimo_sfondo[1], name, tmp,
                              len(segmenti), canale, domanda_cta)

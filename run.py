@@ -589,11 +589,19 @@ def cmd_comments(args: argparse.Namespace) -> int:
             # capisce cosa gli si stia chiedendo. Il braccio sta in
             # `esperimento`, scritto al momento della pubblicazione.
             riga_var = conn.execute(
-                "SELECT variante FROM esperimento WHERE video_id=?",
+                "SELECT variante, domanda FROM esperimento WHERE video_id=?",
                 (c["media"],)).fetchone()
             gruppo_v = riga_var["variante"] if riga_var else ""
+            # Prima la domanda che il video ha DAVVERO mostrato sotto
+            # l'aggancio. Chiuderne una diversa qui sotto sarebbe la terza
+            # domanda in dodici secondi, e nessuna delle tre otterrebbe una
+            # risposta: quella a cui lo spettatore ha gia' pensato e' questa.
+            # Sui video a tre curiosita' resta vuota — le domande erano tre —
+            # e si ricade su quella del braccio.
+            sua = (riga_var["domanda"] if riga_var else "") or ""
             domanda = str(
-                cfg.get(f"esperimento.lunghezza.gruppi.{gruppo_v}.domanda", "")
+                sua.strip()
+                or cfg.get(f"esperimento.lunghezza.gruppi.{gruppo_v}.domanda", "")
                 or cfg.get("cta.domanda", "") or "").strip()
             # Senza studio resta la sola domanda: un commento che annuncia una
             # fonte e non la dice e' peggio del silenzio.
@@ -1063,6 +1071,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # sei clip marcate come usate per un video che ne mostra tre.
     voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
              "image_query": f.get("image_query", ""),
+             "domanda": f.get("domanda", ""),
              "_frase": f} for f in frasi]
 
     import hashlib as _h
@@ -1104,11 +1113,17 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # girano insieme e vanno lette separate, che e' tutto il senso del 2x2.
     # Se la prova sull'apertura e' spenta resta la stringa vuota, e le letture
     # escludono quelle righe invece di contarle come un gruppo che non esiste.
+    # La domanda del video si registra qui e non altrove: e' l'ultimo momento
+    # in cui esiste ancora fuori dal file caricato. La usa il primo commento,
+    # che si scrive ore dopo. Con piu' curiosita' non se ne salva nessuna —
+    # le domande sono state tre, e sceglierne una sarebbe arbitrario.
     segna_variante(conn, yt_id,
                    gruppo if cfg.get("esperimento.lunghezza.attiva", False)
                    else variante,
                    apertura=apertura if cfg.get("esperimento.apertura.attiva",
-                                                False) else "")
+                                                False) else "",
+                   domanda=(montate[0].get("domanda", "")
+                            if len(montate) == 1 else ""))
     # `is not None` e non `if quando`: nel recupero di una giornata perduta la
     # fascia vale 0.0, che significa "esci adesso" ed e' falsa. Con il vecchio
     # controllo la fascia non veniva segnata, `fasce_coperte` restava vuota e
@@ -1286,6 +1301,7 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
 
         voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
                  "image_query": f.get("image_query", ""),
+             "domanda": f.get("domanda", ""),
                  "_frase": f} for f in frasi]
         import hashlib as _h
         nome = "tt-" + _h.sha1(frasi[0]["line"].encode()).hexdigest()[:8]

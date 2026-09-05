@@ -67,9 +67,14 @@ LINES_SCHEMA = {
                     # parlare della curiosita'. Costa zero: e' un campo in
                     # piu' in una chiamata che si fa comunque.
                     "image_query": {"type": "string"},
+                    # La domanda che si mostra SOTTO l'aggancio e a cui la
+                    # rivelazione risponde. Vedi la nota nel prompt: e' la
+                    # correzione al difetto per cui in 3.786 visualizzazioni
+                    # e' arrivato UN commento.
+                    "domanda": {"type": "string"},
                 },
                 "required": ["source_index", "hook", "reveal", "mood", "caption",
-                             "hashtags", "image_query"],
+                             "hashtags", "image_query", "domanda"],
                 "additionalProperties": False,
             },
         }
@@ -630,6 +635,39 @@ are not suitable here.
 
 {materiale}
 
+`domanda` is the single most important field on this list, and it is new.
+
+Here is the problem it fixes. In 3,786 views this channel collected one
+comment. Retention is not the issue — 94% of viewers stay past three seconds
+and most watch half the video. The issue is that every line is a CLOSED
+STATEMENT about the viewer: "You think your inner state is visible to
+everyone." We tell them how they work, we name the study, we finish. The best
+they can think is "huh". We have left them nothing to add, because we already
+did all of it for them.
+
+So ask them something FIRST. `domanda` appears under the hook, three seconds
+in, and the reveal is its answer. For the whole video the viewer is holding an
+answer that only they have.
+
+Rules that make the difference between a question and a decoration:
+
+1. It must ask for something ONLY THEY KNOW — their number, their memory,
+   their choice. Never something we are about to tell them, and never a
+   quiz with a right answer they could feel stupid for missing.
+      good: "Ten people saw you trip. How many noticed?"
+      good: "Think of last week. Good memory or bad one, first?"
+      bad:  "Did you know this?"          (yes/no, no stake, nothing to say)
+      bad:  "What is the illusion of transparency?" (a test, not a question)
+2. Answerable in ONE WORD or ONE NUMBER, silently, in two seconds. If it
+   needs a paragraph, nobody answers it — not in their head, not in the
+   comments.
+3. The reveal must actually ANSWER it. If the answer is not in the line, the
+   question is bait and the video is worse than before.
+4. Six to twelve words. It sits under the hook in smaller type, and it is
+   read in a glance, not studied.
+5. No "comment below", no "let me know" — the frame at the end already asks.
+   Here you ask the question, not for the comment.
+
 For image_query, describe the SCENE that will sit behind the line as a photo:
 one concrete, ordinary moment a camera could have caught, in 6-12 words. A
 person or a place doing something, not an idea. "a hand hovering over a light
@@ -679,6 +717,7 @@ Return JSON matching the schema."""
         # che e' il comportamento di sempre. Un campo mancante non deve mai
         # costare l'uscita di una fascia oraria.
         l["image_query"] = (l.get("image_query") or "").strip()
+        l["domanda"] = (l.get("domanda") or "").strip()
         tag: List[str] = []
         for t in list(pinned) + l.get("hashtags", []):
             t = t.lstrip("#").strip().lower().replace(" ", "")

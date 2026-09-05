@@ -138,6 +138,14 @@ MIGRATIONS = [
     # I video precedenti restano con la stringa vuota, che le letture
     # escludono da sole invece di contarli come un terzo gruppo fantasma.
     "ALTER TABLE esperimento ADD COLUMN apertura TEXT NOT NULL DEFAULT ''",
+    # La domanda mostrata sotto l'aggancio, dal 5 settembre 2026. Non e' un
+    # dato di prova, ed e' qui perche' `esperimento` e' l'unica tabella che
+    # descrive UN VIDEO PUBBLICATO e non un filmato o una curiosita'. Serve al
+    # primo commento, che si scrive ore dopo — quando il video diventa
+    # pubblico — e a quel punto la domanda non esiste piu' da nessuna parte:
+    # vive solo dentro il file gia' caricato su YouTube. Senza, il commento
+    # chiuderebbe con una domanda diversa da quella appena letta.
+    "ALTER TABLE esperimento ADD COLUMN domanda TEXT NOT NULL DEFAULT ''",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -907,17 +915,27 @@ def quanti_liberi(conn: sqlite3.Connection, canale: str) -> int:
 
 
 def segna_variante(conn: sqlite3.Connection, video_id: str, variante: str,
-                   piattaforma: str = "youtube", apertura: str = "") -> None:
+                   piattaforma: str = "youtube", apertura: str = "",
+                   domanda: str = "") -> None:
     """Registra a quali gruppi appartiene un video appena caricato.
 
     Va chiamata DOPO che YouTube ha accettato il caricamento: un video che non
     esiste non appartiene a nessun gruppo, e contarlo sposterebbe il confronto
     di una casella per un errore di rete.
+
+    `domanda` non e' un dato di prova ed e' qui lo stesso, perche' questa e'
+    l'unica tabella che descrive UN VIDEO pubblicato e non un filmato o una
+    curiosita'. Serve al primo commento: viene scritto ore dopo, quando il
+    video diventa pubblico, e a quel punto la domanda mostrata sul fotogramma
+    non esiste piu' da nessuna parte — vive solo dentro il file gia' caricato.
+    Senza, il commento chiuderebbe con una domanda diversa da quella che lo
+    spettatore ha appena letto.
     """
     conn.execute(
         "INSERT OR REPLACE INTO esperimento "
-        "(video_id, variante, creato, piattaforma, apertura) VALUES (?,?,?,?,?)",
-        (video_id, variante, time.time(), piattaforma, apertura),
+        "(video_id, variante, creato, piattaforma, apertura, domanda) "
+        "VALUES (?,?,?,?,?,?)",
+        (video_id, variante, time.time(), piattaforma, apertura, domanda),
     )
     conn.commit()
 
