@@ -1721,7 +1721,96 @@ def cmd_esperimento(args: argparse.Namespace) -> int:
             print(f"  Ancora presto: {totale} video in tutto, ne servono almeno "
                   f"{minimo} per gruppo\n  prima che il confronto voglia dire "
                   f"qualcosa.")
+    _mostra_domanda(conn)
     return 0
+
+
+def _mostra_domanda(conn) -> None:
+    """La prova sulla domanda sotto l'aggancio: prima contro dopo.
+
+    PERCHE' NON E' UN A/B come le altre due. Un terzo fattore porterebbe le
+    caselle da quattro a otto, con due video al giorno significa tre video per
+    casella al mese, e ammazzerebbe anche le due prove gia' in corso. Il
+    confronto e' quindi nel tempo: tutti i video prima della data contro tutti
+    quelli dopo.
+
+    E' un confronto piu' debole — se cambiasse altro nello stesso periodo non
+    sapremmo separarlo — e si accetta per una ragione precisa: la base di
+    partenza e' 0,58 commenti ogni mille viste, cioe' praticamente zero. Da li'
+    non si scende, quindi qualunque cosa succeda e' un miglioramento o un
+    nulla di fatto, e la direzione non e' ambigua.
+
+    COSA SI POTRA' DIRE E COSA NO. Con ~13.000 viste al mese, al ritmo
+    attuale ci si aspettano 7-8 commenti. Un raddoppio si vede; un +30% no. La
+    domanda a cui questa lettura risponde e' "e' cambiato qualcosa di grosso o
+    non e' cambiato niente", non "di quanto e' migliorato".
+    """
+    import datetime as _dt
+
+    dal = str(cfg.get("esperimento.domanda.dal", "") or "").strip()
+    if not dal:
+        return
+    try:
+        stacco = _dt.datetime.strptime(dal, "%Y-%m-%d").replace(
+            tzinfo=_fuso()).timestamp()
+    except ValueError:
+        print(f"\n  esperimento.domanda.dal non e' una data: {dal!r}")
+        return
+
+    # Si guarda `yt_fasce.quando`, che e' l'ora in cui il video e' diventato
+    # PUBBLICO. La data di caricamento sarebbe sbagliata di mezza giornata e
+    # metterebbe nel gruppo sbagliato i video a cavallo dello stacco.
+    righe = conn.execute("""
+        SELECT f.quando,
+               MAX(m.views) v, MAX(m.comments) k,
+               MAX(m.likes) l, MAX(m.sub_gained) s
+          FROM yt_fasce f
+          JOIN reel_metrics m ON m.video_id = f.video_id
+                             AND m.platform = 'youtube'
+         GROUP BY f.video_id""").fetchall()
+
+    gruppi = {"prima": [0, 0, 0, 0, 0], "dopo": [0, 0, 0, 0, 0]}
+    for r in righe:
+        g = gruppi["dopo" if (r["quando"] or 0) >= stacco else "prima"]
+        g[0] += 1
+        g[1] += r["v"] or 0
+        g[2] += r["k"] or 0
+        g[3] += r["l"] or 0
+        g[4] += r["s"] or 0
+
+    giorni = max(0, int((time.time() - stacco) / 86400))
+    durata = int(cfg.get("esperimento.domanda.giorni", 30))
+    print(f"\n\n  PROVA SULLA DOMANDA — l'affermazione chiusa contro la domanda")
+    print(f"  giorno {giorni} di {durata}, stacco al {dal}\n")
+    print(f"  {'gruppo':8} {'video':>6} {'viste':>7} "
+          f"{'COMMENTI/1000':>14} {'like/1000':>10} {'iscritti/1000':>14}")
+    print("  " + "-" * 66)
+    for nome in ("prima", "dopo"):
+        n, v, k, l, sub = gruppi[nome]
+        if not v:
+            print(f"  {nome:8} {n:6} {v:7}        nessun dato")
+            continue
+        print(f"  {nome:8} {n:6} {v:7} {1000*k/v:14.2f} {1000*l/v:10.1f} "
+              f"{1000*sub/v:14.2f}")
+
+    pn, pv, pk = gruppi["prima"][0], gruppi["prima"][1], gruppi["prima"][2]
+    dn, dv, dk = gruppi["dopo"][0], gruppi["dopo"][1], gruppi["dopo"][2]
+    if not (pv and dv):
+        return
+    attesi = pk / pv * dv
+    print(f"\n  Al ritmo di prima, su {dv} viste ci si aspettavano "
+          f"{attesi:.1f} commenti; ne sono arrivati {dk}.")
+    if giorni < durata:
+        print(f"  NON si decide oggi: mancano {durata - giorni} giorni.")
+    elif dk >= 2 * attesi and dk >= 10:
+        print("  La domanda ha funzionato: piu' del doppio, e su numeri che")
+        print("  non si spiegano col caso.")
+    elif dk <= attesi * 1.3:
+        print("  Non e' cambiato niente. Il problema non era la chiusura del")
+        print("  video, e conviene guardare altrove invece di ritoccarla.")
+    else:
+        print("  Meglio, ma non abbastanza da distinguerlo dal caso con questi")
+        print("  numeri. Servirebbero piu' viste, non piu' giorni.")
 
 
 def _verdetto_lunghezza(righe, passati: int, giorni: int) -> None:

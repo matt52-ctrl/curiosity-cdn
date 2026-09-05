@@ -1107,6 +1107,36 @@ reel:
 # confronto perde significato.
 esperimento:
   # Sotto questa soglia per gruppo, la differenza è rumore e non va letta.
+  # ─── PROVA SULLA DOMANDA ───────────────────────────────────────────────────
+  # Il formato cambiato il 5 settembre 2026: sotto l'aggancio compare una
+  # domanda a cui la rivelazione risponde, invece di un'affermazione chiusa.
+  #
+  # PERCHE' NON E' UN A/B come le altre due. Un terzo fattore porterebbe le
+  # caselle da quattro a otto: con due Short al giorno fanno tre video per
+  # casella al mese, e ammazzerebbe anche le due prove gia' in corso. Qui il
+  # confronto e' nel tempo — tutti i video prima dello stacco contro tutti
+  # quelli dopo — ed e' un confronto piu' debole, perche' se cambiasse
+  # dell'altro nello stesso periodo non sapremmo separarlo.
+  #
+  # Si accetta perche' la base di partenza e' quasi zero: 8 commenti su 13.804
+  # viste, 0,58 ogni mille, e solo 7 video su 44 ne hanno ricevuto uno. Da li'
+  # non si scende: qualunque cosa accada e' un miglioramento o un nulla di
+  # fatto, e la direzione non e' ambigua.
+  #
+  # ⚠️ COSA SI POTRA' DIRE E COSA NO. Con ~13.000 viste al mese, al ritmo di
+  # prima ci si aspettano 7-8 commenti. Un raddoppio si vede, un +30% no. La
+  # domanda a cui risponde e' "e' cambiato qualcosa di grosso o niente", non
+  # "di quanto e' migliorato". Chi guardera' i numeri col metro sbagliato
+  # concludera' il contrario di quello che e' successo.
+  domanda:
+    # Il 6 e non il 5, benche' il formato sia partito il 5. I due Short del 5
+    # erano gia' montati alle 5:45 UTC, ore prima che la domanda esistesse, e
+    # sarebbero finiti nel gruppo "dopo" senza averla: due video su sessanta
+    # bastano a spostare un conteggio che parte da otto commenti in totale.
+    # Lo stacco va dove cambia il CONTENUTO, non dove e' stato fatto il commit.
+    dal: "2026-09-06"
+    giorni: 30
+
   video_minimi: 6
 
   # ─── PROVA SULLA LUNGHEZZA ─────────────────────────────────────────────────
