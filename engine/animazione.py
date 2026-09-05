@@ -49,7 +49,27 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .config import OUTPUT_DIR, cfg
+from .config import OUTPUT_DIR, cfg, env
+
+
+def _intestazioni() -> Dict[str, str]:
+    """Il token Hugging Face, se c'e'.
+
+    Serve a dire A CHI attribuire il consumo di GPU, e senza non si ottiene
+    niente. La tabella delle quote elenca una riga "anonimo, 2 minuti", ma
+    quei due minuti valgono per chi sta sul sito col browser, dove Hugging
+    Face riconosce la sessione. Da script il 5 settembre 2026 la GPU non e'
+    stata assegnata mai — provato da due indirizzi diversi, il portatile di
+    Mattia e un runner di GitHub, a sette ore di distanza.
+
+    Che non fosse un difetto nostro lo dice un errore ricevuto lungo la
+    strada: «9:16 (544x960) is not in the list of choices». La richiesta
+    arriva, viene letta e validata; e' solo la GPU che non viene data.
+
+    Il token e' di sola lettura e si revoca da huggingface.co/settings/tokens.
+    """
+    t = env("HF_TOKEN") or env("HUGGINGFACE_TOKEN")
+    return {"Authorization": f"Bearer {t}"} if t else {}
 
 
 # Quante aperture sono gia' uscite da questo processo.
@@ -89,7 +109,7 @@ def _carica(host: str, immagine: Path, attesa: float) -> Optional[str]:
         with open(immagine, "rb") as f:
             r = httpx.post(f"https://{host}/gradio_api/upload",
                            files={"files": (immagine.name, f, "image/png")},
-                           timeout=attesa)
+                           headers=_intestazioni(), timeout=attesa)
         if r.status_code >= 400:
             return None
         elenco = r.json()
@@ -137,7 +157,8 @@ def _attendi(host: str, endpoint: str, evento: str,
     """
     url = f"https://{host}/gradio_api/call/{endpoint}/{evento}"
     try:
-        with httpx.stream("GET", url, timeout=attesa) as r:
+        with httpx.stream("GET", url, headers=_intestazioni(),
+                          timeout=attesa) as r:
             tipo = ""
             for riga in r.iter_lines():
                 if not riga:
@@ -169,7 +190,8 @@ def _scarica(host: str, indirizzo: str, dove: Path,
     else:
         url = f"https://{host}/gradio_api/file={indirizzo.lstrip('/')}"
     try:
-        r = httpx.get(url, timeout=attesa, follow_redirects=True)
+        r = httpx.get(url, headers=_intestazioni(), timeout=attesa,
+                      follow_redirects=True)
         if r.status_code >= 400 or len(r.content) < 10000:
             return None
         dove.parent.mkdir(parents=True, exist_ok=True)
@@ -252,7 +274,7 @@ def anima(fai_immagine, soggetto: str, nome: str) -> Optional[Path]:
         try:
             r = httpx.post(
                 f"https://{host}/gradio_api/call/{spazio['endpoint']}",
-                json={"data": dati}, timeout=60,
+                json={"data": dati}, headers=_intestazioni(), timeout=60,
             )
             if r.status_code >= 400:
                 print(f"    {etichetta}: rifiutato ({r.status_code})")
