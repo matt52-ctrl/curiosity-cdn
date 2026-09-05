@@ -894,7 +894,38 @@ cta:
 # `engine/animazione.py` ritorna sempre None invece di rompersi: a strada
 # chiusa i video escono con lo sfondo di prima.
 animazione:
-  attiva: true
+  # SPENTA il 5 settembre 2026, dopo averla provata fino in fondo. Resta
+  # scritta e funzionante: se Hugging Face cambia politica si riaccende da qui.
+  #
+  # PERCHE' NON FUNZIONA, e perche' non vale la pena riprovare alla cieca.
+  # Le chiamate da programma agli Space ZeroGPU vengono rifiutate SEMPRE, e
+  # non e' una questione di quota. Provato:
+  #
+  #     · da due indirizzi diversi (il portatile di Mattia, un runner GitHub)
+  #     · con e senza un token valido (account matt52393, gratuito, verificato)
+  #     · su due Space diversi, tutti e due RUNNING su hardware zero-a10g
+  #     · con i parametri di DEFAULT degli Space stessi, non i nostri
+  #
+  # Sempre lo stesso esito: `event: error / data: null`, in UN secondo. Non e'
+  # una coda che scade, e' un rifiuto immediato senza messaggio.
+  #
+  # La spiegazione sta nella documentazione di Gradio, e la riporto qui perche'
+  # e' l'unica cosa che spiega tutto: senza l'intestazione `X-IP-Token` le
+  # richieste «would therefore be treated as unauthenticated». Quel token lo
+  # emette la sessione del BROWSER su huggingface.co, non esiste modo di
+  # ottenerlo da uno script. Quindi la riga "anonimo, 2 minuti" della tabella
+  # delle quote vale per chi sta sul sito, non per chi chiama l'API — e il
+  # token dell'account non c'entra: non e' quello il pezzo mancante.
+  #
+  # ⚠️ E ANCHE SE FUNZIONASSE, non andrebbe fatto cosi'. Quegli Space sono di
+  # altre persone e la loro GPU la paga Hugging Face per farci provare i
+  # modelli a mano. Appoggiarci una pubblicazione automatica due volte al
+  # giorno per sempre non e' l'uso per cui esistono. La versione pulita
+  # sarebbe ospitare il nostro Space su GPU nostra, che costa.
+  #
+  # L'alternativa vera resta a pagamento e una tantum: Pollinations, wan-fast
+  # a $0,01 al secondo, cioe' ~$9 per novanta aperture da 10 secondi.
+  attiva: false
 
   # Solo il PRIMO segmento del video. I primi secondi decidono se uno scorre
   # via; sul resto c'e' il testo sopra, e un fondo che si muove troppo lo rende
