@@ -1110,7 +1110,20 @@ reel:
   #
   # false = si torna all'ordine del 4 settembre (immagine generata, poi
   # archivio per umore).
-  sfondo_a_tema: true
+  #
+  # SPENTO il 10 settembre 2026, e non perche' il filmato in tema avesse smesso
+  # di funzionare — vinceva su tutte le misure. E' cambiato cosa si sta
+  # ottimizzando. Da oggi il canale ha un'identita' visiva (l'incisione, vedi
+  # visuals.ai_style) e un filmato di Pexels, per quanto in tema, non ce l'ha e
+  # non puo' averla: viene da un'altra pagina, ha un'altra lingua. Tenere lo
+  # stesso mondo su caroselli, reel, Short e TikTok vale piu' del movimento.
+  #
+  # ⚠️ IL PREZZO E' MISURATO, non teorico: movimento 1,13 contro 3,63 su 255
+  # (4 settembre, stessa scena). Su Instagram, che premia il completamento dei
+  # 7-15 secondi, e' il numero che puo' peggiorare. Si controlla su YouTube con
+  # `averageViewPercentage`, che compare 24-48 ore dopo la pubblicazione: se
+  # crolla, questa riga torna a true e si e' perso nulla.
+  sfondo_a_tema: false
 
   sfondo_generato: true
 

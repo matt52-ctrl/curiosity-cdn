@@ -10,12 +10,29 @@
   padding: 130px 88px 150px;
 }
 
+/* Ritarato il 10 settembre 2026 insieme a impact.css, e per la stessa ragione:
+   questi valori erano tarati su FILMATI di archivio, dove scurire serviva a far
+   vincere il testo. Su un'incisione crema su nero fanno il danno opposto —
+   `brightness(.5)` piu' l'ambra a .38 impastano il tratto. A scurire pensa lo
+   `scrim`, che agisce dove sta il testo e non su tutta la tavola.
+
+   `background-size: contain` invece del `cover` di base.css, ed e' la modifica
+   che conta di piu' qui. Il fotogramma e' 1080x1920 e flux-1-schnell fa
+   1024x1024: con `cover` la tavola va ingrandita di 1,875x e le si butta via
+   il 44% della larghezza. Su uno stile fatto di tratteggio fine e' il caso
+   peggiore possibile — l'unica cosa che rende riconoscibile l'immagine e'
+   esattamente la prima a impastarsi. Con `contain` l'ingrandimento e' 1,05x e
+   non si taglia niente: la tavola sta al centro sul fondo del fotogramma, che
+   e' lo stesso nero del suo, quindi non si legge come una banda ma come una
+   pagina. Il `zoompan` del montaggio ci rimette dentro un po' di movimento. */
 .photo {
-  filter: grayscale(.6) contrast(1.3) brightness(.5);
-  transform: scale(1.08);
+  filter: grayscale(.15) contrast(1.25) brightness(.86);
+  background-size: contain;
+  background-repeat: no-repeat;
+  transform: scale(1.0);
 }
 
-.tone { background: #c98a4b; mix-blend-mode: color; opacity: .38; }
+.tone { background: #c98a4b; mix-blend-mode: color; opacity: .18; }
 
 /* Scrim più denso che nei post: su un video il testo non può mai perdere. */
 .scrim {

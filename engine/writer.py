@@ -180,10 +180,19 @@ Wikimedia Commons. It is the single easiest thing to get wrong.
     with storefronts, office with monitors, library with visible spines,
     airport, station, classroom with a board, anywhere with packaging.
 
-    SAFE and rich: a home kitchen at night, an unmade bed, hands holding a
-    cup, a stairwell, a bathroom mirror, a car interior at dusk, a park bench,
-    a hallway, rain on a window, a field, a person seen from behind, a coat
-    sleeve and a hand on a table, laundry on a line, an empty swimming pool.
+    SAFE and rich: a kitchen at night with bare counters, an unmade bed, hands
+    holding a cup, a stairwell, a bathroom mirror, a car interior at dusk, a
+    park bench, a hallway, rain on a window, a field, a person seen from
+    behind, a coat sleeve and a hand on a table, laundry on a line, an empty
+    swimming pool.
+
+    Also avoid shelves, jars, bottles, boxes, cans and any surface that invites
+    a label — even at home. Measured on 10 September 2026 with the same prompt
+    and the same style: "kitchen counter" produced shelves of labelled jars,
+    framed portraits and an invented signature; "empty corridor" produced a
+    clean plate. The generator cannot resist writing on a surface that wants
+    writing, and on a page of verified facts a frame full of invented lettering
+    is the one thing a reader will notice.
 
   Include a person in at least two slides per post — a figure stops scrolling
   more reliably than an object. It is always the SAME person: this account's
