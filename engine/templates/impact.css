@@ -17,14 +17,19 @@
    Adesso a scurire ci pensa lo `.scrim`, che agisce SOLO dove sta il testo,
    mentre la tavola resta nitida dove non c'e' nulla scritto sopra. */
 .photo {
-  filter: grayscale(.15) contrast(1.25) brightness(.84);
+  filter: grayscale(1) contrast(1.45) brightness(.82);
   transform: scale(1.06);
 }
 
-/* Stessa ambra degli altri template: un template che cambia famiglia
-   cromatica spezza la riconoscibilità del feed, che è metà del valore di
-   avere un'identità visiva. */
-.tone { background: #c98a4b; mix-blend-mode: color; opacity: .18; }
+/* AMBRA TOLTA DALLA TAVOLA il 10 settembre 2026. Il velo serviva a dare una
+   famiglia cromatica comune a fotografie che venivano da fonti diverse: era
+   il colore a tenere insieme il feed. Con l'incisione il legante non e' piu'
+   il colore, e' il TRATTO — e su un'incisione l'ambra fa solo un danno, vira
+   il bianco su bruno e uccide il bianco e nero che e' tutta l'identita'.
+   L'ambra resta dove era un accento e non una velatura: la targhetta del
+   kicker, il titolo del reel, il marchio. La tavola resta monocroma.
+   Il meccanismo si tiene, azzerato: rimettere .32 ci riporta alle foto. */
+.tone { background: #c98a4b; mix-blend-mode: color; opacity: 0; }
 
 /* Scrim molto denso: il testo deve vincere sempre, qualunque foto ci sia. */
 .scrim {

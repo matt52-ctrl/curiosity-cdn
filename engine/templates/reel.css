@@ -26,13 +26,16 @@
    e' lo stesso nero del suo, quindi non si legge come una banda ma come una
    pagina. Il `zoompan` del montaggio ci rimette dentro un po' di movimento. */
 .photo {
-  filter: grayscale(.15) contrast(1.25) brightness(.86);
+  filter: grayscale(1) contrast(1.45) brightness(.82);
   background-size: contain;
   background-repeat: no-repeat;
   transform: scale(1.0);
 }
 
-.tone { background: #c98a4b; mix-blend-mode: color; opacity: .18; }
+/* Ambra azzerata come in impact.css, e per la stessa ragione: su un'incisione
+   il velo vira il bianco su bruno e spegne il bianco e nero, che e' cio' che
+   da' identita' alla pagina. L'ambra resta sul titolo, non sulla tavola. */
+.tone { background: #c98a4b; mix-blend-mode: color; opacity: 0; }
 
 /* Scrim più denso che nei post: su un video il testo non può mai perdere. */
 .scrim {
