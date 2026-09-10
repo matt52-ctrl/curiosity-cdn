@@ -366,7 +366,7 @@ publish:
     # Si riaccende dopo il ricorso: Instagram → Impostazioni → Stato
     # dell'account. I reel NON sono toccati da questo interruttore e
     # continuano a uscire.
-    enabled: false
+    enabled: true
 
     # Quanti caroselli al giorno. Come per `reel.al_giorno`, NON è questo campo
     # a farli uscire — a farli uscire sono le fasce in cycle.yml, una per
