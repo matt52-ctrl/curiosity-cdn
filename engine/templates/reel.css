@@ -26,7 +26,7 @@
    e' lo stesso nero del suo, quindi non si legge come una banda ma come una
    pagina. Il `zoompan` del montaggio ci rimette dentro un po' di movimento. */
 .photo {
-  filter: grayscale(1) contrast(1.45) brightness(.82);
+  filter: grayscale(1) contrast(1.08) brightness(1);
   background-size: contain;
   background-repeat: no-repeat;
   transform: scale(1.0);
@@ -46,7 +46,7 @@
 
 .kicker {
   color: #0b0a09;
-  background: #e8c07a;
+  background: #fdfbf7;
   padding: 12px 22px 10px;
   font-size: 30px;
   letter-spacing: .2em;
@@ -75,13 +75,13 @@
   font-family: 'BodyMedium', 'Body', system-ui, sans-serif;
   font-size: 52px;
   line-height: 1.34;
-  color: #ece3d5;
+  color: #f2f1ee;
   max-width: 22ch;
   text-shadow: 0 2px 24px rgba(0,0,0,.8);
 }
 
 .slide.first .body { display: none; }   /* l'apertura è solo la frase */
-.slide.last .headline { color: #f0c88f; }
+.slide.last .headline { color: #fdfbf7; }
 
 .mark { color: #fdfbf7; opacity: .5; font-size: 34px; }
 .nav { display: none; }

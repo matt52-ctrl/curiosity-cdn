@@ -17,7 +17,7 @@
    Adesso a scurire ci pensa lo `.scrim`, che agisce SOLO dove sta il testo,
    mentre la tavola resta nitida dove non c'e' nulla scritto sopra. */
 .photo {
-  filter: grayscale(1) contrast(1.45) brightness(.82);
+  filter: grayscale(1) contrast(1.08) brightness(1);
   transform: scale(1.06);
 }
 
@@ -40,7 +40,7 @@
 
 .kicker {
   color: #0d0c0b;
-  background: #e8c07a;
+  background: #fdfbf7;
   padding: 8px 16px 7px;
   font-size: 20px;
 }
@@ -76,11 +76,11 @@
    in più ruba spazio proprio dove conta. */
 .slide.first .body { display: none; }
 
-.slide.last .headline { color: #e8c07a; }
+.slide.last .headline { color: #fdfbf7; }
 .slide.solo .headline { color: #fdfbf7; }
 
 .mark { color: #fdfbf7; opacity: .55; }
-.dot { background: #e8c07a; }
+.dot { background: #fdfbf7; }
 .swipe { color: #fdfbf7; }
 .credit { color: #fdfbf7; opacity: .3; }
 
