@@ -182,12 +182,15 @@ Wikimedia Commons. It is the single easiest thing to get wrong.
 
     SAFE and rich: a home kitchen at night, an unmade bed, hands holding a
     cup, a stairwell, a bathroom mirror, a car interior at dusk, a park bench,
-    a hallway, rain on a window, a field, a person seen from behind, a close
-    crop of a face, laundry on a line, an empty swimming pool.
+    a hallway, rain on a window, a field, a person seen from behind, a coat
+    sleeve and a hand on a table, laundry on a line, an empty swimming pool.
 
-  Include a person in at least two slides per post — faces stop scrolling
-  more reliably than objects. Frame them from behind, in profile, or cropped
-  close: a face looking straight at the lens reads as stock photography.
+  Include a person in at least two slides per post — a figure stops scrolling
+  more reliably than an object. It is always the SAME person: this account's
+  recurring figure, a solitary adult in a long plain overcoat. Write them into
+  the query as "the figure in the long overcoat", seen from behind or in
+  partial profile. Never facing the viewer, never with the face legible: the
+  figure is anonymous on purpose, so that the reader can be him.
 
   No mood adjectives ("mysterious", "dramatic", "haunting"): the colour
   treatment is applied afterwards, and mood words only pull the generator

@@ -199,13 +199,39 @@ visuals:
   # inventare insegne e scritte illeggibili, e metterle in fondo non basta.
   # Anche così qualche artefatto passa — è un limite del modello, non del
   # prompt: nel dubbio preferire soggetti senza cartelli (interni, primi piani).
+  # ─── L'IDENTITA' DEL CANALE ────────────────────────────────────────────────
+  # Cambiato il 10 settembre 2026, dopo aver guardato @create.successes: 1,1 M
+  # di follower costruiti su soli caroselli generati, e riconoscibili perche'
+  # ogni slide e' un'incisione con lo stesso cast. La lezione non e' "usa l'IA":
+  # e' che UNA FOTOGRAFIA NON PUO' ESSERE UNA FIRMA. Lo stile di prima —
+  # documentario, luce naturale, 50mm — teneva insieme l'umore di venti immagini
+  # ma non rendeva riconoscibile nessuna: staccata dal contesto, una slide
+  # somigliava a qualunque altra foto in stile documentario. Un'incisione no.
+  #
+  # Due cose ricorrono, e sono due scelte diverse:
+  #   · IL TRATTO, su ogni immagine senza eccezioni — e' quello che si riconosce
+  #     in miniatura, prima ancora di leggere;
+  #   · LA FIGURA, solo quando la scena ha una persona: sempre lo stesso adulto
+  #     anonimo di spalle. Non un volto ricorrente, perche' flux-1-schnell i
+  #     volti non li tiene uguali fra una generazione e l'altra, mentre una
+  #     sagoma e un cappotto si'. Chi appare lo decide `image_query` in
+  #     engine/writer.py: le due cose vanno cambiate insieme.
+  #
+  # ⚠️ NON scrivere qui la parola "anatomical": Cloudflare rifiuta il prompt
+  # con "Input prompt contains NSFW content" (provato il 10/9/2026) e si ripiega
+  # su Pollinations, che stampa il PROPRIO watermark dentro l'immagine.
+  # "copperplate engraving" passa e rende uguale.
   ai_style: >
     Absolutely no text, no letters, no signage, no shop signs, no posters, no
-    numbers, no watermarks anywhere in the frame.
-    Editorial documentary photograph, natural available light, muted desaturated
-    palette, shallow depth of field, 50mm lens, subtle film grain, quiet and
+    numbers, no watermarks anywhere in the frame. Bare undecorated walls: no
+    framed pictures, no notices, no labelled jars, no packaging.
+    Antique copperplate engraving: fine cream ink cross-hatching and stipple on
+    a deep near-black ground, precise Victorian scientific illustration, etched
+    linework, flat frontal composition, no photographic depth, quiet and
     restrained composition with generous negative space.
-    No people looking at the camera.
+    When a person appears it is always the same figure: a solitary adult in a
+    long plain overcoat, seen from behind or in partial profile, face never
+    visible and never turned toward the viewer.
 
   # Tetto di immagini GENERATE per post — vale solo per quelle a pagamento.
   # Le immagini cercate (Wikimedia, Pexels) sono gratuite e non sono contate,
