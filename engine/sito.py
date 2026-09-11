@@ -957,24 +957,69 @@ def pubblica(messaggio: str = "") -> int:
         base_sha = r.json()["object"]["sha"]
         commit = cl.get(f"{api}/git/commits/{base_sha}").json()
 
+        # L'albero che c'e' gia' sul repo del sito, path per path. Serve a non
+        # ricaricare cio' che non e' cambiato, ed e' la differenza fra cinque
+        # chiamate e quattrocentotrenta.
+        #
+        # ⚠️ PERCHE' ESISTE QUESTO PEZZO. Prima si creava un blob per OGNI file
+        # a ogni giro. Con ottanta pagine passava; a quattrocentotrenta no:
+        # GitHub risponde 403 alla raffica di scritture (limite secondario, non
+        # di quota — il 16 agosto sembrava un problema di permessi e non lo era)
+        # e l'11 settembre la sequenza e' andata in timeout, facendo fallire
+        # l'intero workflow dei reel. Costo vero: un guasto sui reel non si
+        # distingueva piu' da questo.
+        #
+        # Lo SHA di un blob git e' sha1("blob <byte>\0" + contenuto): si calcola
+        # in locale senza chiedere niente a nessuno, e se coincide con quello
+        # gia' nell'albero il file e' identico e si riusa il suo sha.
+        vecchi: Dict[str, str] = {}
+        t = cl.get(f"{api}/git/trees/{commit['tree']['sha']}",
+                   params={"recursive": "1"})
+        if t.status_code == 200:
+            vecchi = {v["path"]: v["sha"] for v in t.json().get("tree", [])
+                      if v["type"] == "blob"}
+
         elementi = []
         n = 0
+        presenti = set()
         for f in sorted(DOCS.rglob("*")):
             if not f.is_file():
                 continue
             dati = f.read_bytes()
+            percorso = str(f.relative_to(DOCS))
+            presenti.add(percorso)
+            sha = hashlib.sha1(b"blob %d\0" % len(dati) + dati).hexdigest()
+            if vecchi.get(percorso) == sha:
+                continue                      # identico: non si tocca
             b = cl.post(f"{api}/git/blobs",
                         json={"content": base64.b64encode(dati).decode(),
                               "encoding": "base64"})
             if b.status_code >= 300:
                 print(f"    sito: caricamento fallito per {f.name} ({b.status_code})")
                 return 0
-            elementi.append({"path": str(f.relative_to(DOCS)), "mode": "100644",
+            elementi.append({"path": percorso, "mode": "100644",
                              "type": "blob", "sha": b.json()["sha"]})
             n += 1
 
+        # Le pagine sparite dal sito vanno tolte esplicitamente: con `base_tree`
+        # cio' che non si nomina resta dov'e'. `sha: None` e' il modo con cui
+        # l'API dice "cancella questo percorso".
+        for percorso in sorted(vecchi):
+            if percorso not in presenti:
+                elementi.append({"path": percorso, "mode": "100644",
+                                 "type": "blob", "sha": None})
+
+        if not elementi:
+            print("    sito: gia' aggiornato, niente da pubblicare")
+            return 0
+
+        # CON `base_tree`, al contrario di prima. L'albero completo erano 431
+        # voci in una sola richiesta e GitHub rispondeva 502: il corpo era
+        # troppo grosso. Mandando solo le differenze sono una manciata di voci,
+        # e le cancellazioni le porta la lista qui sopra.
         albero = cl.post(f"{api}/git/trees",
-                         json={"tree": elementi})     # senza base_tree: sostituisce
+                         json={"base_tree": commit["tree"]["sha"],
+                               "tree": elementi})
         if albero.status_code >= 300:
             print(f"    sito: albero rifiutato ({albero.status_code})")
             return 0

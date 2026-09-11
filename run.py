@@ -1968,8 +1968,10 @@ def cmd_sito(args: argparse.Namespace) -> int:
         caricati = sito.pubblica()
         if caricati:
             print(f"  ✓ {caricati} file pubblicati su {cfg.get('sito.repo')}")
-        else:
-            print("  · pubblicazione saltata (vedi sopra)")
+        # Niente `else`: `sito.pubblica` stampa gia' da se' il motivo per cui
+        # non ha caricato nulla, e quel motivo ora quasi sempre e' "era gia'
+        # aggiornato". Aggiungerci sopra "pubblicazione saltata" faceva leggere
+        # come un guasto il giro in cui va tutto bene.
         return 0
     base = sito._base_url()
     if base:
