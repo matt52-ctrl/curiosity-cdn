@@ -357,28 +357,35 @@ def _generate_pollinations(prompt: str, model: str) -> Optional[bytes]:
 
 
 def _modello_cloudflare_di_oggi() -> str:
-    """Quale dei modelli in rotazione tocca oggi.
+    """Il modello con cui si genera oggi.
 
-    Perché a rotazione e non uno fisso: i tre danno immagini ugualmente buone
-    ma diverse, e alternarli rompe la monotonia della griglia senza costare
-    niente — girano tutti sullo stesso free tier di Workers AI.
+    ⚠️ IL NOME MENTE, ed è tenuto apposta. Dal 12 settembre 2026
+    `visuals.cloudflare_modelli` ha una voce sola, quindi questa funzione
+    restituisce sempre flux-1-schnell e non ruota più niente. Si chiama
+    ancora così perché il meccanismo della rotazione è intatto e riparte da
+    solo rimettendo un modello nella lista — è una riga di configurazione,
+    non una modifica al codice.
 
-    Perché la rotazione è PER GIORNO e non per slide. Un carosello con cinque
-    slide generate da tre modelli diversi non sembra vario, sembra sbagliato:
-    lo stile cambia dentro lo stesso post, che è l'unico posto in cui la
-    coerenza serve davvero. Ruotando sul giorno, ogni post resta uniforme al
-    suo interno e a variare è il profilo visto dall'alto — che è quello che
-    Mattia guarda quando dice che la pagina è monotona.
+    Perché la rotazione è finita: serviva a "rompere la monotonia della
+    griglia", cioè a far sembrare vario il profilo visto dall'alto. Da quando
+    il canale ha un'identità visiva (`visuals.ai_style`, l'incisione) la
+    varietà non è più un pregio — tre modelli danno tre incisioni diverse, e
+    tre incisioni diverse non sono una firma. La ragione per cui si sceglieva
+    il modello e la ragione per cui adesso non lo si sceglie sono la stessa
+    ragione, guardata prima e dopo che il canale avesse una faccia.
 
-    Deterministica e senza stato salvato, come `scegli_lunghezza`: dallo
-    stesso giorno esce sempre lo stesso modello, quindi si può ricostruire a
-    posteriori con quale è stata fatta un'immagine.
+    Perché flux e non uno dei due Leonardo: l'incisione è stata tarata su di
+    lui, e costa 163 neuroni contro i 2.340-2.837 dei Leonardo. Non è
+    contabilità: con i Leonardo un solo carosello finiva i 10.000 neuroni del
+    giorno, il giro dei reel partiva dopo e trovava 429, e Short e TikTok
+    uscivano con i filmati d'archivio — cioè senza l'identità, mentre il
+    codice dell'identità era in produzione. Vedi `config.yaml` alla voce
+    `cloudflare_modelli` per le misure e per la giornata in cui si è visto.
 
-    ⚠️ Non del tutto deterministica, da oggi: se i neuroni rimasti non bastano
-    per il modello di turno si ripiega sul più economico. È la differenza fra
-    un'immagine peggiore e nessuna immagine — i due Leonardo costano più di
-    duemila neuroni l'uno e ne bastano tre a finire la giornata. Vedi
-    `engine/neuroni.py` per le misure.
+    Deterministica e senza stato salvato, come `scegli_lunghezza`: si può
+    ricostruire a posteriori con quale modello è stata fatta un'immagine.
+    Resta il ripiego sull'economico quando i neuroni non bastano — oggi non
+    cambia nulla, perché l'economico è già l'unico in lista.
     """
     import datetime as _dt
 
@@ -454,6 +461,14 @@ def _generate_cloudflare(prompt: str, model: str) -> Optional[bytes]:
         detail = exc
         if isinstance(exc, httpx.HTTPStatusError):
             detail = f"{exc.response.status_code} {exc.response.text[:200]}"
+            # Il 429 non e' un fallimento come gli altri: non dipende dal
+            # prompt e non passera' riprovando. Va detto a `neuroni`, che da
+            # solo non se ne accorgerebbe — la sua misura arriva dall'analitica
+            # con ore di ritardo e il 12 settembre 2026 dichiarava 9.000
+            # neuroni residui mentre ogni chiamata tornava 429.
+            if exc.response.status_code == 429:
+                from . import neuroni
+                neuroni.segnala_esaurita()
         print(f"    generazione cloudflare fallita: {detail}")
         return None
 
@@ -508,6 +523,8 @@ def generate(subject: str, modello: str = "") -> Optional[Image]:
     giornaliera, spesa dietro a del testo scurito dalla gradazione. La
     rotazione resta dov'è utile: nei caroselli, dove l'immagine è il contenuto.
     """
+    from . import neuroni
+
     provider = cfg.get("visuals.ai_provider", "none")
     if provider in ("none", "", None):
         return None
@@ -540,6 +557,30 @@ def generate(subject: str, modello: str = "") -> Optional[Image]:
     # tenuto da parte adesso.
     provider_iniziale = provider
 
+    # ⚠️ IL RIPIEGO COSTA LO STILE, e per mesi lo ha fatto senza dirlo.
+    # Pollinations non rende l'incisione: sullo stesso prompt restituisce una
+    # fotografia. Finche' `ai_style` era "fotografia documentaria" la
+    # differenza era invisibile; da quando lo stile E' l'identita' del canale
+    # (12 settembre 2026) un'immagine ripiegata e' un buco nell'identita',
+    # ed e' il buco peggiore perche' l'immagine c'e' e sembra voluta.
+    # Misurato quel giorno sul primo episodio lungo con gli sfondi generati:
+    # dieci capitoli, nove incisioni e una fotografia di occhiali su un
+    # tavolo, con dentro i barattoli etichettati che il prompt vieta.
+    #
+    # Perche' un secondo tentativo e non togliere il ripiego: Cloudflare non
+    # rifiuta il soggetto, rifiuta una PAROLA — "anatomical" fa scattare
+    # "Input prompt contains NSFW content", ed e' un filtro sul testo, non
+    # sulla scena. Rifatta la richiesta con il soggetto accorciato alle prime
+    # otto parole, la stessa scena passa e resta un'incisione. Solo se anche
+    # il secondo tentativo cade si scende di provider.
+    def _riprova_accorciando(nome: str, model: str) -> Optional[bytes]:
+        corto = " ".join(subject.split()[:8]).rstrip(",.")
+        if not corto or corto == subject.strip().rstrip(",."):
+            return None
+        print("    prompt rifiutato: riprovo con il soggetto accorciato")
+        return generatori.get(nome, lambda *_: None)(
+            f"{corto}. {_style_suffix()}".strip(), model)
+
     raw = None
     for i, nome in enumerate(catena):
         # Il modello imposto vale solo per il provider a cui appartiene: se la
@@ -549,10 +590,21 @@ def generate(subject: str, modello: str = "") -> Optional[Image]:
             model = modello
         else:
             model = cfg.get("visuals.ai_model", "") or _AI_MODELS.get(nome, "")
+        if nome == "cloudflare" and neuroni.e_esaurita():
+            continue          # gia' detto una volta, non si ripete a ogni slide
         raw = generatori.get(nome, lambda *_: None)(prompt, model)
+        # Il secondo tentativo ha senso SOLO contro un rifiuto sul testo. Se
+        # la quota e' finita, riprovare e' una seconda chiamata certa di
+        # fallire: ne facevamo venti per episodio, tutte con la loro attesa.
+        if (not raw and nome == provider_iniziale and _style_suffix()
+                and not neuroni.e_esaurita()):
+            raw = _riprova_accorciando(nome, model)
         if raw:
             if i:
-                print(f"    ripiegato su {nome}")
+                # Non e' piu' una riga informativa: e' un'immagine fuori
+                # stile che entrera' in un post. Va letta come un guasto.
+                print(f"    ⚠️ ripiegato su {nome}: immagine FUORI STILE, "
+                      f"l'incisione non c'e'")
             provider = nome        # il credito deve dire chi l'ha davvero fatta
             break
 

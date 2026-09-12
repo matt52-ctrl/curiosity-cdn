@@ -121,8 +121,44 @@ def spesi_oggi() -> Optional[float]:
     return _spesi_api + _spesi_qui
 
 
+_esaurita = False
+
+
+def segnala_esaurita() -> None:
+    """Cloudflare ha risposto 429. Da qui in poi il residuo è zero.
+
+    PERCHE' SERVE, dato che esiste già il conteggio. Il conteggio è una
+    MISURA, e arriva tardi: `_chiedi_a_cloudflare` interroga l'analitica
+    GraphQL, che il 12 settembre 2026 dichiarava 0 neuroni spesi e 9.000
+    residui mentre l'API di generazione rispondeva 429 su ogni chiamata. Il
+    tetto di 9.000 non aveva fermato niente perché guardava un numero vecchio
+    di ore.
+
+    Il 429 invece non è una misura, è un fatto, ed è l'unica informazione
+    tempestiva che esiste. Vale solo per questo processo — è esattamente la
+    durata giusta, perché il giro dopo è un altro giorno o un'altra ora e la
+    dotazione potrebbe essere tornata.
+
+    Cosa cambia in pratica: le chiamate successive dello stesso giro non
+    vengono nemmeno tentate. Sull'episodio lungo erano venti richieste certe
+    di fallire — dieci più dieci, contando il secondo tentativo — ognuna con
+    la sua attesa di rete, per arrivare comunque a Pollinations.
+    """
+    global _esaurita
+    if not _esaurita:
+        print("    ⚠️ quota Cloudflare esaurita: per il resto del giro "
+              "niente immagini generate")
+    _esaurita = True
+
+
+def e_esaurita() -> bool:
+    return _esaurita
+
+
 def residuo() -> Optional[float]:
     """Quanti neuroni restano prima del tetto. None se non si sa."""
+    if _esaurita:
+        return 0.0
     spesi = spesi_oggi()
     if spesi is None:
         return None

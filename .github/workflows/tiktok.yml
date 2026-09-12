@@ -114,7 +114,20 @@ jobs:
       - name: Scarica font e musica
         run: |
           python setup_fonts.py
-          python setup_music.py
+          # `|| true` sulla MUSICA e su nient'altro. setup_music.py scarica da
+          # archive.org, che il 12 settembre 2026 ha risposto HTML al posto di
+          # JSON: lo script e' uscito con 1, lo step gira con `bash -e`, e il
+          # giro e' morto PRIMA di montare qualsiasi cosa. Nessuna bozza su
+          # TikTok per un archivio di musica irraggiungibile.
+          #
+          # Perche' e' sicuro ignorarlo: `_traccia_a_caso` in engine/reel.py
+          # torna None quando la cartella e' vuota, e il montaggio prosegue
+          # senza musica. Un video muto esce; un video non montato no.
+          #
+          # Perche' NON si mette su setup_fonts.py: senza i font il testo si
+          # disegna con il ripiego di sistema e i video escono sbagliati
+          # invece che non uscire. Li' fermarsi e' la cosa giusta.
+          python setup_music.py || true
 
       # Due passi separati di proposito: se il montaggio riesce ma il
       # caricamento fallisce (token scaduto, TikTok giù), i video restano

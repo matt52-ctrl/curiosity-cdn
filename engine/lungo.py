@@ -104,9 +104,153 @@ def testo_parlato(f: Dict) -> str:
     return testo.strip()
 
 
-def _segmento(f: Dict, indice: int, out: Path) -> Optional[Tuple[Path, float]]:
-    """Un blocco: narrazione + filmato + testo. Ritorna (video, durata)."""
-    from . import footage, render
+SCENE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "scene": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "hook": {"type": "string"},
+                    "scena": {"type": "string"},
+                },
+                "required": ["hook", "scena"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["scene"],
+    "additionalProperties": False,
+}
+
+
+def scene(fatti: List[Dict]) -> Dict[str, str]:
+    """Una scena da disegnare per ogni curiosita'. Ritorna {hook: scena}.
+
+    PERCHE' ESISTE. Fino al 12 settembre 2026 l'episodio lungo era l'unico
+    formato del canale senza identita' visiva: `_segmento` chiamava
+    `footage.per_frase`, che sceglie un filmato d'archivio guardando SOLO
+    l'umore. Dietro dieci capitoli diversi finivano dieci filmati che non
+    parlavano di nessuno di loro, e soprattutto non erano incisioni — il video
+    piu' lungo e piu' visibile del canale era l'unico che non si riconosceva.
+
+    Perche' una chiamata sola e non una per capitolo: le scene devono anche
+    essere diverse fra loro, e un modello che le scrive tutte insieme lo vede.
+    Dieci chiamate separate producevano dieci stanze vuote.
+
+    Perche' non si riusa `image_query` degli Short: la tabella `facts` non ce
+    l'ha. Quel campo lo scrive `lines.generate` al momento di montare un reel
+    e vive nella frase, non nella curiosita' — qui le curiosita' arrivano dal
+    database, mesi dopo.
+
+    Se la chiamata fallisce si torna a `{}` e ogni capitolo ripiega
+    sull'archivio, che e' il comportamento di prima: un episodio meno
+    riconoscibile esce comunque, un episodio che non esce non lo recupera
+    nessuno.
+    """
+    from .llm import ask_json
+
+    elenco = "\n".join(f"- {f['hook'].rstrip('.')}" for f in fatti)
+    sistema = """You describe the scene to be engraved behind each chapter of a
+video essay about how the human mind works.
+
+Each scene is rendered as an antique copperplate engraving. You do not write
+the style — that is added automatically. You write only WHAT IS IN THE FRAME.
+
+RULES
+  · One concrete, physical, observable scene. A thing in a place. Never an
+    abstraction, never a metaphor that needs explaining, never a diagram.
+  · No text anywhere in the scene, and nothing that invites a label: no jars,
+    no packaging, no books seen front-on, no shop fronts, no signage, no
+    screens with anything on them. Measured on 10/9/2026: a kitchen counter
+    produces labelled jars and a fake signature, an empty corridor produces a
+    clean plate. It is the scene that decides, not the style.
+  · When a person is in the scene, write "a solitary adult in a long plain
+    overcoat, seen from behind". Always that figure, never a face.
+  · The ten scenes must not repeat each other. Vary the place, the distance
+    and what is in it — a room, a landscape, an object alone on a surface, a
+    figure at a distance.
+  · Under 25 words each."""
+
+    try:
+        d = ask_json(
+            sistema,
+            f"Write one scene for each of these findings:\n{elenco}",
+            SCENE_SCHEMA, effort="medium", max_tokens=2000,
+        )
+    except Exception as exc:
+        print(f"    scene non scritte ({str(exc)[:60]}): sfondi d'archivio")
+        return {}
+
+    return {v["hook"].rstrip("."): v["scena"].strip()
+            for v in d.get("scene", []) if v.get("scena")}
+
+
+def _sfondo(f: Dict, scena: str) -> Tuple[Optional[Path], bool]:
+    """Lo sfondo del capitolo: (percorso, e_un_immagine).
+
+    L'incisione generata viene prima, il filmato d'archivio resta la rete.
+    Come negli Short (`engine/reel.py:_sfondo_generato`) e per la stessa
+    ragione: uno sfondo mancante non deve mai costare l'uscita di un video.
+
+    Dieci incisioni a 163 neuroni l'una sono 1.630 neuroni una volta a
+    settimana. Ci stanno dentro la dotazione giornaliera solo da quando i due
+    Leonardo sono usciti dalla rotazione — vedi `cloudflare_modelli` in
+    config.yaml. Con quelli accesi, questa funzione avrebbe trovato 429.
+    """
+    from . import footage, neuroni, visuals
+
+    if scena and cfg.get("lungo.sfondo_generato", True):
+        try:
+            immagine = visuals.generate(scena, modello=neuroni.ECONOMICO)
+        except Exception as exc:
+            print(f"    incisione non generata ({str(exc)[:60]})")
+            immagine = None
+        if immagine and immagine.path and immagine.path.exists():
+            return immagine.path, True
+
+    clip = footage.per_frase(f.get("mood", "reflective"), f["hook"],
+                            orientamento="landscape")
+    return clip, False
+
+
+def _catena_sfondo(e_immagine: bool, durata: float, w: int, h: int) -> str:
+    """I filtri che portano lo sfondo a [bg].
+
+    SULL'INCISIONE SI RIEMPIE, NON SI RITAGLIA. Flux rende un quadrato da
+    1024; portarlo a coprire un 16:9 con `increase`+`crop` butterebbe il 44%
+    dell'altezza, cioe' proprio il tratteggio che rende riconoscibile lo
+    stile. E' lo stesso conto che il 10 settembre ha fatto passare reel.css da
+    `cover` a `contain`, su un fotogramma di forma diversa. Qui la tavola si
+    posa intera al centro e ai lati resta il nero — che non e' una banda nera
+    di ripiego: il fondo dell'incisione e' gia' un nero quasi pieno, quindi il
+    bordo non si vede e la tavola sembra incorniciata invece che tagliata.
+
+    La carrellata c'e' solo sull'immagine, per la ragione misurata in
+    `engine/reel.py:_fondo`: su un filmato che si muove da solo lo
+    scala-e-riscala toglie movimento invece di aggiungerne, su una tavola
+    ferma e' l'unico movimento che esiste.
+    """
+    if not e_immagine:
+        return (f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
+                f"crop={w}:{h},setsar=1[bg]")
+
+    n = max(1, int(durata * 30))
+    zoom = float(cfg.get("lungo.carrellata_zoom", 1.12))
+    passo = max(0.0001, (zoom - 1.0) / n)
+    lato = min(w, h)
+    return (
+        f"[0:v]scale={lato}:{lato}:force_original_aspect_ratio=decrease,"
+        f"zoompan=z='min(zoom+{passo:.6f},{zoom})':d={n}"
+        f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={lato}x{lato}:fps=30,"
+        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1[bg]"
+    )
+
+
+def _segmento(f: Dict, indice: int, out: Path, scena: str = "") -> Optional[Tuple[Path, float]]:
+    """Un blocco: narrazione + sfondo + testo. Ritorna (video, durata)."""
+    from . import render
 
     ff = _ffmpeg()
     w, h = WIDE
@@ -116,10 +260,9 @@ def _segmento(f: Dict, indice: int, out: Path) -> Optional[Tuple[Path, float]]:
     if not durata:
         return None
 
-    clip = footage.per_frase(f.get("mood", "reflective"), f["hook"],
-                            orientamento="landscape")
+    clip, e_immagine = _sfondo(f, scena)
     if not clip:
-        print(f"    nessun filmato per «{f['hook'][:40]}», salto")
+        print(f"    nessuno sfondo per «{f['hook'][:40]}», salto")
         return None
 
     # A schermo solo l'ancora e la fonte: il contenuto lo porta la voce.
@@ -134,15 +277,19 @@ def _segmento(f: Dict, indice: int, out: Path) -> Optional[Tuple[Path, float]]:
     seg = out / f"seg-{indice:02d}.mp4"
     # -loop 1 sul PNG: senza, la sovrimpressione dura un fotogramma solo e il
     # resto del segmento resta muto di testo. È già successo sui reel.
+    # `-loop 1` sull'incisione, `-stream_loop -1` sul filmato: un'immagine
+    # ferma fornisce un fotogramma solo e senza il loop il segmento durerebbe
+    # 1/30 di secondo. Vale per lo sfondo esattamente come per il PNG del
+    # testo qui sotto, dove lo stesso errore era gia' costato i reel.
     subprocess.run([
         ff, "-y",
-        "-stream_loop", "-1", "-i", str(clip),
+        *(["-loop", "1"] if e_immagine else ["-stream_loop", "-1"]),
+        "-i", str(clip),
         "-loop", "1", "-i", str(png),
         "-i", str(voce_mp3),
         "-filter_complex",
-        f"[0:v]scale={w}:{h}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{h},setsar=1[v0];"
-        f"[v0][1:v]overlay=0:0:format=auto[v]",
+        f"{_catena_sfondo(e_immagine, durata, w, h)};"
+        f"[bg][1:v]overlay=0:0:format=auto[v]",
         "-map", "[v]", "-map", "2:a",
         "-t", f"{durata:.3f}",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
@@ -169,12 +316,20 @@ def costruisci(fatti: List[Dict], titolo_tema: str,
     out = OUTPUT_DIR / f"lungo-{nome}"
     out.mkdir(parents=True, exist_ok=True)
 
+    # Le scene si chiedono tutte insieme, PRIMA del giro: devono essere
+    # diverse fra loro, e questo lo vede solo chi le scrive tutte in una volta.
+    # Se la chiamata fallisce il dizionario resta vuoto e ogni capitolo
+    # ripiega sull'archivio, un capitolo per volta.
+    disegni = scene(fatti)
+    if disegni:
+        print(f"  {len(disegni)} scene da incidere\n")
+
     segmenti: List[Path] = []
     capitoli: List[Dict] = []
     t = 0.0
     for i, f in enumerate(fatti):
         print(f"  [{i + 1}/{len(fatti)}] {f['hook'][:56]}")
-        r = _segmento(f, i, out)
+        r = _segmento(f, i, out, disegni.get(f["hook"].rstrip("."), ""))
         if not r:
             continue
         seg, dur = r

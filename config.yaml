@@ -140,15 +140,39 @@ visuals:
   ai_model: ""            # vuoto = default del provider (o la rotazione qui sotto)
   ai_quality: "low"       # solo openai: low | medium | high
 
-  # I modelli Cloudflare in rotazione. Tutti e tre sullo stesso free tier di
-  # Workers AI, tutti e tre scelti da Mattia il 3 settembre 2026 guardando la
-  # stessa immagine generata dai tre ("belle tutte e tre, alterniamole").
+  # UN MODELLO SOLO. La rotazione fra tre modelli è finita il 12 settembre
+  # 2026, e la ragione è la stessa per cui è nata l'incisione: quella scelta
+  # serviva a "rompere la monotonia della griglia" — a far sembrare il profilo
+  # vario visto dall'alto. Da quando il canale ha un'identità visiva, la
+  # varietà non è più un pregio: è esattamente ciò che impedisce di
+  # riconoscere una slide in miniatura. Tre modelli danno tre incisioni
+  # diverse, e tre incisioni diverse non sono una firma.
   #
-  # LA ROTAZIONE È PER GIORNO, non per slide. Un carosello con cinque slide
-  # uscite da tre modelli diversi non sembra vario, sembra sbagliato: lo stile
-  # cambierebbe dentro lo stesso post, che è l'unico posto in cui la coerenza
-  # serve davvero. Così ogni post resta uniforme al suo interno e a variare è
-  # il profilo visto dall'alto, che è dove la monotonia si nota.
+  # Perché flux-1-schnell e non uno dei due Leonardo, che danno il verticale
+  # nativo: l'incisione è stata TARATA su flux. La scelta della figura di
+  # spalle invece di un volto ricorrente nasce da un limite suo (vedi
+  # `ai_style` più sotto), e il prompt che passa senza finire su Pollinations
+  # è stato provato su di lui.
+  #
+  # E c'è il conto dei neuroni, che qui non è un dettaglio contabile ma è ciò
+  # che decide se l'identità arriva sul canale o no. Per immagine:
+  #   flux-1-schnell     163 neuroni
+  #   lucid-origin     2.837 neuroni   (17×)
+  #   phoenix-1.0      2.340 neuroni   (14×)
+  # Un carosello da cinque slide costava fino a ~14.000 neuroni nei giorni di
+  # turno dei Leonardo: più dell'intera dotazione giornaliera di 10.000. Il
+  # giro dei reel parte dopo quello dei caroselli e trovava 429 — quindi
+  # `_sfondo_generato` in engine/reel.py tornava None e Short, reel e TikTok
+  # ripiegavano sui filmati d'archivio. Misurato sul giro del 12/9/2026: i due
+  # Short del giorno sono usciti con "storm clouds moving" dietro, cioè con il
+  # canale di prima del 10 settembre, mentre il codice dell'incisione era
+  # regolarmente in produzione. Con flux le stesse cinque slide costano 815
+  # neuroni e tutto il resto della giornata resta pagato.
+  #
+  # Cosa si perde davvero: il verticale nativo 1080x1350. Flux dà 1024x1024 e
+  # il ritaglio al 4:5 toglie il 24% dell'altezza. Su una fotografia era un
+  # problema di inquadratura; su un'incisione frontale e centrata si perde
+  # margine, non soggetto.
   #
   # ⚠️ NON accettano lo stesso corpo, e il codice lo tiene in conto — se ne
   # aggiungi uno, controlla prima quale forma vuole. Misurato il 3/9/2026:
@@ -160,8 +184,11 @@ visuals:
   # le immagini escono brutte", ed è il guasto più difficile da riconoscere.
   cloudflare_modelli:
     - "@cf/black-forest-labs/flux-1-schnell"
-    - "@cf/leonardo/lucid-origin"
-    - "@cf/leonardo/phoenix-1.0"
+    # I due Leonardo restano scritti qui, spenti, perché il giorno che
+    # l'identità cambiasse di nuovo la cosa da guardare è quanto costano —
+    # non quale sia il loro nome esatto, che è la parte che si dimentica.
+    # - "@cf/leonardo/lucid-origin"     2.837 neuroni/immagine
+    # - "@cf/leonardo/phoenix-1.0"      2.340 neuroni/immagine
 
   # Dimensioni chieste ai modelli che le accettano. 1080x1350 è il 4:5 pieno
   # di Instagram: chiedendolo nativamente il ritaglio non toglie più niente.
@@ -1561,3 +1588,25 @@ lungo:
   # è uno dei segnali con cui YouTube decide chi spingere, ed è l'unico
   # migliorabile senza toccare il contenuto.
   playlist: "Oddly Wired — full episodes"
+
+  # L'incisione dietro ai capitoli. Acceso il 12 settembre 2026: fino a quel
+  # giorno l'episodio lungo era l'UNICO formato del canale senza identita'
+  # visiva — `footage.per_frase` sceglie il filmato guardando solo l'umore,
+  # quindi dietro dieci capitoli diversi finivano dieci filmati d'archivio che
+  # non erano incisioni e non parlavano di niente. Il video piu' lungo del
+  # canale era quello che non si riconosceva.
+  #
+  # Costo: dieci incisioni a 163 neuroni = 1.630 neuroni, una volta a
+  # settimana. Sta dentro la dotazione solo da quando i due Leonardo sono
+  # usciti dalla rotazione (vedi `visuals.cloudflare_modelli`).
+  #
+  # A false si torna ai filmati d'archivio. Il ripiego resta comunque attivo
+  # per singolo capitolo: se un'immagine non nasce, quel capitolo prende il
+  # filmato e l'episodio esce lo stesso.
+  sfondo_generato: true
+
+  # Quanto stringe la carrellata sulla tavola. Molto meno che sui reel (1,40):
+  # li' lo sfondo e' dietro a una frase che occupa lo schermo e lo zoom deve
+  # farsi sentire; qui la tavola E' l'inquadratura, e su un'incisione lo zoom
+  # largo impasta il tratteggio — che e' l'unica cosa che si deve vedere.
+  carrellata_zoom: 1.12
