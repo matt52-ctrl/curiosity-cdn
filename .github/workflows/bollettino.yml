@@ -1,4 +1,4 @@
-# Bollettino quotidiano su Telegram — come stanno andando i canali.
+# Riepilogo SETTIMANALE su Telegram — come stanno andando i canali.
 #
 # Perché esiste: un sistema che devi controllare a mano non è automatico.
 # Prima, per sapere se qualcosa era uscito, bisognava aprire GitHub, YouTube
@@ -7,24 +7,28 @@
 # anche nei giorni in cui non serve, ed è il motivo per cui si smette di
 # controllare proprio prima del giorno in cui servirebbe.
 #
-# Non sostituisce gli allarmi: quelli scattano quando un canale si ferma e
-# arrivano quando serve. Questo arriva sempre, e serve a vedere i numeri
-# salire o scendere senza doverli andare a cercare.
+# Non sostituisce gli allarmi: quelli girano OGNI GIORNO in allarmi.yml e
+# scattano quando un canale si ferma. Questo arriva il lunedi' e serve a
+# vedere i numeri salire o scendere senza doverli andare a cercare.
+#
+# Settimanale dal 13 settembre 2026, per scelta di Mattia: giorno per giorno i
+# numeri di questo canale sono rumore — tre viste in piu' o in meno — e un
+# messaggio che arriva sempre e non chiede mai niente si smette di leggere.
 #
 # È l'unico workflow che non tocca il database: legge e basta, quindi non ha
 # il passo di salvataggio e non entra nel gruppo `curiosity-state`.
 
-name: Curiosity bollettino
+name: Curiosity riepilogo settimanale
 
 on:
   schedule:
-    # Una volta al giorno, alle ~11:00 italiane. DOPO il giro TikTok delle 6:15
-    # UTC e prima di quello delle 10:15, così il conteggio delle ultime 24 ore
-    # comprende già la bozza del mattino invece di mancarla per pochi minuti.
+    # Lunedì, alle ~11:00 italiane. DOPO il giro TikTok delle 6:15 UTC, così la
+    # settimana appena conclusa è completa invece di mancare per pochi minuti
+    # quello che è uscito la mattina stessa.
     #
     # Anticipato di 45 minuti come tutti gli altri: GitHub accoda i job
     # schedulati e parte in ritardo, misurato fino a 64 minuti.
-    - cron: "15 8 * * *"
+    - cron: "15 8 * * 1"
   workflow_dispatch:
 
 # Nessun permesso di scrittura: questo workflow non commit niente.
@@ -47,14 +51,24 @@ jobs:
           cache: pip
 
       # Solo le dipendenze Python: niente ffmpeg, niente browser. Il
-      # bollettino fa quattro chiamate HTTP e legge il database.
+      # riepilogo fa qualche chiamata HTTP e legge il database.
+      #
+      # Il browser c'era stato per mezz'ora il 13 settembre 2026, per leggere
+      # i numeri di TikTok dalla pagina. Tolto lo stesso giorno: `video/list`
+      # dell'API ufficiale risponde 200 e da' anche le visualizzazioni, che
+      # dalla pagina non si prendevano.
       - name: Installa dipendenze
         timeout-minutes: 12
         run: pip install -r requirements.txt
 
-      - name: Manda il bollettino
+      - name: Manda il riepilogo
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}

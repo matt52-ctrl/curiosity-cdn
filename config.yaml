@@ -692,6 +692,57 @@ publish:
     # Di solito significa una cosa sola: il profilo TikTok è privato.
     privacy: "PUBLIC_TO_EVERYONE"
 
+
+  # ─── BLUESKY ──────────────────────────────────────────────────────────────────
+  # Aggiunto il 13 settembre 2026, dopo aver guardato il profilo vero: 148 post,
+  # 0 like, 0 repost, 0 follower, 0 seguiti, nessun nome visualizzato e nessuna
+  # biografia. I post non erano brutti — erano invisibili.
+  #
+  # PERCHE' SU BLUESKY GLI HASHTAG CONTANO SUL SERIO, al contrario di Instagram.
+  # Qui non c'e' un "per te" algoritmico che ripesca un account senza pubblico:
+  # si arriva alle persone da chi ti segue e dai FEED, e una buona parte dei
+  # feed tematici e' costruita su parole ed hashtag. Un post senza tag, da un
+  # account con zero follower, non ha nessuna strada per essere visto.
+  #
+  # ⚠️ POCHI E VERI. Su Instagram si mettono dodici hashtag per farsi trovare da
+  # chi cerca; qui servono a finire in un feed che qualcuno ha gia' aperto, e
+  # tre e' il massimo che un post da 300 caratteri si puo' permettere senza
+  # rubare spazio alla spiegazione. Vanno scelti fra quelli che una comunita'
+  # usa davvero — #psychology e #science hanno feed attivi, #psychologyfacts
+  # e' un tag da Instagram e su Bluesky non lo guarda nessuno.
+  bluesky:
+    hashtags: ["psychology", "science", "cognitivebias"]
+
+    # ─── PROVA SULLA RISPOSTA ────────────────────────────────────────────
+    # La risposta coi rimandi agli altri canali, sotto ogni post.
+    #
+    # ⚠️ Al 13 settembre 2026 era uscita 74 volte, identica parola per parola.
+    # E' il tipo di ripetizione che fa silenziare un account: ogni post porta
+    # sotto di se' lo stesso blocco di quattro link, e chi scorre il profilo
+    # vede meta' dei contenuti occupati dalla pubblicita' della stessa cosa.
+    # Quei link adesso stanno anche nella BIOGRAFIA, scritta lo stesso
+    # giorno, dove Bluesky li rende cliccabili e non costano un post.
+    #
+    # Invece di spegnerla si PROVA, per scelta di Mattia: meta' dei post con
+    # risposta, meta' senza. Il braccio lo decide la parita' dell'id della
+    # curiosita' (`bluesky.braccio`), cosi' un ritentativo dopo un errore di
+    # rete non sposta un post da un gruppo all'altro.
+    #
+    # ⚠️ QUANDO SI POTRA' LEGGERE, e la risposta onesta e' "non subito". Al
+    # 13 settembre 2026 il profilo sta a 148 post, 0 like, 0 repost, 0
+    # follower: tutte le metriche valgono zero, e zero contro zero non dice
+    # niente. La prova si registra da adesso perche' registrarla costa nulla,
+    # ma si legge solo quando i due bracci INSIEME hanno raccolto almeno 20
+    # interazioni. Se dopo la biografia e gli hashtag il conto resta a zero,
+    # la risposta alla domanda "conviene la risposta?" e' che la domanda era
+    # sbagliata: il problema non era mai stato quello.
+    #
+    #   sempre    la risposta sotto ogni post, com'era fino al 13/9/2026
+    #   mai       nessuna risposta
+    #   alterna   la prova  ← valore attuale
+    risposta: "alterna"
+    interazioni_minime: 20
+
 # ─── COMMENTI ─────────────────────────────────────────────────────────────────
 # Rispondere entro la prima ora è il segnale più forte dopo i salvataggi, e
 # ogni risposta riporta la persona sul post.
@@ -913,6 +964,105 @@ cta:
     youtube: "Subscribe — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
     tiktok: "Follow — one a day, and every one is about something you already do without noticing. Every one names the study it came from."
     instagram: "Follow @oddlywireddaily — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
+
+  # ─── LA RICHIESTA ANTICIPATA ────────────────────────────────────────────
+  # Aggiunta il 13 settembre 2026. Fino a quel giorno la richiesta esisteva in
+  # UN posto solo per formato, e sempre l'ultimo: il fotogramma di coda sul
+  # video, l'ultimo blocco della didascalia sul carosello. Tutti e due sono
+  # posti che vede la minoranza — chi arriva in fondo al video, chi preme
+  # "altro" su Instagram.
+  #
+  # COSA L'HA FATTA SCRIVERE. Lettura diretta dei numeri pubblici di TikTok il
+  # 13 settembre 2026. 24 video, 8.770 viste:
+  #   4 follower          0,46 ogni mille viste
+  #   152 like            1,73%
+  #   5 commenti          0,57 ogni mille — tutti su video di agosto
+  #   14 salvataggi       1,60 ogni mille
+  #   0 condivisioni      su 24 video su 24
+  # Zero condivisioni e 0,46 follower per mille non sono un problema di
+  # contenuto: le viste ci sono. Sono un problema di richiesta — non e' mai
+  # arrivata a chi guardava.
+  #
+  # ⚠️ NON E' UN A/B FRA VIDEO, ed e' una scelta obbligata. Le due prove 2x2
+  # (lunghezza e apertura) girano fino al 21 ottobre sugli stessi video. Un
+  # terzo fattore porterebbe le caselle da quattro a otto. Quindi qui il
+  # confronto e' NEL TEMPO, prima dello stacco contro dopo, come per
+  # `esperimento.domanda` — piu' debole, e accettato per la stessa ragione:
+  # la base di partenza e' quasi zero e la direzione non e' ambigua.
+  #
+  # ⚠️ E COSTA SECONDI, per scelta di Mattia del 13 settembre 2026. La prima
+  # versione metteva la richiesta in sovrimpressione su scene che c'erano
+  # gia', per non allungare i video: «non possiamo aspettare che la gente
+  # arrivi a fine video per commentare, mettere like o iscriversi» — una riga
+  # sotto la rivelazione la legge solo chi sta gia' leggendo altro. Adesso e'
+  # una SCENA SUA, sul video e sul carosello. Il prezzo, che va saputo
+  # leggendo i numeri di ottobre e non scoperto allora, e' scritto per esteso
+  # in `engine/reel.py` dentro `_spezzone_cta` e qui sotto in
+  # `esperimento.cta_anticipata`.
+  anticipata:
+    attiva: true
+
+    # La richiesta sul video: una scena sua, SUBITO DOPO L'AGGANCIO INIZIALE.
+    #
+    # Vale per tutti i video, a una curiosita' o a tre, e sempre nello stesso
+    # punto: dopo l'aggancio del primo segmento, prima che arrivi la sua
+    # rivelazione. Lo spettatore vede aggancio → richiesta → rivelazione.
+    #
+    # ⚠️ L'AGGANCIO NON SI INTERROMPE, ed e' la condizione posta da Mattia il
+    # 13 settembre 2026 («l'aggancio non deve romperlo»). Va in campo intero e
+    # si legge per intero: il taglio cade dove l'aggancio avrebbe comunque
+    # ceduto il posto alla rivelazione, cioe' a `stacco`, che il motore
+    # calcola sul tempo di lettura dell'aggancio e sta fra 1,6 e 3,4 secondi.
+    # Non e' un secondo fisso scelto a mano: un aggancio corto cede prima, uno
+    # lungo ha il tempo che gli serve, e la richiesta segue l'uno e l'altro.
+    #
+    # Perche' proprio li' e non a meta' video, che era la versione del giorno
+    # prima: e' l'unico punto in cui interrompere crea attesa invece di
+    # romperla. Prima, l'aggancio non e' stato letto. Dopo, la rivelazione e'
+    # gia' arrivata e non c'e' piu' niente da aspettare. I due secondi di
+    # richiesta sono due secondi in cui chi guarda sa che la risposta sta per
+    # arrivare e non ce l'ha ancora.
+    #
+    # La curiosita' non si accorcia: la rivelazione arriva due secondi piu'
+    # tardi e resta in campo per tutto il tempo che aveva prima. A crescere e'
+    # solo il video. Il meccanismo sta in `_fatto_spezzato`.
+    reel:
+      youtube: "Subscribe — one a day"
+      tiktok: "Follow — one a day"
+      default: "Follow — one a day"
+
+    # La riga sotto, sullo stesso fotogramma. E' la promessa che ha vinto la
+    # prova di agosto — il riconoscimento, "una cosa su di te" — non quella di
+    # metodo: a meta' video chi guarda non ha ancora nessun motivo di
+    # chiedersi se ci si puo' fidare, ce l'ha dopo.
+    sotto: "About something you already do."
+
+    # 2,0 e non 2,4 come la coda. La coda la vede chi ha finito e sta gia'
+    # decidendo se restare; questa interrompe una cosa che sta succedendo, e
+    # mezzo secondo in meno e' mezzo secondo di interruzione in meno. Due
+    # secondi restano il minimo per leggere due righe corte.
+    secondi: 2.0
+
+    # Sul carosello: una SLIDE DEDICATA in seconda posizione, solo richiesta.
+    # Voluta cosi' da Mattia il 13 settembre 2026: la prima versione era una
+    # striscia in fondo alla seconda slide, per non cambiare il numero di
+    # slide. Il costo di una slide vera sta in `esperimento.cta_anticipata`.
+    #
+    # `carosello` e' il titolo grande, `carosello_sotto` la riga sotto. Senza
+    # chiocciola nel titolo: il filigrana `brand.watermark` e' gia' stampato
+    # in fondo alla slide e la scriverebbe due volte nello stesso angolo.
+    carosello: "Follow for one a day"
+    carosello_sotto: "One checked fact about something you already do. Every one names the study."
+
+    # Dove va la richiesta nel TESTO (didascalie e descrizioni).
+    #   coda     com'era: in fondo, dietro il "altro" di Instagram
+    #   seconda  subito dopo il blocco di apertura  ← valore di prova
+    #   testa    prima di tutto
+    # `seconda` e non `testa` perche' la prima riga di un post deve restare il
+    # fatto: e' quella che decide se si apre la didascalia. La richiesta e' la
+    # prima cosa che si legge DOPO averla aperta. `testa` resta pronta per una
+    # prova successiva, se questa dice che anticipare paga.
+    posizione_testo: "seconda"
 
   # Bluesky non ha spazio: i post stanno a 290-296 caratteri su 300, e lo
   # spazio che manca lo paga già la spiegazione, che esce troncata. Una riga
@@ -1209,6 +1359,97 @@ esperimento:
 
   video_minimi: 6
 
+  # ─── PROVA SULLA RICHIESTA ANTICIPATA ──────────────────────────────────────
+  # Dal 14 settembre 2026 la richiesta compare mentre il contenuto e' ancora in
+  # corso — sopra la rivelazione della prima curiosita', sulla seconda slide
+  # del carosello, e come secondo blocco della didascalia invece che come
+  # ultimo. Il come sta in `cta.anticipata`. Qui sta solo come si legge.
+  #
+  # Come le altre due, e' un confronto NEL TEMPO e non fra video: le prove 2x2
+  # su lunghezza e apertura occupano gia' tutte le caselle disponibili fino al
+  # 21 ottobre. Le tre modifiche (video, carosello, didascalia) partono lo
+  # STESSO GIORNO e si leggono insieme: sono la stessa ipotesi — "la richiesta
+  # arriva troppo tardi" — e separarle vorrebbe dire tre prove da due mesi
+  # l'una su un canale che fa 3.000 viste a settimana.
+  #
+  # ⚠️ LA METRICA NON SONO I COMMENTI. Con 0,57 commenti ogni mille viste e
+  # 3.000 viste a settimana l'attesa e' 1,7 commenti a settimana: un numero
+  # che oscilla fra 0 e 4 per puro caso, e su cui non si decide niente. La
+  # prova sui commenti e' `esperimento.domanda`, che ha gia' il suo stacco al
+  # 6 settembre e va letta separatamente.
+  #
+  # Qui si guardano i FOLLOWER, che e' quello che una richiesta chiede:
+  #   TikTok    follower ogni mille viste   base 0,46  (4 su 8.770, al 13/9)
+  #   YouTube   iscritti ogni mille viste   base 0,84  (misura del 3/9)
+  # e come misura di appoggio i SALVATAGGI, che su TikTok si leggono dalla
+  # pagina e sono venti volte piu' frequenti dei commenti (1,60 ogni mille).
+  #
+  # ⚠️ IL FOLLOWER SU TIKTOK E' CUMULATIVO. L'API lo da' (`user/info`), ma da'
+  # il totale dal primo video: il numero da segnare e' la DIFFERENZA fra due
+  # letture. Serve quella del giorno dello stacco — fatta, 4 follower al 13
+  # settembre — e una a fine prova. Senza la prima, la seconda non dice
+  # niente. Il conto lo fa `analytics/confronto.py`.
+  #
+  # LA REGOLA, scritta prima di vedere i dati.
+  # metrica: follower ogni mille viste, i 30 giorni dopo lo stacco contro i 30
+  # prima, sommando TikTok e YouTube (i canali sono pochi, tenerli separati
+  # dimezza due volte un campione gia' piccolo).
+  #   +50% o piu'        → si tiene, e si prova `posizione_testo: testa`
+  #   fra +20% e +50%    → si tiene e si prolunga di 30 giorni
+  #   sotto +20%         → si torna a `cta.anticipata.attiva: false`
+  # La soglia e' alta di proposito: con ~13.000 viste al mese e 0,46 per mille
+  # l'attesa e' sei follower: sotto il +50% la differenza e' un follower o due,
+  # cioe' niente.
+  #
+  # ⚠️ COSA INQUINA QUESTA PROVA e va scritto adesso, non dopo. Il 21 ottobre
+  # chiudono le prove 2x2 e il formato cambia per tutti. Se questa prova non e'
+  # finita per allora, i 30 giorni "dopo" contengono due cambiamenti e non uno.
+  # Per questo lo stacco e' il 14 settembre e non piu' tardi: 30 giorni finiscono
+  # il 14 ottobre, una settimana prima.
+  #
+  # ⚠️ E COSA INQUINA QUESTA LE ALTRE — il conto va saputo il 21 ottobre, non
+  # scoperto quel giorno. Dal 14 settembre:
+  #
+  # · TUTTI I VIDEO si allungano di 2 secondi, nello stesso punto e per la
+  #   stessa ragione: il corto passa da 13,4 a 15,4 secondi, il lungo da 35,4
+  #   a 37,4. In proporzione non e' lo stesso peso — il 15% contro il 6% — ma
+  #   la prova sulla lunghezza si giudica su viste per video, che non e' una
+  #   percentuale e quindi non e' truccata dalla durata. Questo fattore la
+  #   sporca meno di quanto sembri.
+  #
+  # · LA PROVA SULL'APERTURA e' toccata, e va detto. Si giudica sulla tenuta a
+  #   3 secondi, e dal 14 settembre intorno al terzo secondo non c'e' piu'
+  #   l'aggancio da solo: c'e' la richiesta. L'aggancio resta intero e resta
+  #   il primo contatto — il taglio cade dove finiva comunque — ma la finestra
+  #   misurata adesso contiene anche altro.
+  #   Il confronto fra SCONTRO e DIVARIO regge: la richiesta capita su TUTTI i
+  #   video di tutti e due i bracci, nello stesso punto, quindi si elide. Cade
+  #   invece il NUMERO ASSOLUTO della tenuta. Chi lo confronta col passato del
+  #   canale (mediana 0,923 sui 22 Short di agosto) legge un crollo che non e'
+  #   del formato: e' la richiesta che e' comparsa li'.
+  #   Il 21 ottobre si legge la DIFFERENZA fra i due bracci, mai il livello.
+  #
+  # · IL CAROSELLO passa da 5 slide a 6, e il fatto che stava in seconda
+  #   posizione scala in terza.
+  #
+  # Tutte e tre sono conseguenze di una scelta esplicita di Mattia del 13
+  # settembre 2026, presa dopo che il costo era stato messo per iscritto: la
+  # richiesta in sovrimpressione, che non costava niente, la legge solo chi
+  # sta gia' leggendo altro.
+  cta_anticipata:
+    attiva: true
+    dal: "2026-09-14"
+    giorni: 30
+    # Lettura di riferimento del giorno dello stacco: senza, a fine prova non
+    # c'e' un prima con cui confrontare.
+    base_tiktok_follower: 4
+    base_tiktok_viste: 8770
+    base_follower_per_mille: 0.46
+    base_youtube_iscritti_per_mille: 0.84
+    soglia_adozione: 0.50
+    soglia_proroga: 0.20
+
+
   # ─── PROVA SULLA LUNGHEZZA ─────────────────────────────────────────────────
   # Domanda: un video con UNA curiosità sola rende più di uno con tre?
   #
@@ -1450,12 +1691,20 @@ esperimento:
 
     # Cosa usano i canali CIECHI — Instagram e TikTok — mentre la prova gira.
     #
-    # Su quei due non possiamo leggere niente, e non è un'opinione: verificato
-    # il 21 agosto 2026 chiedendolo alle API.
-    #   Instagram   reach, likes, comments, saved, shares, plays, views →
-    #               400  "(#10) Application does not have permission"
-    #   TikTok      video/list/ → 401  "scope_not_authorized"
-    # Su Instagram non arrivano nemmeno i like.
+    # ⚠️ RISCRITTO IL 13 SETTEMBRE 2026, e la correzione e' grossa. Qui c'era
+    # scritto che Instagram e TikTok erano ciechi — «su Instagram non arrivano
+    # nemmeno i like», «TikTok video/list → 401 scope_not_authorized». Provato
+    # di nuovo con i token che abbiamo gia':
+    #   Instagram   like_count, comments_count, followers_count  → 200
+    #               /insights (reach, plays, saved, shares, views) → 400
+    #   TikTok      user/info + video/list  → 200, VISUALIZZAZIONI comprese
+    # Lo scope TikTok c'era: la nota di agosto non e' mai stata riverificata.
+    # Le porta il riepilogo settimanale, il modulo e' `engine/metriche_social.py`.
+    #
+    # Resta vero cio' che conta per QUESTA prova: la tenuta a 3 secondi non
+    # esiste fuori da YouTube. Ne' Instagram ne' TikTok dicono per quanto un
+    # video e' stato guardato, e la prova sull'apertura si giudica su quello.
+    # Quindi la regola qui sotto non cambia di una riga.
     #
     # Quindi lì non si alterna. Dividere a metà un canale su cui non si legge
     # il risultato significa pagare il prezzo di una prova senza ricevere

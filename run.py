@@ -2020,13 +2020,26 @@ def cmd_bluesky(args: argparse.Namespace) -> int:
             continue
 
         try:
+            # La risposta coi rimandi agli altri canali: metà dei post la
+            # porta e metà no. È una prova, non un'opinione — vedi la nota in
+            # config.yaml sotto `publish.bluesky.risposta`. Con "sempre" o
+            # "mai" la prova si chiude e si impone la scelta.
+            modo = cfg.get("publish.bluesky.risposta", "alterna")
+            gruppo = bs.braccio(f["id"])
+            con_coda = (modo == "sempre" or
+                        (modo == "alterna" and gruppo == "con-risposta"))
             uri = bs.pubblica(testi["testo"], testi["link"],
                               testi["titolo"], testi["descrizione"],
-                              coda=True)
+                              coda=con_coda)
         except bs.BlueskyError as e:
             print(f"  ✗ fatto {f['id']}: {e}")
             continue
         bs.segna_uso(conn, f["id"], uri)
+        # A quale braccio appartiene, segnato DOPO che il post esiste: un post
+        # che non è uscito non appartiene a nessun gruppo.
+        if modo == "alterna":
+            from engine.db import segna_variante
+            segna_variante(conn, uri, gruppo, "bluesky")
         fatti_n += 1
         print(f"  ✓ {bs.url_pubblico(uri)}")
 
@@ -2036,7 +2049,7 @@ def cmd_bluesky(args: argparse.Namespace) -> int:
 
 
 def cmd_bollettino(args: argparse.Namespace) -> int:
-    """Manda su Telegram il riassunto di come stanno andando i canali.
+    """Manda su Telegram il riepilogo SETTIMANALE di come vanno i canali.
 
     Esiste perche' un sistema che devi controllare a mano non e' automatico.
     Prima, per sapere se qualcosa era uscito, bisognava aprire GitHub, YouTube
@@ -2044,6 +2057,11 @@ def cmd_bollettino(args: argparse.Namespace) -> int:
     giorno per scoprire quasi sempre che era tutto a posto. Quel costo si paga
     anche nei giorni in cui non serve, ed e' il motivo per cui si smette di
     controllare proprio prima del giorno in cui servirebbe.
+
+    Settimanale dal 13 settembre 2026, per scelta di Mattia: giorno per giorno
+    i numeri di questo canale sono rumore, e un messaggio che arriva sempre e
+    non chiede mai niente si smette di leggere. I GUASTI restano giornalieri e
+    stanno in `run.py allarmi`.
     """
     from engine import bollettino
 
@@ -2052,7 +2070,29 @@ def cmd_bollettino(args: argparse.Namespace) -> int:
         print(bollettino.componi(conn))
         return 0
     if bollettino.manda(conn):
-        print("bollettino inviato su Telegram")
+        print("riepilogo settimanale inviato su Telegram")
+    return 0
+
+
+def cmd_allarmi(args: argparse.Namespace) -> int:
+    """Controlla i canali fermi e manda su Telegram SOLO se c'e' un problema.
+
+    Gira ogni giorno. Il riepilogo coi numeri gira una volta a settimana: i
+    numeri a sette giorni si leggono meglio, ma un canale fermo non puo'
+    aspettare fino a lunedi'.
+
+    Nessun messaggio quando va tutto bene, e non e' pigrizia: un avviso
+    quotidiano che quasi sempre non porta niente e' quello che si smette di
+    aprire, ed e' allora che quello vero passa inosservato.
+    """
+    from engine import bollettino
+
+    conn = connect()
+    if args.prova:
+        print(bollettino.componi_allarmi(conn) or "(nessun problema)")
+        return 0
+    if bollettino.manda_allarmi(conn):
+        print("allarme inviato su Telegram")
     return 0
 
 
@@ -3717,10 +3757,16 @@ def main() -> int:
     p.set_defaults(func=cmd_bluesky)
 
     p = sub.add_parser("bollettino",
-                       help="manda su Telegram come stanno andando i canali")
+                       help="riepilogo settimanale su Telegram (lunedi')")
     p.add_argument("--prova", action="store_true",
                    help="scrivi a schermo senza mandare")
     p.set_defaults(func=cmd_bollettino)
+
+    p = sub.add_parser("allarmi",
+                       help="controllo giornaliero: manda solo se c'e' un guasto")
+    p.add_argument("--prova", action="store_true",
+                   help="scrivi a schermo senza mandare")
+    p.set_defaults(func=cmd_allarmi)
 
     p = sub.add_parser("pinterest", help="porta i caroselli su Pinterest")
     p.add_argument("--quanti", type=int, default=1)

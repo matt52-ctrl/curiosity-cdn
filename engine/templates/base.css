@@ -144,3 +144,30 @@ body {
   margin-left: 8px;
 }
 .swipe::after { content: " →"; }
+
+/* ─── LA SLIDE DI RICHIESTA ──────────────────────────────────────────────────
+   Seconda posizione nel carosello, e non porta un fatto: chiede di seguire.
+
+   Deve leggersi come una PAGINA DIVERSA, non come una slide di contenuto piu'
+   povera delle altre. Chi sfoglia deve capire in mezzo secondo che qui non c'e'
+   niente da imparare e andare avanti — o fermarsi apposta. Una slide che
+   sembra contenuto e non lo e' e' il modo piu' rapido di far chiudere il post.
+
+   Il mezzo e' l'allineamento: tutto il carosello e' allineato a sinistra, qui
+   e' centrato. E' il segnale piu' forte a colpo d'occhio e non costa colore. */
+.slide.cta-slide .stage {
+  justify-content: center;
+  text-align: center;
+  align-items: center;
+}
+
+.slide.cta-slide .headline {
+  max-width: 18ch;
+}
+
+.slide.cta-slide .body {
+  max-width: 28ch;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: .78;
+}

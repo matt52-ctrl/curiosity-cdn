@@ -1,0 +1,54 @@
+# Controllo giornaliero dei canali fermi — l'unica cosa che non può aspettare.
+#
+# Perché è separato dal riepilogo. Fino al 13 settembre 2026 erano la stessa
+# cosa: un messaggio al giorno con i guasti in cima e i numeri sotto. I numeri
+# sono diventati settimanali — giorno per giorno erano rumore, e un messaggio
+# che arriva sempre si smette di leggere — ma i guasti no: un canale fermo
+# scoperto il lunedì dopo è una settimana persa.
+#
+# TACE QUANDO VA TUTTO BENE, ed è la parte importante. Un avviso quotidiano che
+# quasi sempre non porta niente è quello che si impara a ignorare, ed è
+# esattamente allora che quello vero passa inosservato. Se arriva un messaggio,
+# c'è qualcosa.
+#
+# Come il riepilogo, non tocca il database: legge e basta.
+
+name: Curiosity allarmi
+
+on:
+  schedule:
+    # Ogni giorno alle ~11:00 italiane, dopo il giro TikTok delle 6:15 UTC.
+    # Anticipato di 45 minuti come tutti gli altri: GitHub accoda i job
+    # schedulati e parte in ritardo, misurato fino a 64 minuti.
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  allarmi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Niente ffmpeg, niente browser, nessuna chiamata a piattaforme: questo
+      # controllo guarda solo il database e l'orologio.
+      - name: Installa dipendenze
+        timeout-minutes: 12
+        run: pip install -r requirements.txt
+
+      - name: Controlla i canali
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python run.py allarmi

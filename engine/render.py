@@ -107,6 +107,13 @@ def build_html(
                 " first" if i == 0 else "",
                 " last" if i == total - 1 else "",
                 " solo" if total == 1 else "",
+                # La slide di RICHIESTA: non porta un fatto, chiede di
+                # seguire. Sta in seconda posizione nei caroselli e la mette
+                # `writer.write_copy`. La classe serve perche' deve leggersi
+                # come una pagina diversa dalle altre — se sembra una slide di
+                # contenuto, chi sfoglia ci si ferma sopra aspettandosi un
+                # fatto e trova una pubblicita'.
+                " cta-slide" if s.get("cta_slide") else "",
             ]
         )
         # Livello fotografico. Il trattamento (desaturazione + velatura di

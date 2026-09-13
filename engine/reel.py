@@ -393,12 +393,32 @@ def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
     azione = (cfg.get(f"cta.azione.{canale}", "")
               or cfg.get("cta.azione.default", "") or "").strip()
     dur = float(cfg.get("cta.secondi", 2.4))
+    return _scheda_cta(ff, sfondo, e_immagine, nome, tmp, indice,
+                       domanda, azione, dur, "cta")
+
+
+def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
+                indice: int, titolo: str, sotto: str, dur: float,
+                suffisso: str, entrata: float = 0.35) -> Optional[Path]:
+    """Il fotogramma di richiesta, montato. Uno solo, riusato da due posti.
+
+    La usano la coda (`_coda_cta`) e le tre scene in cui `_fatto_spezzato`
+    divide la prima curiosita'. Sta in una funzione sola per la ragione qui
+    sotto: i parametri di codifica devono restare identici a quelli dei
+    segmenti del ciclo, e due copie della stessa riga divergono al primo
+    ritocco. La concatenazione usa `-c:v copy` e non ricodifica: con un fps o
+    un profilo diverso il video esce corrotto e ffmpeg non dice niente.
+    """
+    from . import render
+
+    if not titolo:
+        return None
 
     # La chiocciola non si scrive: `brand.watermark` è già stampato in fondo a
     # ogni fotogramma, questo compreso.
     overlay = render.render_slides(
-        [{"kicker": "", "headline": domanda, "body": azione}],
-        f"{nome}-cta", "line", size=REEL_SIZE, transparent=True,
+        [{"kicker": "", "headline": titolo, "body": sotto}],
+        f"{nome}-{suffisso}", "line", size=REEL_SIZE, transparent=True,
     )[0]
 
     w, h = REEL_SIZE
@@ -407,7 +427,13 @@ def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
         f"{_fondo(sfondo, e_immagine, dur, w, h, indice)};"
         # Entra subito ma non di colpo: 0,35 di dissolvenza. Su due secondi e
         # mezzo un ingresso più lento mangerebbe il tempo di lettura.
-        f"[1:v]format=rgba,fade=t=in:st=0:d=0.35:alpha=1,"
+        #
+        # `entrata=0` toglie la dissolvenza: serve all'aggancio dei video a
+        # curiosita' singola, che dal 13 settembre 2026 e' montato con questa
+        # stessa funzione. Li' l'aggancio deve comparire esattamente come
+        # compariva prima — e' la finestra su cui si giudica la prova
+        # sull'apertura, e una dissolvenza in ingresso la sposterebbe.
+        f"[1:v]format=rgba{f',fade=t=in:st=0:d={entrata}:alpha=1' if entrata > 0 else ''},"
         f"fade=t=out:st={dur - 0.45:.2f}:d=0.4:alpha=1[t];"
         f"[bg][t]overlay=0:0:format=auto[v]"
     )
@@ -423,6 +449,68 @@ def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
         str(seg),
     ])
     return seg
+
+
+
+def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
+                    tmp: Path, indice: int, canale: str,
+                    hook: str, domanda: str, reveal: str,
+                    stacco: float, per_voce: float) -> List[Path]:
+    """La curiosita' TAGLIATA IN DUE dalla richiesta, con la rivelazione dopo.
+
+    Vale per la PRIMA curiosita' di ogni video, a una o a tre. Voluto da
+    Mattia il 13 settembre 2026, in due passaggi: «mettilo anche sui video a
+    curiosita' singola, ma poi deve essere tipo al secondo 2 o 3 massimo,
+    lasciando un attimo di suspense allo spettatore», e poi «l'aggancio non
+    deve romperlo, fai che la CTA la metti subito dopo l'hook iniziale».
+
+    L'aggancio NON viene interrotto: va in campo intero, si legge per intero,
+    e solo quando avrebbe ceduto il posto alla rivelazione entra la
+    richiesta.
+
+    Il taglio cade a `stacco` — il momento in cui l'aggancio avrebbe lasciato
+    il posto alla rivelazione, calcolato sul tempo di lettura dell'aggancio,
+    fra 1,6 e 3,4 secondi. Non e' una coincidenza scelta per comodita': e'
+    l'UNICO punto del video dove una interruzione crea attesa invece di
+    romperla. Prima, l'aggancio non e' stato letto. Dopo, la rivelazione e'
+    gia' arrivata e non c'e' piu' niente da aspettare.
+
+    Quindi lo spettatore vede: aggancio → richiesta → rivelazione. I due
+    secondi di richiesta sono due secondi in cui sa che la risposta sta per
+    arrivare e non ce l'ha ancora.
+
+    ⚠️ COSA COSTA. La rivelazione arriva due secondi piu' tardi, e i primi 3
+    secondi del video non sono piu' solo aggancio: intorno al terzo secondo
+    c'e' la richiesta. E' la finestra su cui si giudica la prova
+    sull'apertura. Il confronto fra scontro e divario REGGE — la richiesta
+    capita su TUTTI i video di tutti e due i bracci nello stesso punto,
+    quindi si elide — ma il numero assoluto della tenuta a 3 secondi cade da
+    qui in poi, e chi lo confronta col passato del canale legge un crollo che
+    non e' del formato.
+
+    La curiosita' NON si allunga: `stacco + (per_voce - stacco) = per_voce`.
+    A crescere e' solo il video, dei due secondi della richiesta.
+    """
+    titolo = (cfg.get(f"cta.anticipata.reel.{canale}", "")
+              or cfg.get("cta.anticipata.reel.default", "") or "").strip()
+    if not titolo:
+        return []
+    dur = float(cfg.get("cta.anticipata.secondi", 2.0))
+    sotto = (cfg.get("cta.anticipata.sotto", "") or "").strip()
+
+    # L'aggancio, fino al taglio. Nessuna dissolvenza in ingresso: deve
+    # comparire come compariva prima, o la tenuta a 3 secondi misura la
+    # dissolvenza invece dell'aggancio.
+    a = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, indice,
+                    hook, domanda, stacco, "hook", entrata=0.0)
+    # La richiesta.
+    b = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 90 + indice,
+                    titolo, sotto, dur, "mid")
+    # La rivelazione, per il tempo che restava alla curiosita'.
+    c = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 80 + indice,
+                    reveal or hook, "", max(1.5, per_voce - stacco), "reveal")
+    pezzi = [x for x in (a, b, c) if x]
+    return pezzi if len(pezzi) == 3 else []
 
 
 def build(slides: List[Dict[str, str]], name: str) -> Path:
@@ -712,6 +800,10 @@ def build_multi(voci: List[Dict], name: str,
     # curiosità e deve sapere quale dei due tipi ha in mano, perché un'immagine
     # si apre con `-loop 1` e un filmato con `-stream_loop`.
     ultimo_sfondo: Optional[tuple] = None
+    # Secondi aggiunti dalle scene che non sono curiosita' (la richiesta di
+    # meta' video). Serve alla dissolvenza della musica, che si calcola sulla
+    # durata vera del montaggio.
+    extra = 0.0
     for i, v in enumerate(voci):
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
@@ -769,6 +861,33 @@ def build_multi(voci: List[Dict], name: str,
         # gia' avuto risposta e ripeterla toglierebbe spazio all'unica riga
         # che conta.
         domanda = (v.get("domanda") or "").strip()
+
+        # La richiesta va SUBITO DOPO L'AGGANCIO INIZIALE, e solo li'. Non a
+        # meta' video, non dopo la prima curiosita': dopo l'aggancio del
+        # primo segmento, prima che arrivi la sua rivelazione. Tutto il
+        # ragionamento — perche' proprio li' e cosa costa — sta in
+        # `_fatto_spezzato`.
+        #
+        # Vale per tutti i video, a una o a tre curiosita'. Il video si
+        # allunga sempre degli stessi due secondi, e la richiesta la vede
+        # chiunque abbia guardato tre secondi invece che undici.
+        #
+        # Se fallisce si prosegue col montaggio normale, che e' la rete di
+        # sempre: la fascia oraria di uno Short non si recupera, e un video
+        # senza richiesta vale piu' di nessun video.
+        if i == 0 and cfg.get("cta.anticipata.attiva", False):
+            try:
+                pezzi = _fatto_spezzato(ff, sfondo, e_immagine, name, tmp, i,
+                                        canale, hook, domanda, reveal,
+                                        stacco, per_voce)
+            except Exception as exc:
+                print(f"    curiosita' non spezzata: {str(exc)[:80]}")
+                pezzi = []
+            if pezzi:
+                segmenti.extend(pezzi)
+                extra += float(cfg.get("cta.anticipata.secondi", 2.0))
+                continue
+
         overlays = render.render_slides(
             [
                 {"kicker": "", "headline": hook, "body": domanda},
@@ -803,10 +922,16 @@ def build_multi(voci: List[Dict], name: str,
         ])
         segmenti.append(seg)
 
+
     if not segmenti:
         return None, []
 
-    durata = per_voce * len(segmenti)
+    # I segmenti non sono piu' tutti lunghi uguali: lo spezzone di richiesta
+    # dura meno di una curiosita'. Contare `per_voce * len(segmenti)` darebbe
+    # una durata piu' lunga del vero, e la dissolvenza della musica —
+    # calcolata su `durata - 1.5` — cadrebbe oltre la fine del video, cioe'
+    # non ci sarebbe piu'.
+    durata = per_voce * len(montate) + extra
 
     # La richiesta finale. Si aggiunge in coda, quindi non toglie tempo a
     # nessuna curiosita': il video si allunga di due secondi e mezzo.

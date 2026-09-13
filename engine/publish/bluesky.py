@@ -125,6 +125,39 @@ def _accorcia(testo: str, quanto: int) -> str:
     return tagliato + "…"
 
 
+def _a_frase(testo: str, quanto: int) -> str:
+    """Taglia alla fine di una FRASE, non a metà periodo.
+
+    Perché non basta `_accorcia`. Misurato sui post veri del 12 settembre
+    2026: le spiegazioni uscivano così —
+
+        «Groupthink occurs when the desire for harmony or conformity in a
+        decision-making group results in an irrational or dysfunctional…»
+
+    Una frase che si interrompe su un aggettivo non è una spiegazione
+    accorciata: è una spiegazione rotta, e su un account il cui unico
+    argomento è «di noi ti puoi fidare» costa più di quanto valgano le parole
+    salvate. Meglio un periodo intero in meno che un periodo a metà.
+
+    Se NESSUNA frase intera ci sta, si restituisce vuoto invece di un
+    troncone: il post resta aggancio + fonte + link, che è già un post
+    completo. Il fatto per esteso sta a un clic di distanza, ed è
+    esattamente il clic che vogliamo.
+    """
+    testo = (testo or "").strip()
+    if not testo:
+        return ""
+    if len(testo) <= quanto:
+        return testo
+    tenuto = ""
+    for pezzo in re.split(r"(?<=[.!?])\s+", testo):
+        prova = (tenuto + " " + pezzo).strip()
+        if len(prova) > quanto:
+            break
+        tenuto = prova
+    return tenuto if tenuto.endswith((".", "!", "?")) else ""
+
+
 def componi(fatto, base_url: str = "") -> Dict[str, str]:
     """Testo e scheda-collegamento per una curiosità.
 
@@ -144,6 +177,21 @@ def componi(fatto, base_url: str = "") -> Dict[str, str]:
 
     link = f"{base}/f/{_slug(hook)}/" if base else ""
 
+    # Gli hashtag, e sono la ragione per cui questa funzione è stata toccata.
+    #
+    # Su Bluesky non c'è un "per te" algoritmico che ripesca un account senza
+    # pubblico: la distribuzione passa da chi ti segue e dai FEED, e una buona
+    # parte dei feed tematici si costruisce sulle parole e sugli hashtag. Un
+    # post senza tag non entra in nessun feed, e a zero follower non lo legge
+    # nessuno — misurato il 13 settembre 2026: 148 post, 0 like, 0 repost.
+    #
+    # Pochi e veri. Non sono gli hashtag di Instagram: là servono a farsi
+    # trovare da chi cerca, qui a finire in un feed che qualcuno ha già
+    # aperto. Tre sono il massimo che un post da 300 caratteri si può
+    # permettere senza rubare spazio alla spiegazione.
+    tag = [t.strip().lstrip("#") for t in
+           (cfg.get("publish.bluesky.hashtags", []) or []) if t and t.strip()][:3]
+
     # Il conto dei caratteri si fa a ritroso: link e fonte sono incomprimibili
     # (un link accorciato non funziona, uno studio citato a metà non è una
     # citazione), quindi è la frase esplicativa a cedere spazio.
@@ -151,14 +199,47 @@ def componi(fatto, base_url: str = "") -> Dict[str, str]:
     # Nota su come Bluesky conta i link: li conta per intero, non li accorcia
     # come faceva Twitter. I nostri sono lunghi perché lo slug è l'aggancio
     # stesso — quindi il posto che si mangiano va tolto davvero, non stimato.
-    fisso = len(hook) + len(fonte) + len(link) + len("\n\n") * 2 + (2 if link else 0)
-    spazio = MAX_TESTO - fisso
-    corpo = _accorcia(fatto_txt, spazio) if spazio > 40 else ""
+    # ⚠️ IL LINK NON VA PIU' NEL TESTO, ed è la modifica che rende possibile
+    # tutto il resto. `pubblica` allega al post una scheda
+    # `app.bsky.embed.external` con lo stesso indirizzo: scriverlo anche nel
+    # corpo lo metteva DUE VOLTE nello stesso post — una come testo, una come
+    # rettangolo cliccabile sotto — e la copia di testo costava fra i 70 e i
+    # 95 caratteri su 300.
+    #
+    # Sono i caratteri che mancavano alla spiegazione, che infatti usciva
+    # tagliata a metà periodo. Rimossa la copia, entrano sia il fatto per
+    # intero sia gli hashtag, e il collegamento resta cliccabile esattamente
+    # come prima.
+    #
+    # Se un giorno la scheda non ci fosse (nessun `link`), non c'è niente da
+    # togliere e la riga della fonte resta da sola.
+    # Gli hashtag cedono il posto alla spiegazione, non il contrario.
+    #
+    # `_a_frase` restituisce vuoto quando nemmeno la prima frase ci sta, e con
+    # tre tag capitava su un fatto su tre: il post usciva a 161 caratteri su
+    # 300, senza spiegazione, con centoquaranta caratteri buttati. Allora si
+    # riprova togliendo un tag per volta, e ci si ferma appena la frase entra.
+    # Un hashtag in meno costa un feed; una spiegazione in meno costa il post.
+    corpo, coda_tag = "", " ".join(f"#{t}" for t in tag)
+    for quanti in range(len(tag), -1, -1):
+        prova_tag = " ".join(f"#{t}" for t in tag[:quanti])
+        fisso = (len(hook) + len(fonte) + len("\n\n") * 2
+                 + (len(prova_tag) + 2 if prova_tag else 0))
+        spazio = MAX_TESTO - fisso
+        # `_a_frase` e non `_accorcia`: meglio nessuna spiegazione che una
+        # spiegazione interrotta in mezzo a un periodo.
+        corpo = _a_frase(fatto_txt, spazio) if spazio > 40 else ""
+        if corpo:
+            coda_tag = prova_tag
+            break
 
     righe = [hook]
     if corpo:
         righe.append(corpo)
-    righe.append(fonte if not link else f"{fonte}\n{link}")
+    ultima = fonte
+    if coda_tag:
+        ultima += f"\n{coda_tag}"
+    righe.append(ultima)
     testo = "\n\n".join(righe)
 
     return {
@@ -168,6 +249,22 @@ def componi(fatto, base_url: str = "") -> Dict[str, str]:
         "descrizione": _accorcia(fatto_txt, 180),
     }
 
+
+
+def braccio(fact_id: int) -> str:
+    """A quale gruppo della prova appartiene il post di questa curiosita'.
+
+    `con-risposta` o `senza-risposta`. Deciso dalla PARITA' dell'id, non a
+    caso: due giri sullo stesso fatto devono dare lo stesso gruppo, o un
+    ritentativo dopo un errore di rete sposterebbe un post da un braccio
+    all'altro e il conteggio non tornerebbe piu'.
+
+    ⚠️ La parita' degli id e' un'alternanza vera solo perche' i fatti si
+    pubblicano in ordine e senza salti sistematici. Se un giorno la selezione
+    diventasse "prima i fatti con la fonte piu' lunga" o qualcosa che correla
+    con l'id, questa riga andrebbe rifatta con un sorteggio registrato.
+    """
+    return "con-risposta" if int(fact_id) % 2 == 0 else "senza-risposta"
 
 # ─── Pubblicazione ────────────────────────────────────────────────────────────
 

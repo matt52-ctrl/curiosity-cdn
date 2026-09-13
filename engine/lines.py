@@ -735,6 +735,36 @@ Return JSON matching the schema."""
     return [l for l in linee if not l.get("_doppione")]
 
 
+
+def posiziona_cta(pezzi: List[str], cta: str) -> List[str]:
+    """Mette la richiesta dove dice `cta.anticipata.posizione_testo`.
+
+    Fino al 13 settembre 2026 la richiesta stava SEMPRE in fondo, dopo la
+    prova e dopo l'eventuale domanda. Su Instagram il pezzo visibile prima di
+    "altro" e' un centinaio di caratteri: la richiesta non entrava mai, e chi
+    non apriva la didascalia — cioe' quasi tutti — non ha mai saputo che
+    esisteva un account da seguire.
+
+    Tre posizioni, e ognuna paga un prezzo diverso:
+      coda     com'era. Nessuno la vede, ma non ruba niente all'aggancio.
+      seconda  subito dopo il blocco di apertura. L'aggancio resta il primo
+               contatto, la richiesta e' la prima cosa che si legge aprendo.
+               E' l'equivalente in didascalia della seconda slide.
+      testa    prima di tutto. Si vede sempre, ma la prima riga del post
+               diventa una richiesta invece di un fatto — ed e' esattamente
+               cio' che fa scorrere via.
+    Il valore di prova e' `seconda`: la posizione `testa` resta disponibile
+    per una prova successiva, non per questa.
+    """
+    if not cta:
+        return pezzi
+    dove = (cfg.get("cta.anticipata.posizione_testo", "coda") or "coda").strip()
+    if dove == "testa":
+        return [cta] + pezzi
+    if dove == "seconda" and pezzi:
+        return [pezzi[0], cta] + pezzi[1:]
+    return pezzi + [cta]
+
 def corpo_didascalia(line: Dict[str, Any], ponte: bool = True,
                      canale: str = "") -> str:
     """La didascalia senza hashtag.
@@ -769,8 +799,7 @@ def corpo_didascalia(line: Dict[str, Any], ponte: bool = True,
                  if x and x.strip()]
         cta = (cfg.get(f"cta.testo.{canale}", "") if canale else "") \
             or cfg.get("caption.cta", "")
-        if cta:
-            pezzi.append(cta)
+        pezzi = posiziona_cta(pezzi, cta)
     else:
         # I reel gia' in coda hanno la didascalia come stringa unica.
         pezzi = [str(grezza).strip()]

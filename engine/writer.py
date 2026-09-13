@@ -358,6 +358,44 @@ Return exactly {slide_count} slides. Include these hashtags among yours: {', '.j
         s["image_kind"] = (
             "concept" if s.get("image_kind") == "concept" else "real_subject"
         )
+    # ─── LA SLIDE DI RICHIESTA, IN SECONDA POSIZIONE ────────────────────────
+    # Sul carosello la richiesta e' sempre stata solo in didascalia, cioe'
+    # dietro il "altro" di Instagram. Chi sfoglia le cinque slide e va via non
+    # ha mai letto un invito a seguire: gli abbiamo dato il contenuto e non
+    # gli abbiamo chiesto niente.
+    #
+    # Perche' la SECONDA e non l'ultima: l'ultima la vede solo chi ha
+    # completato il carosello, che e' la minoranza — lo stesso errore della
+    # coda del video. La seconda la vede quasi chiunque abbia scorso una
+    # volta.
+    #
+    # Perche' una slide VERA e non una striscia in fondo a una slide di
+    # contenuto: scelta di Mattia del 13 settembre 2026. La striscia si legge
+    # di sfuggita mentre l'occhio e' sul fatto, cioe' quasi mai. Una pagina
+    # sua non si puo' non vedere.
+    #
+    # ⚠️ IL PREZZO, da sapere prima di leggere i numeri di ottobre. Il
+    # carosello guadagna una slide (da 5 a 6), e il fatto che stava in seconda
+    # posizione scala in terza: ogni slide in piu' e' gente che si ferma prima
+    # della fine, e ogni contenuto spostato piu' in la' e' contenuto che vede
+    # meno gente. Se la prova esce pari, questo e' il primo posto dove
+    # guardare.
+    #
+    # Non consuma un'immagine: `image_query` resta vuota e `attach_images`
+    # salta le slide senza query.
+    if len(slides) > 1 and cfg.get("cta.anticipata.attiva", False):
+        titolo = (cfg.get("cta.anticipata.carosello", "") or "").strip()
+        if titolo:
+            slides.insert(1, {
+                "kicker": slides[0].get("kicker", ""),
+                "headline": titolo,
+                "body": (cfg.get("cta.anticipata.carosello_sotto", "")
+                         or "").strip(),
+                "image_query": "",
+                "image_kind": "real_subject",
+                "cta_slide": True,
+            })
+
     data["slides"] = slides
 
     tags: List[str] = []
@@ -397,8 +435,11 @@ def full_caption(copy: Dict[str, Any], has_ai_images: bool = False) -> str:
         # leggono come due account. `caption.cta` resta come ripiego per le
         # installazioni che non hanno ancora la sezione `cta`.
         cta = cfg.get("cta.testo.instagram", "") or cfg.get("caption.cta", "")
-        if cta:
-            pezzi.append(cta)
+        # Dove va la richiesta lo decide `cta.anticipata.posizione_testo`, ed
+        # e' la stessa funzione che serve i reel: due posizioni diverse sui
+        # due formati dello stesso profilo si leggerebbero come due account.
+        from .lines import posiziona_cta
+        pezzi = posiziona_cta([x for x in pezzi if x and x.strip()], cta)
         testo = "\n\n".join(x.strip() for x in pezzi if x and x.strip())
     else:
         # I post gia' in magazzino hanno la didascalia come stringa unica.
