@@ -132,8 +132,15 @@ jobs:
       # Due passi separati di proposito: se il montaggio riesce ma il
       # caricamento fallisce (token scaduto, TikTok giù), i video restano
       # pronti e il giorno dopo partono senza rifare il lavoro.
+      # Dal 27/9/2026 i video escono da soli via Buffer, quindi l'orario del
+      # giro E' l'orario di uscita. Si monta e si pubblica solo nelle due fasce
+      # serali (~19:15 e ~22:15 italiane = pomeriggio a New York), cioe'
+      # `publish.tiktok.max_per_day: 2`. I giri del mattino restano accesi
+      # per i commenti: alle 8 italiane a New York sono le 2 di notte.
       - name: Monta i video
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '15 17 * * *' || github.event.schedule == '15 20 * * *' }}
         env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -156,9 +163,14 @@ jobs:
         # cinque bozze ogni 24 ore, con un margine per un recupero manuale.
         run: python run.py tiktok --quanti 1 --max-generazioni 1
 
-      - name: Carica le bozze nell'inbox
-        if: ${{ !inputs.prova }}
+      - name: Pubblica su TikTok via Buffer
+        if: ${{ !inputs.prova && (github.event_name == 'workflow_dispatch' || github.event.schedule == '15 17 * * *' || github.event.schedule == '15 20 * * *') }}
         env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          # Buffer non accetta upload: vuole un URL pubblico, lo stesso CDN dei reel.
+          GITHUB_TOKEN: ${{ secrets.CDN_TOKEN }}
+          GITHUB_REPO: ${{ secrets.CDN_REPO }}
+          IMAGE_HOST_BACKEND: github
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TIKTOK_REFRESH_TOKEN: ${{ secrets.TIKTOK_REFRESH_TOKEN }}

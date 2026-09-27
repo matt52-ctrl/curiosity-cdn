@@ -1202,9 +1202,13 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
     # caricamento. Uscire a zero e non in errore: le credenziali assenti sono
     # una configurazione incompleta, non un guasto, e un giro rosso ogni notte
     # e' una mail che dopo tre giorni non legge piu' nessuno.
+    # Dal 27/9/2026 chi pubblica e' Buffer: con la sua chiave si monta anche
+    # se il token della nostra app TikTok (audit rifiutato) un giorno smette.
+    from engine.publish import buffer as _buf
     from engine.publish import tiktok as _tt
     try:
-        _tt._token_accesso()
+        if not _buf.attivo():
+            _tt._token_accesso()
     except _tt.CredenzialiAssenti as exc:
         print(f"· TikTok non collegato, non monto niente: {exc}")
         return 0
@@ -1544,9 +1548,17 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     Le bozze NON escono da sole: arrivano come notifica nell'app e tocca a te
     premere pubblica. E' il compromesso che rende superfluo l'audit.
     """
-    from engine.publish import tiktok
+    from engine.publish import buffer, tiktok
 
     out = OUTPUT_DIR / "tiktok"
+
+    # Dal 27/9/2026 TikTok esce SEMPRE da Buffer, quando la chiave c'e'.
+    # L'audit della nostra app e' stato rifiutato per regola (niente app per
+    # il proprio account), quindi senza Buffer restano solo le bozze — e le
+    # bozze Mattia non le pubblicava piu'. Vedi engine/publish/buffer.py.
+    if buffer.attivo():
+        return _carica_via_buffer(out, args)
+
     video = sorted(out.glob("*.mp4"))
     if not video:
         print(f"nessun video in {out}. Preparane prima:  run.py tiktok")
@@ -1630,6 +1642,90 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     if len(restanti) - fatti > 0:
         print(f"{len(restanti) - fatti} restano in coda per i prossimi giorni.")
     return 0
+
+
+def _pulisci_buffer(conn) -> None:
+    """Toglie dal CDN i video che Buffer ha gia' consegnato a TikTok.
+
+    Gira all'inizio di ogni giro, non solo dopo la pubblicazione: se l'ultima
+    attesa e' scaduta con il post ancora `sending`, il file e' rimasto sul CDN
+    e il registro se lo ricorda. Un file tolto troppo presto fa fallire il post
+    in silenzio; uno tolto troppo tardi costa solo qualche MB nel repo.
+    """
+    from engine.hosting import elimina
+    from engine.publish import buffer
+
+    for r in conn.execute("SELECT post_id, prefisso, file FROM tiktok_buffer "
+                          "WHERE pulito = 0").fetchall():
+        try:
+            s = buffer.stato(r["post_id"])
+        except Exception as exc:
+            print(f"  · stato Buffer di {r['file']} non letto: {str(exc)[:80]}")
+            continue
+        conn.execute("UPDATE tiktok_buffer SET stato = ? WHERE post_id = ?",
+                     (s, r["post_id"]))
+        if s in ("sent", "error", "sparito"):
+            elimina([r["prefisso"]])
+            conn.execute("UPDATE tiktok_buffer SET pulito = 1 WHERE post_id = ?",
+                         (r["post_id"],))
+            if s != "sent":
+                allarme.segnala("TikTok via Buffer",
+                                f"{r['file']}: il post e' finito in '{s}', non online. "
+                                f"Guardare su publish.buffer.com perche'.")
+    conn.commit()
+
+
+def _carica_via_buffer(out: Path, args: argparse.Namespace) -> int:
+    """Pubblica su TikTok i video montati, passando da Buffer."""
+    from engine.publish import buffer
+
+    conn = connect()
+    _pulisci_buffer(conn)
+
+    video = sorted(out.glob("*.mp4"))
+    fatti = {r[0] for r in conn.execute("SELECT file FROM tiktok_buffer").fetchall()}
+    restanti = [v for v in video if v.name not in fatti]
+    if not restanti:
+        print("nessun video nuovo da pubblicare su TikTok")
+        return 0
+
+    didascalie = {}
+    try:
+        for v in _json.loads((out / "lotto.json").read_text()):
+            didascalie[v["file"]] = v
+    except Exception:
+        pass
+
+    try:
+        canale = buffer.canale_tiktok()
+    except Exception as exc:
+        print(f"✗ {exc}")
+        allarme.segnala("TikTok via Buffer", str(exc))
+        return 1 if allarme.riepiloga("TikTok") else 0
+
+    quanti = min(int(args.quanti or len(restanti)), len(restanti))
+    pubblicati = 0
+    for v in restanti[:quanti]:
+        testo = (didascalie.get(v.name) or {}).get("didascalia", "")
+        prefisso = f"tiktok-{v.stem}"
+        try:
+            # Il CDN dei reel: URL pulita e permanente, come chiede Buffer.
+            url = upload([v], prefisso)[0]
+            pid = buffer.pubblica_video(url, testo, canale)
+            conn.execute("INSERT INTO tiktok_buffer (post_id, file, prefisso, creato) "
+                         "VALUES (?,?,?,?)", (pid, v.name, prefisso, time.time()))
+            conn.commit()
+            s = buffer.attendi(pid)
+            print(f"  ✓ {v.name} → Buffer {pid}: {s}")
+            pubblicati += 1
+        except Exception as exc:
+            print(f"  ✗ {v.name}: {str(exc)[:160]}")
+            allarme.segnala("TikTok via Buffer", f"{v.name}: {str(exc)[:200]}")
+
+    # Chiude subito quello che e' gia' `sent`, invece di aspettare il giro dopo.
+    _pulisci_buffer(conn)
+    print(f"\n{pubblicati} video pubblicati su TikTok tramite Buffer.")
+    return 1 if allarme.riepiloga("TikTok") else 0
 
 
 def cmd_ttconsole(args: argparse.Namespace) -> int:

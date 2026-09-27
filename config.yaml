@@ -614,6 +614,13 @@ publish:
     reuse_cooldown_hours: 48
 
   tiktok:
+    # ⚠️ DAL 27/9/2026 LA STORIA QUI SOTTO E' SUPERATA: i video escono da
+    # soli tramite BUFFER (engine/publish/buffer.py), sempre, quando c'e'
+    # BUFFER_API_KEY. L'audit della nostra app e' stato rifiutato per regola
+    # (TikTok non approva app per il proprio account). Due al giorno, nelle
+    # fasce serali di tiktok.yml. Le bozze nell'inbox restano solo come
+    # ripiego se la chiave Buffer sparisce.
+    #
     # I video NON si pubblicano da soli, e non è una limitazione tecnica che
     # si può aggirare: l'API può solo depositare bozze nell'inbox dell'app,
     # mentre il programmatore di TikTok sta in TikTok Studio (desktop). Sono

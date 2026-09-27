@@ -286,6 +286,19 @@ CREATE TABLE IF NOT EXISTS yt_fasce (
     quando    REAL NOT NULL,
     caricato  REAL NOT NULL
 );
+
+-- I video TikTok affidati a Buffer (dal 27/9/2026). Buffer scarica il file
+-- dal CDN quando PUBBLICA, non quando riceve il post: il file si puo'
+-- togliere solo dopo `sent`. Questa tabella ricorda cosa e' ancora in volo,
+-- cosi' il giro dopo finisce la pulizia invece di dimenticarla.
+CREATE TABLE IF NOT EXISTS tiktok_buffer (
+    post_id   TEXT PRIMARY KEY,
+    file      TEXT NOT NULL,
+    prefisso  TEXT NOT NULL,        -- cartella sul CDN: posts/<prefisso>/
+    creato    REAL NOT NULL,
+    stato     TEXT NOT NULL DEFAULT 'scheduled',
+    pulito    INTEGER NOT NULL DEFAULT 0
+);
 """
 
 

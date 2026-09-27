@@ -58,9 +58,17 @@ def _uscite(conn: sqlite3.Connection) -> List[str]:
                      (da,)).fetchone()[0]
     righe.append(f"Short YouTube     {n}")
 
-    n = conn.execute("SELECT COUNT(DISTINCT ref) FROM fact_uses "
-                     "WHERE channel='tiktok' AND used_at > ?", (da,)).fetchone()[0]
-    righe.append(f"bozze TikTok      {n}")
+    # Dal 27/9/2026 TikTok esce da Buffer: si contano i post consegnati
+    # (`sent`), non i video montati — un montato che Buffer non ha pubblicato
+    # non e' un'uscita.
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM tiktok_buffer "
+                         "WHERE stato='sent' AND creato > ?", (da,)).fetchone()[0]
+        righe.append(f"TikTok (Buffer)   {n}")
+    except sqlite3.OperationalError:
+        n = conn.execute("SELECT COUNT(DISTINCT ref) FROM fact_uses "
+                         "WHERE channel='tiktok' AND used_at > ?", (da,)).fetchone()[0]
+        righe.append(f"bozze TikTok      {n}")
 
     n = conn.execute("SELECT COUNT(*) FROM fact_uses "
                      "WHERE channel='bluesky' AND used_at > ?", (da,)).fetchone()[0]
