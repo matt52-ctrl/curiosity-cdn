@@ -617,8 +617,8 @@ publish:
     # ⚠️ DAL 27/9/2026 LA STORIA QUI SOTTO E' SUPERATA: i video escono da
     # soli tramite BUFFER (engine/publish/buffer.py), sempre, quando c'e'
     # BUFFER_API_KEY. L'audit della nostra app e' stato rifiutato per regola
-    # (TikTok non approva app per il proprio account). Due al giorno, nelle
-    # fasce serali di tiktok.yml. Le bozze nell'inbox restano solo come
+    # (TikTok non approva app per il proprio account). Nelle
+    # cinque fasce di tiktok.yml (5 al giorno dal 27/9). Le bozze nell'inbox restano solo come
     # ripiego se la chiave Buffer sparisce.
     #
     # I video NON si pubblicano da soli, e non è una limitazione tecnica che
@@ -668,7 +668,7 @@ publish:
     # Non serve generare curiosità apposta: il registro dei consumi è per
     # canale, e su TikTok non è mai uscito nulla. Tutto l'archivio è materiale
     # nuovo per quel pubblico — è cross-posting, non riciclo.
-    max_per_day: 2
+    max_per_day: 5
 
     # Tetto di TikTok, non nostro: cinque bozze pendenti ogni 24 ore, scritto
     # nella loro documentazione. Il ciclo si ferma da sé quando lo tocca,
@@ -937,7 +937,7 @@ cta:
   # passato del canale, ed è il prezzo accettato.
   azione:
     youtube: "Subscribe. One a day, about you."
-    tiktok: "Follow. One a day, about you."
+    tiktok: "Follow. Every one is about you."
     default: "One a day, about you."
 
   # Le stesse richieste in forma di testo, per descrizioni e didascalie.
@@ -969,7 +969,7 @@ cta:
   # promessa di metodo.
   testo:
     youtube: "Subscribe — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
-    tiktok: "Follow — one a day, and every one is about something you already do without noticing. Every one names the study it came from."
+    tiktok: "Follow — every one is about something you already do without noticing. Every one names the study it came from."
     instagram: "Follow @oddlywireddaily — one a day, and every one is about something you already do without noticing. Every one names the study it came from, and says so when a finding is contested."
 
   # ─── LA RICHIESTA ANTICIPATA ────────────────────────────────────────────
@@ -1035,7 +1035,7 @@ cta:
     # solo il video. Il meccanismo sta in `_fatto_spezzato`.
     reel:
       youtube: "Subscribe — one a day"
-      tiktok: "Follow — one a day"
+      tiktok: "Follow for more"
       default: "Follow — one a day"
 
     # La riga sotto, sullo stesso fotogramma. E' la promessa che ha vinto la

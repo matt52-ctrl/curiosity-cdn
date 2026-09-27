@@ -54,15 +54,20 @@ on:
     # Diversamente dai reel, qui l'orario del job NON è l'orario di uscita:
     # deposita solo la bozza, e a pubblicare sei tu quando la vedi. Contano
     # perciò gli orari in cui hai il telefono in mano, non quelli di TikTok.
-    - cron: "15 6 * * *"     # ~9:00 italiane — la bozza ti aspetta al risveglio
-    - cron: "15 10 * * *"    # ~13:00 italiane — pausa pranzo
+    # DAL 27/9/2026: CINQUE al giorno, pubblicati da Buffer (chiesto da Mattia:
+    # "anche 5 video al giorno"). Buffer regge 25 TikTok ogni 24 ore. Tutte
+    # le fasce cadono nel giorno americano. Minuti a :45 per non partire
+    # insieme ai workflow delle :15 dello stesso gruppo di concorrenza.
+    - cron: "45 13 * * *"    # 15:45 italiane —  9:45 a New York
+    - cron: "45 16 * * *"    # 18:45 italiane — 12:45 a New York
+    - cron: "45 19 * * *"    # 21:45 italiane — 15:45 a New York
+    - cron: "45 22 * * *"    # 00:45 italiane — 18:45 a New York
+    - cron: "45 0 * * *"     # 02:45 italiane — 20:45 a New York
     # Le 17:15 e non le 16:15: a quell'ora gira il ciclo dei reel, che
     # condivide il gruppo di concorrenza `curiosity-state`. Due giri dello
     # stesso gruppo in coda insieme non si accodano educatamente — GitHub
     # ne tiene uno solo in attesa e ANNULLA l'altro. È successo il 19
     # agosto e costò la giornata YouTube.
-    - cron: "15 17 * * *"    # ~19:15 italiane — sera Europa, pomeriggio USA
-    - cron: "15 20 * * *"    # ~23:00 italiane — sera piena negli Stati Uniti
   workflow_dispatch:
     inputs:
       prova:
@@ -132,13 +137,9 @@ jobs:
       # Due passi separati di proposito: se il montaggio riesce ma il
       # caricamento fallisce (token scaduto, TikTok giù), i video restano
       # pronti e il giorno dopo partono senza rifare il lavoro.
-      # Dal 27/9/2026 i video escono da soli via Buffer, quindi l'orario del
-      # giro E' l'orario di uscita. Si monta e si pubblica solo nelle due fasce
-      # serali (~19:15 e ~22:15 italiane = pomeriggio a New York), cioe'
-      # `publish.tiktok.max_per_day: 2`. I giri del mattino restano accesi
-      # per i commenti: alle 8 italiane a New York sono le 2 di notte.
+      # Dal 27/9/2026 i video escono da soli via Buffer: l'orario del giro E'
+      # l'orario di uscita, un video per giro, cinque giri al giorno.
       - name: Monta i video
-        if: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '15 17 * * *' || github.event.schedule == '15 20 * * *' }}
         env:
           BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -164,7 +165,7 @@ jobs:
         run: python run.py tiktok --quanti 1 --max-generazioni 1
 
       - name: Pubblica su TikTok via Buffer
-        if: ${{ !inputs.prova && (github.event_name == 'workflow_dispatch' || github.event.schedule == '15 17 * * *' || github.event.schedule == '15 20 * * *') }}
+        if: ${{ !inputs.prova }}
         env:
           BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
           # Buffer non accetta upload: vuole un URL pubblico, lo stesso CDN dei reel.
