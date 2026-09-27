@@ -618,7 +618,7 @@ publish:
     # soli tramite BUFFER (engine/publish/buffer.py), sempre, quando c'e'
     # BUFFER_API_KEY. L'audit della nostra app e' stato rifiutato per regola
     # (TikTok non approva app per il proprio account). Nelle
-    # cinque fasce di tiktok.yml (5 al giorno dal 27/9). Le bozze nell'inbox restano solo come
+    # quattro fasce di tiktok.yml (4 al giorno dal 27/9). Le bozze nell'inbox restano solo come
     # ripiego se la chiave Buffer sparisce.
     #
     # I video NON si pubblicano da soli, e non è una limitazione tecnica che
@@ -668,7 +668,7 @@ publish:
     # Non serve generare curiosità apposta: il registro dei consumi è per
     # canale, e su TikTok non è mai uscito nulla. Tutto l'archivio è materiale
     # nuovo per quel pubblico — è cross-posting, non riciclo.
-    max_per_day: 5
+    max_per_day: 4
 
     # Tetto di TikTok, non nostro: cinque bozze pendenti ogni 24 ore, scritto
     # nella loro documentazione. Il ciclo si ferma da sé quando lo tocca,
