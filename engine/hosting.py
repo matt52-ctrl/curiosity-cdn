@@ -24,7 +24,7 @@ import httpx
 from .config import env, require_env
 
 
-def _orfano(ramo: str, crea: bool) -> None:
+def _orfano(ramo: str, crea: bool, tieni: List[str] | None = None) -> None:
     """Porta `ramo` su un commit senza genitori che contiene solo un README.
 
     Serve ai video TikTok (dal 27/9/2026, approvato da Mattia). Cancellare un
@@ -34,6 +34,12 @@ def _orfano(ramo: str, crea: bool) -> None:
     raccomanda di non superare verso meta' novembre. Su un ramo che contiene
     SOLO video temporanei e riparte da zero, i commit vecchi restano senza
     riferimenti e GitHub li butta via da solo.
+
+    `tieni`: cartelle (`posts/<prefisso>/`) da portare nel commit nuovo.
+    Servono ai reel, che restano in coda un giorno prima che Instagram li
+    scarichi: senza, la scatola non si potrebbe svuotare mai. I file tenuti
+    non si ricaricano — il commit nuovo punta agli stessi blob gia' sul repo,
+    quindi i loro URL restano identici e continuano a rispondere.
 
     ⚠️ Mai con `main` o un ramo che contiene altro: e' una riscrittura.
     """
@@ -49,9 +55,20 @@ def _orfano(ramo: str, crea: bool) -> None:
                        "ogni pubblicazione: non metterci niente da conservare.\n",
             "encoding": "utf-8"})
         blob.raise_for_status()
-        albero = c.post(f"{api}/trees", json={"tree": [{
-            "path": "README.md", "mode": "100644", "type": "blob",
-            "sha": blob.json()["sha"]}]})
+        voci = [{"path": "README.md", "mode": "100644", "type": "blob",
+                 "sha": blob.json()["sha"]}]
+        if tieni and not crea:
+            vecchio = c.get(f"{api}/trees/{ramo}", params={"recursive": "1"})
+            vecchio.raise_for_status()
+            if vecchio.json().get("truncated"):
+                # Albero troppo grande per leggerlo tutto: meglio non
+                # azzerare che perdere un file ancora in coda.
+                raise RuntimeError(f"albero di {ramo} troncato, non azzero")
+            radici = tuple(f"posts/{t}/" for t in tieni)
+            voci += [{"path": x["path"], "mode": x["mode"], "type": "blob",
+                      "sha": x["sha"]} for x in vecchio.json()["tree"]
+                     if x["type"] == "blob" and x["path"].startswith(radici)]
+        albero = c.post(f"{api}/trees", json={"tree": voci})
         albero.raise_for_status()
         commit = c.post(f"{api}/commits", json={
             "message": f"azzero {ramo}", "tree": albero.json()["sha"], "parents": []})
@@ -76,9 +93,9 @@ def assicura_ramo(ramo: str) -> None:
         r.raise_for_status()
 
 
-def azzera_ramo(ramo: str) -> None:
-    """Svuota il ramo usa-e-getta. Solo quando nessun file e' ancora in volo."""
-    _orfano(ramo, crea=False)
+def azzera_ramo(ramo: str, tieni: List[str] | None = None) -> None:
+    """Svuota il ramo usa-e-getta, storia compresa, tenendo le cartelle `tieni`."""
+    _orfano(ramo, crea=False, tieni=tieni)
 
 
 def _upload_github(paths: List[Path], prefix: str,

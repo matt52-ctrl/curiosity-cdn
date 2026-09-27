@@ -36,7 +36,7 @@ from engine.db import (
     set_post_status,
     set_post_urls,
 )
-from engine.hosting import upload
+from engine.hosting import assicura_ramo, upload
 from engine.publish import instagram, tiktok
 
 
@@ -2743,7 +2743,8 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 # oggi può essere pubblicato da un'altra macchina domani, e su
                 # GitHub Actions il disco non sopravvive fra un giro e l'altro.
                 try:
-                    url = upload([video], prefix=f"reel-{rid}")[0]
+                    assicura_ramo(_ramo_reel())
+                    url = upload([video], prefix=f"reel-{rid}", ramo=_ramo_reel())[0]
                     set_reel_url(conn, rid, url)
                     print(f"    ✓ reel #{rid} pronto ({video.stat().st_size//1024} KB)")
                 except Exception as exc:
@@ -2795,7 +2796,8 @@ def cmd_reels(args: argparse.Namespace) -> int:
                     f"video non trovato: {video}. Costruito su un'altra macchina "
                     f"e mai caricato — il reel va rigenerato."
                 )
-            url = upload([video], prefix=f"reel-{r['id']}")[0]
+            assicura_ramo(_ramo_reel())
+            url = upload([video], prefix=f"reel-{r['id']}", ramo=_ramo_reel())[0]
             set_reel_url(conn, r["id"], url)
 
         caption = r["caption"]
@@ -2810,7 +2812,9 @@ def cmd_reels(args: argparse.Namespace) -> int:
         cover = Path(r["video_path"]).parent / "cover.jpg"
         if cover.exists():
             try:
-                cover_url = upload([cover], prefix=f"reel-{r['id']}-cover")[0]
+                assicura_ramo(_ramo_reel())
+                cover_url = upload([cover], prefix=f"reel-{r['id']}-cover",
+                                   ramo=_ramo_reel())[0]
             except Exception as exc:
                 print(f"  ⚠ copertina non caricata: {exc}")
 
@@ -2828,6 +2832,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
                 print(f"  · {n} file rimossi dal CDN")
         except Exception:
             pass
+        _svuota_scatola_reel(conn)
     except Exception as exc:
         set_reel_status(conn, r["id"], "failed")
         # La curiosita' torna disponibile: il reel resta segnato come fallito
@@ -2853,6 +2858,33 @@ def cmd_reels(args: argparse.Namespace) -> int:
     allarme.silenzio(conn)
     allarme.cadenza(conn)
     return 1 if allarme.riepiloga("reel") else 0
+
+
+def _ramo_reel() -> str:
+    return str(cfg.get("reel.ramo_cdn", "reel-cdn"))
+
+
+def _svuota_scatola_reel(conn) -> None:
+    """Svuota la scatola dei reel tenendo solo quelli ancora in coda.
+
+    Dal 27/9/2026 video e copertine dei reel stanno sul ramo usa-e-getta
+    `reel-cdn`, non su `main`: su `main` un file cancellato resta nella storia
+    di git per sempre (~21 MB al giorno). Qui il ramo riparte da un commit
+    senza storia che contiene solo i reel che Instagram deve ancora scaricare.
+    """
+    from engine.hosting import azzera_ramo
+
+    ramo = _ramo_reel()
+    in_coda = [r["id"] for r in conn.execute(
+        "SELECT id FROM reels WHERE status NOT IN ('published','failed','superseded') "
+        "AND video_url LIKE ?", (f"%/{ramo}/%",)).fetchall()]
+    tieni = [x for rid in in_coda for x in (f"reel-{rid}", f"reel-{rid}-cover")]
+    try:
+        azzera_ramo(ramo, tieni=tieni)
+        print(f"  · scatola {ramo} svuotata ({len(in_coda)} reel in coda tenuti)")
+    except Exception as exc:
+        # Non blocca niente: il giro dopo riprova.
+        print(f"  · svuotamento di {ramo} non riuscito: {str(exc)[:80]}")
 
 
 def cmd_prune(args: argparse.Namespace) -> int:
@@ -2909,6 +2941,7 @@ def cmd_prune(args: argparse.Namespace) -> int:
     n = elimina(prefissi)
     print(f"✓ {n} file rimossi dal CDN")
     print("  Nota: libera la copia di lavoro, non la storia di git.")
+    _svuota_scatola_reel(conn)
     return 0
 
 

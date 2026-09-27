@@ -1209,6 +1209,10 @@ animazione:
 # Flusso separato dai caroselli: cadenza diversa, tempi diversi, guasti
 # diversi. Se i video si rompono, i post continuano a uscire.
 reel:
+  # Ramo usa-e-getta per video e copertine dei reel (dal 27/9/2026, approvato
+  # da Mattia). Si azzera con tutta la storia dopo ogni pubblicazione,
+  # tenendo solo i reel ancora in coda. Non metterci mai altro.
+  ramo_cdn: "reel-cdn"
   # 9 secondi: la finestra 7-15s ha i tassi di completamento e di replica piu'
   # alti. Sotto i 7 il video finisce prima che l'algoritmo registri una
   # visione piena; sopra i 15 le repliche crollano.
