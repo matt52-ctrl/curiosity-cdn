@@ -670,6 +670,11 @@ publish:
     # nuovo per quel pubblico — è cross-posting, non riciclo.
     max_per_day: 4
 
+    # Il ramo usa-e-getta dove stanno i video finche' Buffer non li pubblica.
+    # Si AZZERA con tutta la storia dopo ogni uscita (approvato da Mattia il
+    # 27/9/2026): non metterci mai altro. Il codice rifiuta 'main'.
+    ramo_cdn: "tt-cdn"
+
     # Tetto di TikTok, non nostro: cinque bozze pendenti ogni 24 ore, scritto
     # nella loro documentazione. Il ciclo si ferma da sé quando lo tocca,
     # senza trattarlo come un errore — è il ritmo previsto, non un guasto.

@@ -24,10 +24,68 @@ import httpx
 from .config import env, require_env
 
 
-def _upload_github(paths: List[Path], prefix: str) -> List[str]:
+def _orfano(ramo: str, crea: bool) -> None:
+    """Porta `ramo` su un commit senza genitori che contiene solo un README.
+
+    Serve ai video TikTok (dal 27/9/2026, approvato da Mattia). Cancellare un
+    file dal CDN libera la copia di lavoro ma non la storia: su `main` ogni
+    video resterebbe nei commit per sempre, e a quattro TikTok al giorno da
+    15-25 MB il repo — 873 MB quel giorno — avrebbe passato i 5 GB che GitHub
+    raccomanda di non superare verso meta' novembre. Su un ramo che contiene
+    SOLO video temporanei e riparte da zero, i commit vecchi restano senza
+    riferimenti e GitHub li butta via da solo.
+
+    ⚠️ Mai con `main` o un ramo che contiene altro: e' una riscrittura.
+    """
+    if ramo in ("main", "master", env("GITHUB_BRANCH", "main")):
+        raise ValueError(f"rifiuto di azzerare '{ramo}': non e' il ramo usa-e-getta")
     token = require_env("GITHUB_TOKEN")
     repo = require_env("GITHUB_REPO")
-    branch = env("GITHUB_BRANCH", "main")
+    h = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    api = f"https://api.github.com/repos/{repo}/git"
+    with httpx.Client(timeout=60, headers=h) as c:
+        blob = c.post(f"{api}/blobs", json={
+            "content": "CDN temporaneo dei video TikTok. Si azzera da solo dopo "
+                       "ogni pubblicazione: non metterci niente da conservare.\n",
+            "encoding": "utf-8"})
+        blob.raise_for_status()
+        albero = c.post(f"{api}/trees", json={"tree": [{
+            "path": "README.md", "mode": "100644", "type": "blob",
+            "sha": blob.json()["sha"]}]})
+        albero.raise_for_status()
+        commit = c.post(f"{api}/commits", json={
+            "message": f"azzero {ramo}", "tree": albero.json()["sha"], "parents": []})
+        commit.raise_for_status()
+        sha = commit.json()["sha"]
+        if crea:
+            r = c.post(f"{api}/refs", json={"ref": f"refs/heads/{ramo}", "sha": sha})
+        else:
+            r = c.patch(f"{api}/refs/heads/{ramo}", json={"sha": sha, "force": True})
+        r.raise_for_status()
+
+
+def assicura_ramo(ramo: str) -> None:
+    """Crea il ramo usa-e-getta se non esiste ancora."""
+    token = require_env("GITHUB_TOKEN")
+    repo = require_env("GITHUB_REPO")
+    r = httpx.get(f"https://api.github.com/repos/{repo}/git/ref/heads/{ramo}",
+                  headers={"Authorization": f"Bearer {token}"}, timeout=60)
+    if r.status_code == 404:
+        _orfano(ramo, crea=True)
+    else:
+        r.raise_for_status()
+
+
+def azzera_ramo(ramo: str) -> None:
+    """Svuota il ramo usa-e-getta. Solo quando nessun file e' ancora in volo."""
+    _orfano(ramo, crea=False)
+
+
+def _upload_github(paths: List[Path], prefix: str,
+                   ramo: str | None = None) -> List[str]:
+    token = require_env("GITHUB_TOKEN")
+    repo = require_env("GITHUB_REPO")
+    branch = ramo or env("GITHUB_BRANCH", "main")
     urls: List[str] = []
 
     with httpx.Client(timeout=60) as client:
@@ -87,10 +145,10 @@ def _upload_cloudinary(paths: List[Path], prefix: str) -> List[str]:
     return urls
 
 
-def upload(paths: List[Path], prefix: str) -> List[str]:
+def upload(paths: List[Path], prefix: str, ramo: str | None = None) -> List[str]:
     backend = env("IMAGE_HOST_BACKEND", "github").lower()
     if backend == "github":
-        return _upload_github(paths, prefix)
+        return _upload_github(paths, prefix, ramo)
     if backend == "cloudinary":
         return _upload_cloudinary(paths, prefix)
     if backend == "local":

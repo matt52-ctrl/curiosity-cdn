@@ -1644,17 +1644,28 @@ def cmd_ttcarica(args: argparse.Namespace) -> int:
     return 0
 
 
-def _pulisci_buffer(conn) -> None:
-    """Toglie dal CDN i video che Buffer ha gia' consegnato a TikTok.
+def _ramo_tiktok() -> str:
+    return str(cfg.get("publish.tiktok.ramo_cdn", "tt-cdn"))
+
+
+def _pulisci_buffer(conn) -> int:
+    """Chiude i post che Buffer ha finito e, se non resta niente in volo,
+    svuota la scatola usa-e-getta dei video TikTok. Ritorna quanti ne ha chiusi.
 
     Gira all'inizio di ogni giro, non solo dopo la pubblicazione: se l'ultima
     attesa e' scaduta con il post ancora `sending`, il file e' rimasto sul CDN
-    e il registro se lo ricorda. Un file tolto troppo presto fa fallire il post
-    in silenzio; uno tolto troppo tardi costa solo qualche MB nel repo.
+    e il registro se lo ricorda. Svuotare troppo presto fa fallire il post in
+    silenzio (Buffer scarica il video quando pubblica); svuotare tardi costa
+    solo qualche MB per qualche ora.
+
+    Dal 27/9/2026 i video non stanno su `main` ma sul ramo `tt-cdn`, che si
+    azzera per intero: su `main` un video cancellato resta nella storia di git
+    per sempre, e a quattro al giorno il repo passava i 5 GB entro novembre.
     """
-    from engine.hosting import elimina
+    from engine.hosting import azzera_ramo, elimina
     from engine.publish import buffer
 
+    chiusi = 0
     for r in conn.execute("SELECT post_id, prefisso, file FROM tiktok_buffer "
                           "WHERE pulito = 0").fetchall():
         try:
@@ -1665,18 +1676,33 @@ def _pulisci_buffer(conn) -> None:
         conn.execute("UPDATE tiktok_buffer SET stato = ? WHERE post_id = ?",
                      (s, r["post_id"]))
         if s in ("sent", "error", "sparito"):
+            # I primi video del 27/9 stavano ancora su `main`: per quelli
+            # serve la cancellazione vecchia. Sul ramo nuovo e' una no-op.
             elimina([r["prefisso"]])
             conn.execute("UPDATE tiktok_buffer SET pulito = 1 WHERE post_id = ?",
                          (r["post_id"],))
+            chiusi += 1
             if s != "sent":
                 allarme.segnala("TikTok via Buffer",
                                 f"{r['file']}: il post e' finito in '{s}', non online. "
                                 f"Guardare su publish.buffer.com perche'.")
     conn.commit()
 
+    in_volo = conn.execute("SELECT COUNT(*) FROM tiktok_buffer "
+                           "WHERE pulito = 0").fetchone()[0]
+    if chiusi and not in_volo:
+        try:
+            azzera_ramo(_ramo_tiktok())
+            print(f"  · scatola {_ramo_tiktok()} svuotata")
+        except Exception as exc:
+            # Non blocca niente: al giro dopo si riprova.
+            print(f"  · svuotamento di {_ramo_tiktok()} non riuscito: {str(exc)[:80]}")
+    return chiusi
+
 
 def _carica_via_buffer(out: Path, args: argparse.Namespace) -> int:
     """Pubblica su TikTok i video montati, passando da Buffer."""
+    from engine.hosting import assicura_ramo
     from engine.publish import buffer
 
     conn = connect()
@@ -1709,8 +1735,10 @@ def _carica_via_buffer(out: Path, args: argparse.Namespace) -> int:
         testo = (didascalie.get(v.name) or {}).get("didascalia", "")
         prefisso = f"tiktok-{v.stem}"
         try:
-            # Il CDN dei reel: URL pulita e permanente, come chiede Buffer.
-            url = upload([v], prefisso)[0]
+            # URL pulita e stabile finche' Buffer non pubblica, come chiede;
+            # sul ramo usa-e-getta, che dopo si svuota con tutta la storia.
+            assicura_ramo(_ramo_tiktok())
+            url = upload([v], prefisso, ramo=_ramo_tiktok())[0]
             pid = buffer.pubblica_video(url, testo, canale)
             conn.execute("INSERT INTO tiktok_buffer (post_id, file, prefisso, creato) "
                          "VALUES (?,?,?,?)", (pid, v.name, prefisso, time.time()))
