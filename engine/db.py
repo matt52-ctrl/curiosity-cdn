@@ -146,6 +146,10 @@ MIGRATIONS = [
     # vive solo dentro il file gia' caricato su YouTube. Senza, il commento
     # chiuderebbe con una domanda diversa da quella appena letta.
     "ALTER TABLE esperimento ADD COLUMN domanda TEXT NOT NULL DEFAULT ''",
+    # Il fenomeno di cui parla la curiosita' ("anchoring", "spotlight effect").
+    # E' la chiave dei doppioni di significato, che la deduplica lessicale non
+    # vede: il perche' sta per esteso in engine/fenomeni.py.
+    "ALTER TABLE facts ADD COLUMN fenomeno TEXT NOT NULL DEFAULT ''",
 ]
 
 # Metriche dei reel, tenute separate da quelle dei post: la tabella `metrics`
@@ -366,12 +370,16 @@ def next_approved_fact(conn: sqlite3.Connection) -> Optional[sqlite3.Row]:
     solo lo stato della curiosita', che resta 'approved' anche dopo che un
     reel l'ha usata.
     """
-    return conn.execute(
+    from .fenomeni import ammessi
+
+    righe = conn.execute(
         """SELECT * FROM facts
            WHERE status='approved'
              AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel='instagram')
-           ORDER BY confidence DESC, id ASC LIMIT 1"""
-    ).fetchone()
+           ORDER BY confidence DESC, id ASC"""
+    ).fetchall()
+    righe = ammessi(conn, righe, "instagram")
+    return righe[0] if righe else None
 
 
 def all_published_texts(conn: sqlite3.Connection) -> List[str]:
@@ -908,23 +916,27 @@ def fatti_liberi(conn: sqlite3.Connection, canale: str,
     ripiego non serve piu' — e quel ripiego era esattamente cio' che faceva
     uscire la stessa curiosita' due volte.
     """
-    return conn.execute(
+    from .fenomeni import ammessi
+
+    righe = conn.execute(
         """SELECT * FROM facts
            WHERE status IN ('approved','rendered','published')
              AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)
-           ORDER BY confidence DESC, id ASC
-           LIMIT ?""",
-        (canale, limite),
+           ORDER BY confidence DESC, id ASC""",
+        (canale,),
     ).fetchall()
+    return ammessi(conn, righe, canale)[:limite]
 
 
 def quanti_liberi(conn: sqlite3.Connection, canale: str) -> int:
-    return conn.execute(
-        """SELECT COUNT(*) n FROM facts
-           WHERE status IN ('approved','rendered','published')
-             AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)""",
-        (canale,),
-    ).fetchone()["n"]
+    """Quante curiosita' possono uscire ADESSO su `canale`.
+
+    Conta i fenomeni, non le righe: dieci curiosita' libere sullo stesso
+    effetto valgono una sola uscita. Contando le righe, le scorte sembravano
+    piene mentre la selezione non trovava niente da pubblicare, e la
+    generazione — che parte proprio da questo numero — non scattava.
+    """
+    return len(fatti_liberi(conn, canale, limite=10**6))
 
 
 def segna_variante(conn: sqlite3.Connection, video_id: str, variante: str,

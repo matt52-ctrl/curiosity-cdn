@@ -152,16 +152,30 @@ RULES
 # ─── Stadio 1: generazione ────────────────────────────────────────────────────
 
 def generate(
-    count: int, avoid_recent: List[str], learnings: str = ""
+    count: int, avoid_recent: List[str], learnings: str = "",
+    fenomeni_coperti: List[str] | None = None,
 ) -> List[Dict[str, Any]]:
     recent = "\n".join("  - " + t for t in avoid_recent[-60:])
     # I "learnings" vanno nel messaggio utente, non nel system prompt: il
     # system prompt è in cache e cambiarlo la invaliderebbe a ogni batch.
     feedback = f"\n\n{learnings}\n" if learnings else ""
+    # Le ultime 60 frasi da sole erano circa cinque giorni di produzione:
+    # passato quel margine i fenomeni famosi tornavano, e il 29/9/2026 l'archivio
+    # aveva 15 curiosita' sul senno di poi e 13 sull'ancoraggio. L'elenco dei
+    # fenomeni e' corto — un nome ciascuno — e copre tutto lo storico.
+    coperti = ""
+    if fenomeni_coperti:
+        coperti = (
+            "\n\nPhenomena already covered — do not write about ANY of these, "
+            "under this name or any other, not even with a different study:\n"
+            + ", ".join(fenomeni_coperti)
+            + "\nThere are hundreds of well-replicated findings outside this list. "
+            "Go and find them."
+        )
     user = f"""Produce {count} ideas.
 
 Already published — do not repeat these or restate them differently:
-{recent or "  (nothing yet — this is the first batch)"}
+{recent or "  (nothing yet — this is the first batch)"}{coperti}
 {feedback}
 Return JSON matching the schema."""
     data = ask_json(_system_prompt(), user, IDEAS_SCHEMA, effort="high")
@@ -392,9 +406,22 @@ def run_batch(
     min_conf = float(cfg.get("pipeline.min_confidence", 0.85))
     niche = cfg.get("niche.slug", "general")
 
+    from . import fenomeni
+
+    # Prima si riparano le etichette mancanti, cosi' l'elenco passato al
+    # generatore e' completo. Un guasto qui non ferma la generazione: senza
+    # elenco si genera come prima, e la selezione lascia passare le curiosita'
+    # senza etichetta.
+    try:
+        fenomeni.etichetta_mancanti(conn)
+    except Exception as exc:
+        print(f"  · etichette dei fenomeni non riparate: {str(exc)[:80]}")
+    coperti = fenomeni.noti(conn)
+
     corpus = all_published_texts(conn)
-    print(f"→ genero {count} idee (corpus esistente: {len(corpus)} fatti)")
-    ideas = generate(count, corpus, learnings)
+    print(f"→ genero {count} idee (corpus esistente: {len(corpus)} fatti, "
+          f"{len(coperti)} fenomeni)")
+    ideas = generate(count, corpus, learnings, coperti)
 
     ideas = dedupe(ideas, corpus)
     print(f"→ {len(ideas)} idee dopo deduplica")
@@ -456,5 +483,17 @@ def run_batch(
         else:
             stats["rejected"] += 1
             print(f"  ✗ [{fact_id}] {verdict} {confidence:.2f} — {v['note'][:90]}")
+
+    # Le approvate ricevono il loro fenomeno subito, prima di poter essere
+    # scelte. Se la chiamata fallisce restano senza etichetta e le ripara il
+    # giro successivo, in testa a questa stessa funzione.
+    try:
+        n = fenomeni.etichetta_mancanti(conn)
+        if n:
+            gia = set(coperti)
+            nuovi = [e for e in fenomeni.noti(conn) if e not in gia]
+            print(f"  · fenomeni: {n} etichettate, {len(nuovi)} fenomeni nuovi")
+    except Exception as exc:
+        print(f"  · etichette dei fenomeni rimandate: {str(exc)[:80]}")
 
     return stats

@@ -370,6 +370,26 @@ pipeline:
   min_confidence: 0.75
   # Similarità massima con un post già pubblicato (0-1). Sopra → scartato.
   max_similarity: 0.55
+
+  # ─── RIPOSO DEI FENOMENI ───
+  # Giorni prima che lo stesso FENOMENO ("anchoring", "spotlight effect") torni
+  # sullo stesso canale, anche con una curiosità diversa. La soglia qui sopra è
+  # lessicale e non vede i doppioni di significato: il 29/9/2026, 91 uscite
+  # YouTube su 197 ripetevano un fenomeno già uscito lì nei 30 giorni prima.
+  # Il perché per esteso sta in engine/fenomeni.py.
+  #
+  # Il valore è un compromesso con le scorte, misurato quel giorno: l'archivio
+  # copre 161 fenomeni. YouTube ne consuma 4 al giorno, quindi 30 giorni sono
+  # 120 fenomeni diversi — ci stanno. TikTok ne consuma fino a 16 (4 video × 4
+  # curiosità): a 30 giorni ne servirebbero 480 e il canale si fermerebbe; a 7
+  # ne servono 112. Anche 7 è un salto: fino a quel giorno 316 usi TikTok su
+  # 667 ripetevano un fenomeno uscito lì nella settimana prima, 112 nei tre
+  # giorni prima. Se TikTok scende a una curiosità per video, il suo riposo
+  # può salire a 30 come gli altri.
+  riposo_fenomeno:
+    giorni: 30
+    per_canale:
+      tiktok: 7
   # Post al giorno. IG tollera fino a 25-50 via API ma 1-2 è il ritmo giusto
   # per una pagina nuova: l'algoritmo premia la costanza, non il volume.
   posts_per_day: 2

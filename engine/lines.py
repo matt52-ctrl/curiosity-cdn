@@ -610,14 +610,20 @@ def generate(conn: sqlite3.Connection, count: int,
     # studio a giorni di distanza sullo stesso profilo. Il ripiego esisteva
     # perche' la produzione era scarsa; ora le scorte si rigenerano da sole
     # quando scendono, quindi non serve piu'.
-    fatti = conn.execute(
-        """SELECT id, hook, fact, detail, source_hint FROM facts
+    #
+    # E sul FENOMENO, non solo sulla riga: `ammessi` toglie le curiosita' il
+    # cui effetto e' uscito su questo canale di recente, e ne tiene una sola
+    # per effetto dentro il lotto — altrimenti due frasi sullo stesso effetto
+    # finiscono nello stesso video da quattro. Il perche' sta in fenomeni.py.
+    from .fenomeni import ammessi
+
+    fatti = ammessi(conn, conn.execute(
+        """SELECT id, hook, fact, detail, source_hint, fenomeno FROM facts
             WHERE status IN ('approved','rendered','published')
               AND id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = ?)
-            ORDER BY RANDOM()
-            LIMIT ?""",
-        (canale, count * 2),
-    ).fetchall()
+            ORDER BY RANDOM()""",
+        (canale,),
+    ).fetchall(), canale)[:count * 2]
 
     if not fatti:
         return []

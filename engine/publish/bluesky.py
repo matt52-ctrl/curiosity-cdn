@@ -425,16 +425,17 @@ def prossimi(conn, quanti: int = 1) -> List:
     studio citato qui non lo vogliamo — e scoprirlo al momento di comporre
     significherebbe saltare un giorno.
     """
-    return conn.execute(
+    from ..fenomeni import ammessi
+
+    righe = conn.execute(
         """SELECT f.* FROM facts f
            WHERE f.status IN ('published','rendered','approved')
              AND f.hook != '' AND COALESCE(f.source_hint,'') != ''
              AND COALESCE(f.verdict,'') != 'refuted'
              AND f.id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = 'bluesky')
-           ORDER BY f.created_at DESC
-           LIMIT ?""",
-        (quanti,),
+           ORDER BY f.created_at DESC"""
     ).fetchall()
+    return ammessi(conn, righe, "bluesky")[:quanti]
 
 
 def segna_uso(conn, fact_id: int, uri: str) -> None:
