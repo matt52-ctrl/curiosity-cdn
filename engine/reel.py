@@ -360,15 +360,16 @@ def build_line(
     parlato: List[tuple] = []
     d1 = _parla(line, cartella_voce / "hook.mp3")
     if d1:
-        parlato.append((0.2, cartella_voce / "hook.mp3"))
+        # Stessi tempi stretti degli Short (17/10/2026): decide la voce.
+        parlato.append((0.15, cartella_voce / "hook.mp3"))
         if reveal:
-            stacco = max(stacco, 0.2 + d1 + 0.4)
+            stacco = 0.15 + d1 + 0.25
             d2 = _parla(reveal, cartella_voce / "reveal.mp3")
             if d2:
-                parlato.append((stacco + 0.3, cartella_voce / "reveal.mp3"))
-                dur = max(dur, stacco + 0.3 + d2 + 0.9)
+                parlato.append((stacco + 0.15, cartella_voce / "reveal.mp3"))
+                dur = stacco + 0.15 + d2 + 0.5
         else:
-            dur = max(dur, 0.2 + d1 + 0.9)
+            dur = 0.15 + d1 + 0.6
 
     # Due tempi: prima l'aggancio da solo, poi la rivelazione sotto. Il
     # secondo fotogramma contiene entrambi, così la rivelazione si aggiunge
@@ -421,9 +422,20 @@ def build_line(
     # fotogramma a t=0 e il resto del video resta senza scritta. Il difetto è
     # invisibile in fase di montaggio — ffmpeg non segnala nulla — e si scopre
     # solo guardando il video oltre il primo istante.
-    args += ["-loop", "1", "-t", f"{dur}", "-i", str(overlay)]
+    # Sottotitoli a comparsa, come sugli Short: ogni frase diventa una
+    # sequenza di fotogrammi che si riempie coi tempi della voce.
+    lista_a = _traccia(_stati(line, _PAROLE.get(str(cartella_voce / "hook.mp3"), [])
+                              if d1 else [], 0.15),
+                       line, "", dur, f"reel-{name}-a", cartella_voce)
+    lista_b = (_traccia(_stati(reveal, _PAROLE.get(str(cartella_voce / "reveal.mp3"), [])
+                               if d1 else [], stacco + 0.15),
+                        reveal, "", dur, f"reel-{name}-b", cartella_voce)
+               if reveal else None)
+    args += (["-f", "concat", "-safe", "0", "-i", str(lista_a)] if lista_a
+             else ["-loop", "1", "-t", f"{dur}", "-i", str(overlay)])
     if reveal:
-        args += ["-loop", "1", "-t", f"{dur}", "-i", str(overlays[1])]
+        args += (["-f", "concat", "-safe", "0", "-i", str(lista_b)] if lista_b
+                 else ["-loop", "1", "-t", f"{dur}", "-i", str(overlays[1])])
     if musica:
         args += ["-stream_loop", "-1", "-i", str(musica)]
 
@@ -441,9 +453,9 @@ def build_line(
         # nessuna attesa da premiare, e il tempo di visione non cresce.
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,"
+            f"[1:v]fps=30,format=rgba,"
             f"fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
-            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
+            f"[2:v]fps=30,format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
             f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[b];"
             f"[bg][a]overlay=0:0:format=auto[p];"
             f"[p][b]overlay=0:0:format=auto[v]"
@@ -451,7 +463,7 @@ def build_line(
     else:
         filtro = (
             f"{sfondo};"
-            f"[1:v]format=rgba,"
+            f"[1:v]fps=30,format=rgba,"
             f"fade=t=out:st={dur - coda:.2f}:d=0.45:alpha=1[txt];"
             f"[bg][txt]overlay=0:0:format=auto[v]"
         )
@@ -630,7 +642,7 @@ def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
         # stessa funzione. Li' l'aggancio deve comparire esattamente come
         # compariva prima — e' la finestra su cui si giudica la prova
         # sull'apertura, e una dissolvenza in ingresso la sposterebbe.
-        f"[1:v]format=rgba{f',fade=t=in:st=0:d={entrata}:alpha=1' if entrata > 0 else ''},"
+        f"[1:v]fps=30,format=rgba{f',fade=t=in:st=0:d={entrata}:alpha=1' if entrata > 0 else ''},"
         f"fade=t=out:st={dur - 0.45:.2f}:d=0.4:alpha=1[t];"
         f"[bg][t]overlay=0:0:format=auto[v]"
     )
