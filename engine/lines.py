@@ -688,6 +688,23 @@ Return JSON matching the schema."""
     if imparato:
         user += "\n\n" + imparato
 
+    # La regola "al massimo meta' con You" vale per lotto, e i lotti sono di
+    # una o due frasi: non scattava mai. Al 17/10/2026 85 titoli su 90
+    # aprivano con "You…", ed e' uno dei segnali con cui YouTube riconosce un
+    # canale fatto in serie. Qui la si guarda sullo storico.
+    try:
+        ultime = [r[0] or "" for r in conn.execute(
+            "SELECT line FROM reels ORDER BY id DESC LIMIT 10")]
+    except sqlite3.OperationalError:
+        ultime = []
+    con_you = sum(1 for x in ultime
+                  if x.split(" ", 1)[0].lower().strip("'’") in ("you", "your"))
+    if ultime and con_you * 2 > len(ultime):
+        user += (f"\n\nOf the last {len(ultime)} hooks published, {con_you} "
+                 "opened with \"You\" or \"Your\". In THIS batch, no hook may "
+                 "open with \"You\" or \"Your\": start elsewhere and keep it "
+                 "about the viewer.")
+
     data = ask_json(_system(variante, apertura), user, LINES_SCHEMA,
                     effort="medium", max_tokens=8000)
     linee = data.get("lines", [])[:count]

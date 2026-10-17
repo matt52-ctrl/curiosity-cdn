@@ -552,7 +552,12 @@ publish:
     # A due fasce le formule di `scegli_lunghezza` e `scegli_apertura` sono
     # nel loro caso nativo: ogni giornata contiene un video per gruppo e i
     # gruppi si scambiano la fascia, quindi l'ora non entra nel confronto.
-    max_per_day: 2
+    # ⬇ 17/10/2026, strategia "puntare su TikTok" (decisa da Mattia): UNO al
+    # giorno. Mediana crollata a 43-63 viste e YouTube nel 2026 colpisce i
+    # canali di curiosita' in serie (volume alto + schema identico). Meno
+    # video, piu' diversi fra loro. Revisione 15/11: sotto 100 di mediana si
+    # valuta un canale nuovo. Va cambiato INSIEME a `orari`.
+    max_per_day: 1
 
     # Orari di uscita, in ORA ITALIANA. Non sono gli orari in cui gira il
     # workflow: il primo giro della giornata carica tutti e tre i video e li
@@ -623,7 +628,9 @@ publish:
     # spiegazione piu' probabile e' questa e non il contenuto: la coppia da
     # provare allora e' 19:00 + 23:00, che rinuncia all'equidistanza e tiene
     # tutte e due le uscite dentro la finestra buona.
-    orari: ["11:00", "23:00"]
+    # 17/10/2026: una fascia sola, le 19:00 (13:00 a New York): l'unico
+    # riscontro nostro dava 497 viste alle 19:45 contro 115 a mezzogiorno.
+    orari: ["19:00"]
     fuso: "Europe/Rome"
 
     # Quanto deve restare ferma una curiosità prima di poter tornare come
@@ -1928,7 +1935,9 @@ sito:
 # Non consuma curiosità nuove: riusa quelle già uscite negli Short, che per il
 # pubblico del formato lungo sono comunque inedite.
 lungo:
-  enabled: true
+  # SPENTO il 17/10/2026 (strategia decisa da Mattia): 9 episodi, 0-4 viste
+  # l'uno. Non porta nessuno e aggiunge al canale altro contenuto in serie.
+  enabled: false
 
   # Voce della narrazione (Edge TTS: gratuita, senza chiave, neurale).
   # Scelta ascoltando sei voci maschili sullo stesso testo: l'accento
