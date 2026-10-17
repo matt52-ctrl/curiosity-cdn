@@ -1294,8 +1294,7 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
             # stesso generatore.
             frasi = lines.generate(conn, quante, canale="tiktok",
                                    variante=lines.scegli_variante(conn),
-                                   apertura=cfg.get("esperimento.apertura.vincitore",
-                                                    "divario"))
+                                   apertura=lines.apertura_a_caso())
         except Exception as exc:
             print(f"  ✗ scrittura fallita: {str(exc)[:90]}")
             falliti += 1
@@ -2031,6 +2030,13 @@ def _mostra_apertura(conn) -> None:
               f"{r['viste_per_video'] or 0:>12.0f}")
 
     dati = {r["apertura"]: r for r in righe}
+    if len(cfg.get("esperimento.apertura.tipi") or []) > 2:
+        # Sette tipi: niente verdetto automatico, la tabella sopra e' il
+        # risultato. Si guarda TENUTA e viste insieme, dopo `giorni`.
+        print(f"  Sette aperture a rotazione: giorno {passati} di {giorni}.")
+        print("  Con un video al giorno ogni tipo ne ha uno a settimana:")
+        print("  prima di 4 video per tipo le differenze sono rumore.")
+        return
     scontro, divario = dati.get("scontro"), dati.get("divario")
     print()
     # Le quattro caselle prima del verdetto: se una è molto fuori scala
@@ -2698,8 +2704,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
             nuove = [l for l in lines.generate(
                         conn, quanti + 2, imparato=imparato,
                         variante=lines.scegli_variante(conn),
-                        apertura=cfg.get("esperimento.apertura.vincitore",
-                                         "divario"))
+                        apertura=lines.apertura_a_caso())
                      if l["line"] not in usate]
         except Exception as exc:
             print(f"generazione frasi fallita: {exc}")

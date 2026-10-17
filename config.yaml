@@ -61,7 +61,8 @@ voice:
     - Short declarative sentences. Concrete nouns. Active voice.
     - Numbers are specific: "in a 2019 study of 1,300 adults", not "studies show".
     - Never claim more than the evidence supports. "Suggests" beats "proves".
-    - The hook is a statement or a question, never a command.
+    - The hook is a statement or a question. A command only when the opening
+      type for the batch explicitly asks for one ("ordine").
 
 # ─── FORMATO ──────────────────────────────────────────────────────────────────
 format:
@@ -1801,8 +1802,12 @@ esperimento:
     # tenuta a 3 secondi e' sedici volte meno rumorosa delle visualizzazioni
     # (CV 0,049 contro 0,781, misurato su 22 Short). E' la prova sulla
     # lunghezza a chiedere i 60 giorni. Questa li segue.
-    giorni: 60
-    inizio: "2026-08-22"
+    giorni: 42   # 17/10/2026: sette aperture, sei settimane
+    # Riaperta il 17/10/2026 con SETTE aperture (scelta di Mattia). La prova
+    # divario/scontro (22/8–17/10) e' finita in pari: tenuta 95,1% contro
+    # 94,9%, viste 188 contro 201 — nessuna differenza.
+    inizio: "2026-10-17"
+    tipi: [divario, scontro, ordine, scena, effetto, sbagliata, nome]
     alterna_fascia: true
 
     # LA REGOLA, scritta prima di vedere i dati.

@@ -340,6 +340,107 @@ is. Rewrite it or use another finding.""",
 }
 
 
+# ─── Cinque aperture nuove (17/10/2026, idee approvate da Mattia) ─────────────
+# Tutte e sette girano a rotazione (`esperimento.apertura.tipi`). Lo scopo e'
+# doppio: misurare quale tiene di piu', e smettere di sembrare un canale fatto
+# con lo stampino — 85 agganci su 90 erano "You + verbo + affermazione".
+APERTURA.update({
+    "ordine": """
+
+HOW TO OPEN, FOR THIS BATCH — the instruction
+
+THIS OVERRIDES the "no commands" rule above: every hook in this batch MUST
+start with a verb in the imperative (Think, Picture, Count, Look, Guess,
+Remember, Name). A hook that is a statement has failed this batch.
+
+The hook asks the viewer to DO something small, right now, in their head or
+with their eyes, and the reveal shows what just happened to them. The viewer
+does not read about the effect: they catch themselves in it.
+
+  hook:   "Think of a number between one and ten. Don't change it."
+  reveal: "Most people pick seven. Middle, odd, and feels random."
+
+  hook:   "Picture the last time you were embarrassed. Now count the people."
+  reveal: "You remember more watchers than were actually looking."
+
+Rules: two short sentences at most; doable in two seconds without moving;
+never ask for anything physical, risky or personal to type. The reveal must
+answer the instruction — the viewer should feel caught, not lectured.""",
+
+    "scena": """
+
+HOW TO OPEN, FOR THIS BATCH — the scene from the study
+
+The hook opens INSIDE the original experiment: a year, the people, what they
+were asked to do. Concrete, past tense, no conclusion. The reveal gives the
+result and what it means for the viewer.
+
+  hook:   "In 1977, researchers showed people two photos of their own face."
+  reveal: "They chose the mirror version. Their friends chose the other."
+
+  hook:   "In 1999, two researchers asked people to count basketball passes."
+  reveal: "Half of them never saw the gorilla walk through."
+
+Rules: the year and the setup must come from the source you were given —
+never invent a detail. Do not open with "You". Do not name the effect.""",
+
+    "effetto": """
+
+HOW TO OPEN, FOR THIS BATCH — the effect before the cause
+
+Every hook in this batch MUST begin with "This is why", "That's why" or
+"Here's why", followed by a complete everyday situation. A hook without one
+of those openings has failed this batch.
+
+The hook names an everyday result the viewer has lived, and the reveal gives
+the mechanism.
+
+  hook:   "This is why the last song is the one you remember."
+  reveal: "Memory keeps the peak and the ending. The middle fades."
+
+  hook:   "This is why your ex looks better six months later."
+  reveal: "Time erases the friction first and keeps the highlights."
+
+Rules: the situation must be common enough that most viewers have lived it.
+Vary the opening words across the batch ("This is why", "That's why", "Here's
+why") — not the same three words every time.""",
+
+    "sbagliata": """
+
+HOW TO OPEN, FOR THIS BATCH — the wrong answer first
+
+The hook gives the answer most people would give, and says it is wrong. The
+viewer answers in their head, and stays to learn the right one.
+
+  hook:   "Most people think it's willpower. It isn't."
+  reveal: "It's how many decisions you made before lunch."
+
+  hook:   "Ask anyone why we forget names. They'll say memory. Wrong part."
+  reveal: "Names never get stored properly — the attention went elsewhere."
+
+Rules: the "common answer" must be one people genuinely give, and the reveal
+must be supported by the source. No strawman.""",
+
+    "nome": """
+
+HOW TO OPEN, FOR THIS BATCH — naming a nameless feeling
+
+The hook describes a specific feeling everyone knows and nobody has a word
+for, and promises the name. The reveal gives the name and why it happens.
+
+  hook:   "There's a name for walking into a room and forgetting why."
+  reveal: "The doorway effect. Your brain files memories by location."
+
+  hook:   "There's a word for replaying a conversation hours later."
+  reveal: "Rumination — and unfinished arguments replay the most."
+
+Rules: the feeling must be instantly recognisable. Use the real name from the
+source. Vary the opening ("There's a name for", "Psychologists have a word
+for", "This feeling has a name") across the batch.""",
+})
+APERTURE = tuple(APERTURA)
+
+
 def scegli_apertura(giorno: int, indice_fascia: int) -> str:
     """Quale apertura tocca a questa uscita: 'divario' o 'scontro'.
 
@@ -363,9 +464,25 @@ def scegli_apertura(giorno: int, indice_fascia: int) -> str:
     """
     if not cfg.get("esperimento.apertura.attiva", False):
         return "divario"
+    tipi = [t for t in (cfg.get("esperimento.apertura.tipi") or []) if t in APERTURA]
+    if tipi:
+        # Rotazione a sette: ogni uscita prende il tipo successivo, cosi'
+        # ogni tipo esce lo stesso numero di volte e in giorni diversi.
+        return tipi[(giorno * max(1, int(cfg.get("publish.youtube.max_per_day", 1)))
+                     + indice_fascia) % len(tipi)]
     if not cfg.get("esperimento.apertura.alterna_fascia", True):
         indice_fascia = 0
     return "scontro" if (giorno // 2 + indice_fascia) % 2 == 0 else "divario"
+
+
+def apertura_a_caso() -> str:
+    """Per i canali che non si misurano (TikTok, Instagram): un tipo a caso fra
+    quelli in rotazione, perche' la varieta' serve anche li'."""
+    import random
+    tipi = [t for t in (cfg.get("esperimento.apertura.tipi") or []) if t in APERTURA]
+    if cfg.get("esperimento.apertura.attiva", False) and tipi:
+        return random.choice(tipi)
+    return cfg.get("esperimento.apertura.vincitore", "divario")
 
 
 def scegli_variante(conn) -> str:
@@ -532,8 +649,9 @@ WHAT MAKES BOTH BEATS WORK
   saying "this is you". Sends per reach now weigh more than likes, so prefer
   lines that describe a person the viewer knows.
 
-  No advice, no commands, no "remember that…". No question marks in the
-  reveal. Never open with "The fact that", "Studies show", "Science says" or
+  No advice, no commands, no "remember that…" — EXCEPT when the opening block
+  at the end of this brief is "the instruction": there the hook IS a small
+  command, and that block wins. No question marks in the reveal. Never open with "The fact that", "Studies show", "Science says" or
   "Your brain is" — the four openings every account already uses.
 
 MOOD — decides the music and the footage, so it must be honest
