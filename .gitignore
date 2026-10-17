@@ -41,3 +41,4 @@ data/tiktok_token_prova.json
 # Tenerlo anche qui significava rigenerare 78 file a ogni giro e collidere con
 # le esecuzioni su GitHub — che è esattamente quello che è successo.
 docs/
+prove_voce/

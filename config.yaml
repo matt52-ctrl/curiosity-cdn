@@ -920,6 +920,58 @@ cta:
   # è successo.
   secondi: 2.4
 
+  # BANCA DEGLI INVITI (17/10/2026, chiesta da Mattia: «la frase CTA deve
+  # essere più avvincente»). Per ogni video se ne pesca una a caso — sempre
+  # la stessa per lo stesso video. Il titolo è anche ciò che dice la voce,
+  # quindi va scritto per essere DETTO: corto, sotto i tre secondi.
+  # `meta` = la scena dopo l'aggancio, prima della risposta: deve tenere la
+  #   suspense, non scioglierla. [titolo, riga sotto]
+  # `fine` = sotto la domanda finale.
+  # Niente "one a day": su TikTok ne escono quattro.
+  # Per aggiungerne: una riga. Per toglierne: cancellarla.
+  banca:
+    meta:
+      youtube:
+        - ["Subscribe — the answer is coming", "It's about something you do every day."]
+        - ["Subscribe if you've done this", "Wait for it."]
+        - ["Subscribe. Your brain has more of these", "Here's the first."]
+        - ["Before the answer: subscribe", "It's stranger than it sounds."]
+        - ["Subscribe — you'll want the next one", "The answer is two seconds away."]
+        - ["Subscribe and catch your brain in the act", "Here's how it works."]
+        - ["Subscribe — this one's about you", "Keep watching."]
+      tiktok:
+        - ["Follow — the answer is coming", "It's about something you do every day."]
+        - ["Follow if you've done this", "Wait for it."]
+        - ["Follow. Your brain has more of these", "Here's the first."]
+        - ["Before the answer: follow", "It's stranger than it sounds."]
+        - ["Follow — you'll want the next one", "The answer is two seconds away."]
+        - ["Follow and catch your brain in the act", "Here's how it works."]
+        - ["Follow — this one's about you", "Keep watching."]
+      default:
+        - ["Follow — the answer is coming", "It's about something you do every day."]
+        - ["Follow if you've done this", "Wait for it."]
+        - ["Before the answer: follow", "It's stranger than it sounds."]
+        - ["Follow — this one's about you", "Keep watching."]
+    fine:
+      youtube:
+        - "Subscribe — the next one is about you too."
+        - "Subscribe. Every one comes with the study behind it."
+        - "Subscribe before your brain makes you forget."
+        - "Subscribe — you'll catch yourself doing the next one."
+        - "Tell me below. Then subscribe."
+        - "Subscribe for the next thing your brain hides from you."
+      tiktok:
+        - "Follow — the next one is about you too."
+        - "Follow. Every one comes with the study behind it."
+        - "Follow before your brain makes you forget."
+        - "Follow — you'll catch yourself doing the next one."
+        - "Tell me below. Then follow."
+        - "Follow for the next thing your brain hides from you."
+      default:
+        - "Follow — the next one is about you too."
+        - "Follow before your brain makes you forget."
+        - "Tell me below. Then follow."
+
   # Fissa, non generata dal modello. Se cambiasse a ogni video non sapremmo se
   # a muovere i numeri è la richiesta o quale versione è capitata. Si passa a
   # una versione generata solo dopo che questa ha dato una misura.
@@ -1349,6 +1401,19 @@ reel:
   # totale, ma con poche curiosità in archivio la divisione darebbe segmenti
   # lunghissimi con una frase ferma sullo schermo.
   long_max_seconds_per_fact: 16.0
+
+  # La voce del formato lungo anche sugli Short (YouTube, TikTok, reel).
+  # Decisa da Mattia il 17 ottobre 2026 dopo aver sentito gli episodi lunghi:
+  # «mettiamo la voce e poi vedremo i risultati, anche se allunghiamo i
+  # video». La voce legge l'aggancio e poi la rivelazione; il segmento si
+  # allunga quanto serve per non tagliarla — mai il contrario. Voce e
+  # velocita' sono quelle di `lungo`. ⚠️ Cade a 4 giorni dalla fine della
+  # prova sulla lunghezza (corto 231 viste/video contro lungo 156): i video
+  # da qui in poi non sono confrontabili con quelli di prima.
+  # Se la sintesi fallisce il video esce come prima, muto.
+  voce:
+    attiva: true
+    volume_musica: 0.10
 
 # ─── PROVA A/B SUL REGISTRO ───────────────────────────────────────────────────
 # Metà dei video YouTube sono scritti come sempre ("osservazione"), metà con un

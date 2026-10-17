@@ -201,6 +201,52 @@ def _traccia_a_caso(seed: str, mood: str = "reflective") -> Optional[Path]:
     return rnd.choice(tracce)
 
 
+def _parla(testo: str, dest: Path) -> Optional[float]:
+    """La voce di un pezzo di Short. Ritorna la durata, None se spenta o fallita.
+
+    Riusa la narrazione del formato lungo: stessa voce, stessa velocita',
+    stesse ripuliture per l'orecchio. Import qui dentro perche' `lungo`
+    importa questo modulo.
+    """
+    if not cfg.get("reel.voce.attiva", False) or not (testo or "").strip():
+        return None
+    from .lungo import narra, testo_parlato
+    return narra(testo_parlato({"hook": testo}), dest)
+
+
+def _mixa(ff: str, video: Path, out: Path, durata: float,
+          musica: Optional[Path], voci: List[tuple], vol_musica: float) -> None:
+    """Video gia' montato + musica + voci posate ai loro istanti.
+
+    `voci` = [(secondi, file)]. Senza voci la musica resta al volume di
+    sempre; con le voci scende sotto, come nel formato lungo.
+    """
+    args = [ff, "-y", "-i", str(video)]
+    if musica:
+        args += ["-stream_loop", "-1", "-i", str(musica)]
+    for _, f in voci:
+        args += ["-i", str(f)]
+    pezzi, etichette = [], []
+    base = 2 if musica else 1
+    if musica:
+        pezzi.append(f"[1:a]volume={vol_musica},atrim=0:{durata:.2f},"
+                     f"afade=t=out:st={max(0, durata - 1.5):.2f}:d=1.5[m]")
+        etichette.append("[m]")
+    for k, (t, _) in enumerate(voci):
+        ms = int(t * 1000)
+        pezzi.append(f"[{base + k}:a]adelay={ms}|{ms}[v{k}]")
+        etichette.append(f"[v{k}]")
+    if not etichette:
+        shutil.copy(video, out)
+        return
+    pezzi.append(f"{''.join(etichette)}amix=inputs={len(etichette)}:"
+                 f"normalize=0:duration=longest,atrim=0:{durata:.2f}[a]")
+    args += ["-filter_complex", ";".join(pezzi), "-map", "0:v", "-map", "[a]",
+             "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-t", f"{durata:.2f}",
+             "-movflags", "+faststart", str(out)]
+    _run(args)
+
+
 def build_line(
     line: str,
     background: Path,
@@ -219,6 +265,24 @@ def build_line(
     ff = _ffmpeg()
     w, h = REEL_SIZE
     dur = float(seconds or cfg.get("reel.line_seconds", 6.5))
+    stacco = float(cfg.get("reel.reveal_at", 3.4))
+
+    # La voce comanda i tempi: l'aggancio resta in campo finche' non e' stato
+    # detto, la rivelazione finche' non e' finita. Si allunga, non si taglia.
+    cartella_voce = OUTPUT_DIR / f"reel-{name}-voce"
+    cartella_voce.mkdir(parents=True, exist_ok=True)
+    parlato: List[tuple] = []
+    d1 = _parla(line, cartella_voce / "hook.mp3")
+    if d1:
+        parlato.append((0.2, cartella_voce / "hook.mp3"))
+        if reveal:
+            stacco = max(stacco, 0.2 + d1 + 0.4)
+            d2 = _parla(reveal, cartella_voce / "reveal.mp3")
+            if d2:
+                parlato.append((stacco + 0.3, cartella_voce / "reveal.mp3"))
+                dur = max(dur, stacco + 0.3 + d2 + 0.9)
+        else:
+            dur = max(dur, 0.2 + d1 + 0.9)
 
     # Due tempi: prima l'aggancio da solo, poi la rivelazione sotto. Il
     # secondo fotogramma contiene entrambi, così la rivelazione si aggiunge
@@ -289,7 +353,6 @@ def build_line(
         # L'aggancio resta in campo fino a `stacco`, poi lascia il posto alla
         # risposta. Il ritardo e' voluto: se la risposta arriva subito non c'e'
         # nessuna attesa da premiare, e il tempo di visione non cresce.
-        stacco = float(cfg.get("reel.reveal_at", 3.4))
         filtro = (
             f"{sfondo};"
             f"[1:v]format=rgba,"
@@ -308,6 +371,9 @@ def build_line(
         )
 
     args += ["-filter_complex", filtro, "-map", "[v]"]
+    if parlato:
+        # Musica e voce si mescolano dopo, in un passaggio solo audio.
+        musica_dopo, musica = musica, None
     if musica:
         # L'indice dell'audio dipende da quanti fotogrammi di testo ci sono.
         idx_audio = 3 if reveal else 2
@@ -329,6 +395,13 @@ def build_line(
         str(out),
     ]
     _run(args)
+    if parlato:
+        muto = out.with_name("reel-muto.mp4")
+        out.replace(muto)
+        _mixa(ff, muto, out, dur, musica_dopo, parlato,
+              float(cfg.get("reel.voce.volume_musica", 0.10)))
+        muto.unlink(missing_ok=True)
+    shutil.rmtree(cartella_voce, ignore_errors=True)
 
     # Copertina esplicita. Senza, Instagram sceglie da sé un fotogramma e
     # spesso pesca prima che il testo compaia: nel feed e nella griglia il
@@ -358,7 +431,7 @@ def _ingresso(sfondo: Path, e_immagine: bool, durata: float) -> List[str]:
 
 def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
               indice: int, canale: str = "",
-              domanda: str = "") -> Optional[Path]:
+              domanda: str = "", durata: Optional[float] = None) -> Optional[Path]:
     """Il fotogramma finale: cosa chiediamo a chi è arrivato in fondo.
 
     Perché esiste: fino al 20 agosto 2026 i video finivano e basta. L'ultima
@@ -390,11 +463,47 @@ def _coda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
     domanda = (domanda or cfg.get("cta.domanda", "") or "").strip()
     if not domanda:
         return None
-    azione = (cfg.get(f"cta.azione.{canale}", "")
-              or cfg.get("cta.azione.default", "") or "").strip()
-    dur = float(cfg.get("cta.secondi", 2.4))
+    azione = _invito("fine", canale, nome)[0]
+    dur = float(durata or cfg.get("cta.secondi", 2.4))
     return _scheda_cta(ff, sfondo, e_immagine, nome, tmp, indice,
                        domanda, azione, dur, "cta")
+
+
+def _invito(punto: str, canale: str, seme: str) -> tuple:
+    """(titolo, sotto) dell'invito per `punto` ('meta' o 'fine').
+
+    Pescato dalla banca `cta.banca` (17/10/2026, chiesto da Mattia: l'invito
+    deve essere avvincente e non sempre lo stesso). Il seme e' il nome del
+    video: lo stesso video rimontato riprende la stessa frase. Senza banca si
+    ricade sulle frasi fisse di prima.
+    """
+    import hashlib
+    banca = (cfg.get(f"cta.banca.{punto}.{canale}")
+             or cfg.get(f"cta.banca.{punto}.default") or [])
+    if banca:
+        n = int(hashlib.sha1(f"{punto}{seme}".encode()).hexdigest(), 16)
+        voce = banca[n % len(banca)]
+        if isinstance(voce, str):
+            return voce.strip(), ""
+        return (voce[0] or "").strip(), (voce[1] if len(voce) > 1 else "").strip()
+    if punto == "meta":
+        return ((cfg.get(f"cta.anticipata.reel.{canale}", "")
+                 or cfg.get("cta.anticipata.reel.default", "") or "").strip(),
+                (cfg.get("cta.anticipata.sotto", "") or "").strip())
+    return ((cfg.get(f"cta.azione.{canale}", "")
+             or cfg.get("cta.azione.default", "") or "").strip(), "")
+
+
+def _testi_cta(canale: str, seme: str, domanda: str = "") -> tuple:
+    """(richiesta a meta', richiesta finale) come la legge la voce.
+
+    Identiche a quelle a schermo: un invito detto diverso da come e' scritto
+    sembrano due inviti.
+    """
+    meta = _invito("meta", canale, seme)[0]
+    domanda = (domanda or cfg.get("cta.domanda", "") or "").strip()
+    azione = _invito("fine", canale, seme)[0]
+    return meta, " ".join(x for x in (domanda, azione) if x)
 
 
 def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
@@ -455,7 +564,8 @@ def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
 def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
                     tmp: Path, indice: int, canale: str,
                     hook: str, domanda: str, reveal: str,
-                    stacco: float, per_voce: float) -> List[Path]:
+                    stacco: float, per_voce: float,
+                    dur_cta: Optional[float] = None) -> List[Path]:
     """La curiosita' TAGLIATA IN DUE dalla richiesta, con la rivelazione dopo.
 
     Vale per la PRIMA curiosita' di ogni video, a una o a tre. Voluto da
@@ -491,12 +601,10 @@ def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
     La curiosita' NON si allunga: `stacco + (per_voce - stacco) = per_voce`.
     A crescere e' solo il video, dei due secondi della richiesta.
     """
-    titolo = (cfg.get(f"cta.anticipata.reel.{canale}", "")
-              or cfg.get("cta.anticipata.reel.default", "") or "").strip()
+    titolo, sotto = _invito("meta", canale, nome)
     if not titolo:
         return []
-    dur = float(cfg.get("cta.anticipata.secondi", 2.0))
-    sotto = (cfg.get("cta.anticipata.sotto", "") or "").strip()
+    dur = float(dur_cta or cfg.get("cta.anticipata.secondi", 2.0))
 
     # L'aggancio, fino al taglio. Nessuna dissolvenza in ingresso: deve
     # comparire come compariva prima, o la tenuta a 3 secondi misura la
@@ -804,6 +912,13 @@ def build_multi(voci: List[Dict], name: str,
     # meta' video). Serve alla dissolvenza della musica, che si calcola sulla
     # durata vera del montaggio.
     extra = 0.0
+    # La voce: (istante, file) posati sulla linea del tempo del video intero,
+    # mescolati alla fine. `t` e' dove comincia il segmento corrente.
+    parlato: List[tuple] = []
+    t = 0.0
+    cartella_voce = out_dir / "_voce"
+    cartella_voce.mkdir(exist_ok=True)
+    meta_cta, _ = _testi_cta(canale, name)
     for i, v in enumerate(voci):
         hook = v.get("hook") or v.get("line", "")
         reveal = v.get("reveal", "")
@@ -838,6 +953,16 @@ def build_multi(voci: List[Dict], name: str,
             continue
         montate.append(v)
         ultimo_sfondo = (sfondo, e_immagine)
+
+        # Con la voce i tempi li decide il parlato: l'aggancio resta finche'
+        # non e' stato detto, la rivelazione finche' non e' finita.
+        stacco_i, per_i = stacco, per_voce
+        f_hook, f_rev = cartella_voce / f"{i}h.mp3", cartella_voce / f"{i}r.mp3"
+        d1 = _parla(hook, f_hook)
+        d2 = _parla(reveal, f_rev) if d1 and reveal else None
+        if d1:
+            stacco_i = max(stacco, 0.2 + d1 + 0.4)
+            per_i = max(per_voce, stacco_i + 0.3 + (d2 or 0.0) + 0.9)
 
         # La domanda sta SOTTO l'aggancio, e sotto quello soltanto.
         #
@@ -876,16 +1001,28 @@ def build_multi(voci: List[Dict], name: str,
         # sempre: la fascia oraria di uno Short non si recupera, e un video
         # senza richiesta vale piu' di nessun video.
         if i == 0 and cfg.get("cta.anticipata.attiva", False):
+            dur_cta = float(cfg.get("cta.anticipata.secondi", 2.0))
+            f_meta = cartella_voce / "meta.mp3"
+            dm = _parla(meta_cta, f_meta) if d1 else None
+            if dm:
+                dur_cta = max(dur_cta, 0.3 + dm + 0.5)
             try:
                 pezzi = _fatto_spezzato(ff, sfondo, e_immagine, name, tmp, i,
                                         canale, hook, domanda, reveal,
-                                        stacco, per_voce)
+                                        stacco_i, per_i, dur_cta)
             except Exception as exc:
                 print(f"    curiosita' non spezzata: {str(exc)[:80]}")
                 pezzi = []
             if pezzi:
                 segmenti.extend(pezzi)
-                extra += float(cfg.get("cta.anticipata.secondi", 2.0))
+                extra += dur_cta
+                if d1:
+                    parlato.append((t + 0.2, f_hook))
+                if dm:
+                    parlato.append((t + stacco_i + 0.3, f_meta))
+                if d2:
+                    parlato.append((t + stacco_i + dur_cta + 0.3, f_rev))
+                t += stacco_i + dur_cta + max(1.5, per_i - stacco_i)
                 continue
 
         overlays = render.render_slides(
@@ -901,26 +1038,31 @@ def build_multi(voci: List[Dict], name: str,
             # La carrellata sta dentro `_fondo`, e c'e' SOLO sulle immagini:
             # sui filmati era stata provata e bocciata a misura. La nota lunga
             # con i numeri e' li'.
-            f"{_fondo(sfondo, e_immagine, per_voce, w, h, i)};"
-            f"[1:v]format=rgba,fade=t=out:st={stacco:.2f}:d=0.4:alpha=1[a];"
-            f"[2:v]format=rgba,fade=t=in:st={stacco + 0.3:.2f}:d=0.45:alpha=1,"
-            f"fade=t=out:st={per_voce - 0.5:.2f}:d=0.4:alpha=1[b];"
+            f"{_fondo(sfondo, e_immagine, per_i, w, h, i)};"
+            f"[1:v]format=rgba,fade=t=out:st={stacco_i:.2f}:d=0.4:alpha=1[a];"
+            f"[2:v]format=rgba,fade=t=in:st={stacco_i + 0.3:.2f}:d=0.45:alpha=1,"
+            f"fade=t=out:st={per_i - 0.5:.2f}:d=0.4:alpha=1[b];"
             f"[bg][a]overlay=0:0:format=auto[p];"
             f"[p][b]overlay=0:0:format=auto[v]"
         )
         _run([
             ff, "-y",
-            *_ingresso(sfondo, e_immagine, per_voce),
-            "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[0]),
-            "-loop", "1", "-t", f"{per_voce}", "-i", str(overlays[1]),
+            *_ingresso(sfondo, e_immagine, per_i),
+            "-loop", "1", "-t", f"{per_i}", "-i", str(overlays[0]),
+            "-loop", "1", "-t", f"{per_i}", "-i", str(overlays[1]),
             "-filter_complex", filtro, "-map", "[v]",
-            "-t", f"{per_voce}",
+            "-t", f"{per_i}",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
             "-maxrate", "6M", "-bufsize", "12M",
             "-pix_fmt", "yuv420p", "-r", "30",
             str(seg),
         ])
         segmenti.append(seg)
+        if d1:
+            parlato.append((t + 0.2, f_hook))
+        if d2:
+            parlato.append((t + stacco_i + 0.3, f_rev))
+        t += per_i
 
 
     if not segmenti:
@@ -931,7 +1073,7 @@ def build_multi(voci: List[Dict], name: str,
     # una durata piu' lunga del vero, e la dissolvenza della musica —
     # calcolata su `durata - 1.5` — cadrebbe oltre la fine del video, cioe'
     # non ci sarebbe piu'.
-    durata = per_voce * len(montate) + extra
+    durata = t
 
     # La richiesta finale. Si aggiunge in coda, quindi non toglie tempo a
     # nessuna curiosita': il video si allunga di due secondi e mezzo.
@@ -952,12 +1094,19 @@ def build_multi(voci: List[Dict], name: str,
         if len(montate) == 1:
             propria = (montate[0].get("domanda") or "").strip()
             domanda_cta = propria or domanda_cta
+        dur_coda = float(cfg.get("cta.secondi", 2.4))
+        f_fine = cartella_voce / "fine.mp3"
+        dc = _parla(_testi_cta(canale, name, domanda_cta)[1], f_fine) if parlato else None
+        if dc:
+            dur_coda = max(dur_coda, 0.3 + dc + 0.7)
         try:
             coda = _coda_cta(ff, ultimo_sfondo[0], ultimo_sfondo[1], name, tmp,
-                             len(segmenti), canale, domanda_cta)
+                             len(segmenti), canale, domanda_cta, durata=dur_coda)
             if coda:
                 segmenti.append(coda)
-                durata += float(cfg.get("cta.secondi", 2.4))
+                if dc:
+                    parlato.append((durata + 0.3, f_fine))
+                durata += dur_coda
         except Exception as exc:
             print(f"    fotogramma finale non montato: {str(exc)[:80]}")
 
@@ -969,17 +1118,28 @@ def build_multi(voci: List[Dict], name: str,
     out = out_dir / "short.mp4"
 
     args = [ff, "-y", "-f", "concat", "-safe", "0", "-i", str(elenco)]
-    if musica:
+    if parlato:
+        # Video concatenato muto, poi voce e musica in un passaggio solo audio.
+        muto = out_dir / "short-muto.mp4"
+        _run(args + ["-c:v", "copy", "-an", str(muto)])
+        _mixa(ff, muto, out, durata, musica, parlato,
+              float(cfg.get("reel.voce.volume_musica", 0.10)))
+        muto.unlink(missing_ok=True)
+        musica, args = None, None
+    if args and musica:
         args += ["-stream_loop", "-1", "-i", str(musica)]
-    args += ["-c:v", "copy"]
+    if args:
+        args += ["-c:v", "copy"]
     if musica:
         args += [
             "-map", "0:v", "-map", "1:a",
             "-af", f"volume=0.3,afade=t=out:st={durata - 1.5:.2f}:d=1.5",
             "-c:a", "aac", "-b:a", "128k", "-shortest",
         ]
-    args += ["-movflags", "+faststart", str(out)]
-    _run(args)
+    if args:
+        args += ["-movflags", "+faststart", str(out)]
+        _run(args)
+    shutil.rmtree(cartella_voce, ignore_errors=True)
 
     for s in segmenti:
         s.unlink(missing_ok=True)
