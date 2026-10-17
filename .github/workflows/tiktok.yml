@@ -61,9 +61,11 @@ on:
     # le fasce cadono nel giorno americano. Minuti a :45 per non partire
     # insieme ai workflow delle :15 dello stesso gruppo di concorrenza.
     - cron: "45 16 * * *"    # 18:45 italiane — 12:45 a New York
-    - cron: "45 19 * * *"    # 21:45 italiane — 15:45 a New York
+    # spento 17/10/2026 (2 al giorno):
+    # cron: "45 19 * * *"    # 21:45 italiane — 15:45 a New York
     - cron: "45 22 * * *"    # 00:45 italiane — 18:45 a New York
-    - cron: "45 0 * * *"     # 02:45 italiane — 20:45 a New York
+    # spento 17/10/2026 (2 al giorno):
+    # cron: "45 0 * * *"     # 02:45 italiane — 20:45 a New York
     # Le 17:15 e non le 16:15: a quell'ora gira il ciclo dei reel, che
     # condivide il gruppo di concorrenza `curiosity-state`. Due giri dello
     # stesso gruppo in coda insieme non si accodano educatamente — GitHub

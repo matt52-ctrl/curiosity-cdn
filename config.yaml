@@ -389,7 +389,7 @@ pipeline:
   riposo_fenomeno:
     giorni: 30
     per_canale:
-      tiktok: 7
+      tiktok: 14   # era 7 a 16 curiosità/giorno; ora 4/giorno
   # Post al giorno. IG tollera fino a 25-50 via API ma 1-2 è il ritmo giusto
   # per una pagina nuova: l'algoritmo premia la costanza, non il volume.
   posts_per_day: 2
@@ -689,13 +689,16 @@ publish:
     # rendono meglio fra i 42 e i 54 secondi — più larga della finestra di
     # YouTube (30-45) e molto più di quella di Instagram (7-15). Quattro per
     # ~11 secondi l'una centrano i 45.
-    facts_per_video: 4
-    target_seconds: 45.0
+    # ⬇ 17/10/2026 (Mattia: «pubblichiamo troppo, puntiamo sulla qualità»):
+    # DUE curiosità per video. Con la voce ogni curiosità dura ~15-20 s, e a
+    # quattro il video arrivava a ~80 s. Due danno ~40 s, dentro la finestra.
+    facts_per_video: 2
+    target_seconds: 30.0
 
     # Non serve generare curiosità apposta: il registro dei consumi è per
     # canale, e su TikTok non è mai uscito nulla. Tutto l'archivio è materiale
     # nuovo per quel pubblico — è cross-posting, non riciclo.
-    max_per_day: 4
+    max_per_day: 2   # era 4; 17/10/2026, meno video e migliori
 
     # Il ramo usa-e-getta dove stanno i video finche' Buffer non li pubblica.
     # Si AZZERA con tutta la storia dopo ogni uscita (approvato da Mattia il
