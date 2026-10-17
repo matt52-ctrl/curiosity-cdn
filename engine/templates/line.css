@@ -115,3 +115,12 @@ body { background: transparent; }
   text-shadow: 0 2px 16px rgba(0,0,0,.9);
 }
 
+
+
+/* Sottotitoli che seguono la voce (17/10/2026). Tutta la frase e' gia' in
+   campo, cosi' l'impaginato non si muove; le parole non ancora dette sono
+   spente, quelle dette si accendono. Le parole chiave in giallo caldo: lo
+   stesso colore su ogni video, perche' diventi il segno del canale. */
+.headline .w { opacity: 0; transition: none; }
+.headline .w.on { opacity: 1; }
+.headline .w.k { color: #FFD166; }

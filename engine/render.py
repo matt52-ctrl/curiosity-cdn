@@ -85,6 +85,10 @@ def build_html(
     for i, s in enumerate(slides):
         kicker = _esc(s.get("kicker", ""))
         headline = _esc(s.get("headline", ""))
+        # `headline_html`: la stessa frase gia' divisa in <span> (sottotitoli
+        # parola per parola, 17/10/2026). La misura del corpo resta sul
+        # testo semplice, cosi' tutti gli stati di una frase hanno lo stesso
+        # impaginato e le parole non saltano mentre si accendono.
         body = _esc(s.get("body", ""))
         # Puntini di progressione: dicono al lettore quanto manca. Aumentano
         # misurabilmente il completion rate del carosello.
@@ -119,6 +123,7 @@ def build_html(
         # Livello fotografico. Il trattamento (desaturazione + velatura di
         # colore) sta nel CSS del tema: è ciò che fa sembrare venti foto di
         # venti autori diversi la stessa pagina invece di un collage.
+        nascosto = ' style="visibility:hidden"' if s.get("body_nascosto") else ""
         image = s.get("image", "")
         credit = _esc(s.get("credit", ""))
         canvas = (
@@ -137,8 +142,8 @@ def build_html(
     <span class="index">{index}</span>
   </header>
   <div class="stage">
-    <h1 class="headline {_fit_class(headline)}">{headline}</h1>
-    {f'<p class="body">{body}</p>' if body else ''}
+    <h1 class="headline {_fit_class(headline)}">{s.get("headline_html") or headline}</h1>
+    {f'<p class="body"{nascosto}>{body}</p>' if body else ''}
   </div>
   <footer class="bottom">
     <span class="mark">{watermark}</span>

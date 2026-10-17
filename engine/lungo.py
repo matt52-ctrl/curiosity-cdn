@@ -39,6 +39,40 @@ def _voce() -> str:
     return cfg.get("lungo.voce", "en-US-AndrewNeural")
 
 
+def narra_parole(testo: str, dest: Path) -> Tuple[Optional[float], List[Tuple[float, str]]]:
+    """Come `narra`, ma restituisce anche quando inizia ogni parola.
+
+    (durata, [(secondi, parola)]). Servono ai sottotitoli che si accendono
+    mentre la voce parla (17/10/2026). Il motore li manda gratis insieme
+    all'audio, in unita' da 100 nanosecondi.
+    """
+    import edge_tts
+
+    parole: List[Tuple[float, str]] = []
+
+    async def _fai():
+        com = edge_tts.Communicate(
+            testo, _voce(),
+            rate=cfg.get("lungo.velocita", "-8%"),
+            boundary="WordBoundary",
+        )
+        with open(dest, "wb") as f:
+            async for pezzo in com.stream():
+                if pezzo["type"] == "audio":
+                    f.write(pezzo["data"])
+                elif pezzo["type"] == "WordBoundary":
+                    parole.append((pezzo["offset"] / 1e7, pezzo["text"]))
+
+    try:
+        asyncio.run(_fai())
+    except Exception as exc:
+        print(f"    narrazione fallita: {str(exc)[:110]}")
+        return None, []
+    if not dest.exists() or dest.stat().st_size < 1000:
+        return None, []
+    return _durata(dest), parole
+
+
 def narra(testo: str, dest: Path) -> Optional[float]:
     """Sintetizza la narrazione. Ritorna la durata in secondi.
 

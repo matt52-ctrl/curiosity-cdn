@@ -1448,6 +1448,10 @@ reel:
   voce:
     attiva: true
     volume_musica: 0.10
+    # Sottotitoli che si accendono parola per parola mentre la voce parla,
+    # con le ultime due parole piene in giallo (17/10/2026, scelti da Mattia).
+    # false = la frase intera ferma, come prima.
+    sottotitoli: true
 
 # ─── PROVA A/B SUL REGISTRO ───────────────────────────────────────────────────
 # Metà dei video YouTube sono scritti come sempre ("osservazione"), metà con un

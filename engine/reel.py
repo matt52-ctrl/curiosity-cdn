@@ -163,7 +163,7 @@ def compose(frames: List[Path], out: Path, music: Optional[Path] = None) -> Path
 
     for s in segmenti:
         s.unlink(missing_ok=True)
-    tmp.rmdir()
+    shutil.rmtree(tmp, ignore_errors=True)
     return out
 
 
@@ -210,8 +210,94 @@ def _parla(testo: str, dest: Path) -> Optional[float]:
     """
     if not cfg.get("reel.voce.attiva", False) or not (testo or "").strip():
         return None
-    from .lungo import narra, testo_parlato
-    return narra(testo_parlato({"hook": testo}), dest)
+    from .lungo import narra_parole, testo_parlato
+    durata, parole = narra_parole(testo_parlato({"hook": testo}), dest)
+    _PAROLE[str(dest)] = parole
+    return durata
+
+
+# I tempi delle parole dell'ultima sintesi, per file. Li legge chi monta i
+# sottotitoli; `_parla` resta una funzione che restituisce solo la durata.
+_PAROLE: Dict[str, list] = {}
+
+_VUOTE = set("""a an the and or but of in on at to for from by with about as into
+over under than then that this these those it its is are was were be been
+being do does did you your yours we our they their them he she his her i me
+my not no so if when what why how who whom which there here just only even
+more most much many very can could would should will may might own all any
+some one ever never""".split())
+
+
+def _chiavi(parole: List[str]) -> set:
+    """Le due parole da colorare: le ultime due parole piene della frase.
+
+    In inglese il peso di una frase cade quasi sempre in fondo ("…in a
+    noisy room", "…not the process"): e' una regola grezza ma senza
+    chiamate al modello, e sbaglia raramente in modo brutto."""
+    piene = [i for i, w in enumerate(parole)
+             if len(w.strip(".,;:!?'\"’—-").lower()) >= 4
+             and w.strip(".,;:!?'\"’—-").lower() not in _VUOTE]
+    return set(piene[-2:])
+
+
+def _stati(testo: str, parole: list, inizio: float) -> List[tuple]:
+    """[(secondi, html)] — la frase con le parole accese una alla volta.
+
+    `parole` arriva dalla voce. Se il conto non combacia con quello a
+    schermo (la voce legge un testo ripulito: niente parentesi, sigle
+    sciolte) i tempi si distribuiscono in proporzione fra la prima e
+    l'ultima parola detta. Vuoto = niente sottotitoli, si torna al
+    fotogramma fisso.
+    """
+    import html as _h
+    if not cfg.get("reel.voce.sottotitoli", False) or not parole:
+        return []
+    pezzi = testo.split()
+    n = len(pezzi)
+    if not n:
+        return []
+    if len(parole) == n:
+        tempi = [inizio + t for t, _ in parole]
+    else:
+        a, b = parole[0][0], parole[-1][0]
+        tempi = [inizio + a + (b - a) * i / max(1, n - 1) for i in range(n)]
+    chiavi = _chiavi(pezzi)
+
+    def riga(accese: int) -> str:
+        return " ".join(
+            f'<span class="w{" on" if j < accese else ""}'
+            f'{" k" if j in chiavi else ""}">{_h.escape(w, quote=False)}</span>'
+            for j, w in enumerate(pezzi))
+
+    return [(0.0, riga(0))] + [(t, riga(i + 1)) for i, t in enumerate(tempi)]
+
+
+def _traccia(stati: List[tuple], titolo: str, sotto: str, dur: float,
+             nome: str, tmp: Path) -> Optional[Path]:
+    """Gli stati della frase come elenco per il concat di ffmpeg: ogni
+    fotogramma resta in campo fino alla parola successiva."""
+    from . import render
+    if not stati:
+        return None
+    pngs = render.render_slides(
+        # La riga sotto (la domanda) entra solo a frase completa: prima
+        # comparirebbe la domanda di una frase che non c'e' ancora.
+        # Nascosta ma presente: tiene il suo spazio, cosi' l'aggancio non
+        # sale di colpo quando la domanda compare.
+        [{"kicker": "", "headline": titolo, "headline_html": h, "body": sotto,
+          "body_nascosto": i < len(stati) - 1}
+         for i, (_, h) in enumerate(stati)],
+        f"{nome}-sub", "line", size=REEL_SIZE, transparent=True,
+    )
+    righe = []
+    for i, png in enumerate(pngs):
+        fine = stati[i + 1][0] if i + 1 < len(stati) else dur
+        durata = max(0.04, min(fine, dur) - stati[i][0])
+        righe.append(f"file '{png}'\nduration {durata:.3f}\n")
+    righe.append(f"file '{pngs[-1]}'\n")
+    lista = tmp / f"{nome}-sub.txt"
+    lista.write_text("".join(righe))
+    return lista
 
 
 def _mixa(ff: str, video: Path, out: Path, durata: float,
@@ -508,7 +594,8 @@ def _testi_cta(canale: str, seme: str, domanda: str = "") -> tuple:
 
 def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
                 indice: int, titolo: str, sotto: str, dur: float,
-                suffisso: str, entrata: float = 0.35) -> Optional[Path]:
+                suffisso: str, entrata: float = 0.35,
+                stati: Optional[List[tuple]] = None) -> Optional[Path]:
     """Il fotogramma di richiesta, montato. Uno solo, riusato da due posti.
 
     La usano la coda (`_coda_cta`) e le tre scene in cui `_fatto_spezzato`
@@ -532,6 +619,7 @@ def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
 
     w, h = REEL_SIZE
     seg = tmp / f"{indice:02d}.mp4"
+    lista = _traccia(stati or [], titolo, sotto, dur, f"{nome}-{suffisso}", tmp)
     filtro = (
         f"{_fondo(sfondo, e_immagine, dur, w, h, indice)};"
         # Entra subito ma non di colpo: 0,35 di dissolvenza. Su due secondi e
@@ -549,7 +637,8 @@ def _scheda_cta(ff: str, sfondo: Path, e_immagine: bool, nome: str, tmp: Path,
     _run([
         ff, "-y",
         *_ingresso(sfondo, e_immagine, dur),
-        "-loop", "1", "-t", f"{dur}", "-i", str(overlay),
+        *(["-f", "concat", "-safe", "0", "-i", str(lista)] if lista
+          else ["-loop", "1", "-t", f"{dur}", "-i", str(overlay)]),
         "-filter_complex", filtro, "-map", "[v]",
         "-t", f"{dur}",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
@@ -565,7 +654,9 @@ def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
                     tmp: Path, indice: int, canale: str,
                     hook: str, domanda: str, reveal: str,
                     stacco: float, per_voce: float,
-                    dur_cta: Optional[float] = None) -> List[Path]:
+                    dur_cta: Optional[float] = None,
+                    parole_hook: Optional[list] = None,
+                    parole_rev: Optional[list] = None) -> List[Path]:
     """La curiosita' TAGLIATA IN DUE dalla richiesta, con la rivelazione dopo.
 
     Vale per la PRIMA curiosita' di ogni video, a una o a tre. Voluto da
@@ -610,13 +701,15 @@ def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
     # comparire come compariva prima, o la tenuta a 3 secondi misura la
     # dissolvenza invece dell'aggancio.
     a = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, indice,
-                    hook, domanda, stacco, "hook", entrata=0.0)
+                    hook, domanda, stacco, "hook", entrata=0.0,
+                    stati=_stati(hook, parole_hook or [], 0.15))
     # La richiesta.
     b = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 90 + indice,
                     titolo, sotto, dur, "mid")
     # La rivelazione, per il tempo che restava alla curiosita'.
     c = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 80 + indice,
-                    reveal or hook, "", max(1.5, per_voce - stacco), "reveal")
+                    reveal or hook, "", max(1.5, per_voce - stacco), "reveal",
+                    stati=_stati(reveal or hook, parole_rev or [], 0.15))
     pezzi = [x for x in (a, b, c) if x]
     return pezzi if len(pezzi) == 3 else []
 
@@ -954,6 +1047,9 @@ def build_multi(voci: List[Dict], name: str,
         montate.append(v)
         ultimo_sfondo = (sfondo, e_immagine)
 
+        # 17/10/2026, Mattia: «troppi tempi vuoti». Con la voce NIENTE
+        # minimi fissi: 0,15 s prima di parlare, 0,25 dopo, e la rivelazione
+        # finisce mezzo secondo dopo l'ultima parola.
         # Con la voce i tempi li decide il parlato: l'aggancio resta finche'
         # non e' stato detto, la rivelazione finche' non e' finita.
         stacco_i, per_i = stacco, per_voce
@@ -961,8 +1057,8 @@ def build_multi(voci: List[Dict], name: str,
         d1 = _parla(hook, f_hook)
         d2 = _parla(reveal, f_rev) if d1 and reveal else None
         if d1:
-            stacco_i = max(stacco, 0.2 + d1 + 0.4)
-            per_i = max(per_voce, stacco_i + 0.3 + (d2 or 0.0) + 0.9)
+            stacco_i = 0.15 + d1 + 0.25
+            per_i = stacco_i + 0.15 + (d2 or 0.0) + 0.5
 
         # La domanda sta SOTTO l'aggancio, e sotto quello soltanto.
         #
@@ -1005,11 +1101,13 @@ def build_multi(voci: List[Dict], name: str,
             f_meta = cartella_voce / "meta.mp3"
             dm = _parla(meta_cta, f_meta) if d1 else None
             if dm:
-                dur_cta = max(dur_cta, 0.3 + dm + 0.5)
+                dur_cta = 0.15 + dm + 0.25
             try:
                 pezzi = _fatto_spezzato(ff, sfondo, e_immagine, name, tmp, i,
                                         canale, hook, domanda, reveal,
-                                        stacco_i, per_i, dur_cta)
+                                        stacco_i, per_i, dur_cta,
+                                        parole_hook=_PAROLE.get(str(f_hook)) if d1 else None,
+                                        parole_rev=_PAROLE.get(str(f_rev)) if d2 else None)
             except Exception as exc:
                 print(f"    curiosita' non spezzata: {str(exc)[:80]}")
                 pezzi = []
@@ -1017,11 +1115,11 @@ def build_multi(voci: List[Dict], name: str,
                 segmenti.extend(pezzi)
                 extra += dur_cta
                 if d1:
-                    parlato.append((t + 0.2, f_hook))
+                    parlato.append((t + 0.15, f_hook))
                 if dm:
-                    parlato.append((t + stacco_i + 0.3, f_meta))
+                    parlato.append((t + stacco_i + 0.15, f_meta))
                 if d2:
-                    parlato.append((t + stacco_i + dur_cta + 0.3, f_rev))
+                    parlato.append((t + stacco_i + dur_cta + 0.15, f_rev))
                 t += stacco_i + dur_cta + max(1.5, per_i - stacco_i)
                 continue
 
@@ -1059,9 +1157,9 @@ def build_multi(voci: List[Dict], name: str,
         ])
         segmenti.append(seg)
         if d1:
-            parlato.append((t + 0.2, f_hook))
+            parlato.append((t + 0.15, f_hook))
         if d2:
-            parlato.append((t + stacco_i + 0.3, f_rev))
+            parlato.append((t + stacco_i + 0.15, f_rev))
         t += per_i
 
 
@@ -1098,14 +1196,14 @@ def build_multi(voci: List[Dict], name: str,
         f_fine = cartella_voce / "fine.mp3"
         dc = _parla(_testi_cta(canale, name, domanda_cta)[1], f_fine) if parlato else None
         if dc:
-            dur_coda = max(dur_coda, 0.3 + dc + 0.7)
+            dur_coda = 0.15 + dc + 0.6
         try:
             coda = _coda_cta(ff, ultimo_sfondo[0], ultimo_sfondo[1], name, tmp,
                              len(segmenti), canale, domanda_cta, durata=dur_coda)
             if coda:
                 segmenti.append(coda)
                 if dc:
-                    parlato.append((durata + 0.3, f_fine))
+                    parlato.append((durata + 0.15, f_fine))
                 durata += dur_coda
         except Exception as exc:
             print(f"    fotogramma finale non montato: {str(exc)[:80]}")
@@ -1144,7 +1242,7 @@ def build_multi(voci: List[Dict], name: str,
     for s in segmenti:
         s.unlink(missing_ok=True)
     elenco.unlink(missing_ok=True)
-    tmp.rmdir()
+    shutil.rmtree(tmp, ignore_errors=True)
 
     # Copertina: il primo aggancio in campo, come per i reel brevi.
     try:
