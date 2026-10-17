@@ -849,6 +849,8 @@ def _fabbisogno_giornaliero() -> int:
     giorno = giorni_di_prova()
     fasce = _fasce_di_oggi() or [0.0]
     normale = int(cfg.get("publish.youtube.facts_per_video", 3))
+    if not cfg.get("esperimento.lunghezza.attiva", False):
+        return normale * len(fasce)
     return sum(
         int(cfg.get(f"esperimento.lunghezza.gruppi."
                     f"{scegli_lunghezza(giorno, i)}.fatti", normale))
@@ -1015,6 +1017,9 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # giorno la prova viene chiusa togliendo il blocco dal config invece che
     # con `attiva: false`, senza ripiego il canale smetterebbe di pubblicare.
     base = f"esperimento.lunghezza.gruppi.{gruppo}"
+    # A prova chiusa vale `publish.youtube.*`, non il gruppo "lungo" da 3.
+    if not cfg.get("esperimento.lunghezza.attiva", False):
+        base = "publish.youtube"
     quante = int(cfg.get(f"{base}.fatti",
                          cfg.get("publish.youtube.facts_per_video", 3)))
     massimo = float(cfg.get(f"{base}.max_secondi_per_fatto",
