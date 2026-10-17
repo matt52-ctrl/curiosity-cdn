@@ -158,6 +158,31 @@ def _a_frase(testo: str, quanto: int) -> str:
     return tenuto if tenuto.endswith((".", "!", "?")) else ""
 
 
+def _tag_feed(fatto) -> List[str]:
+    """I tag dei feed di psicologia che esistono davvero, scelti per argomento.
+
+    17/10/2026: 300 post, 6 follower, 0 like. I nostri `#psychology #science
+    #cognitivebias` non li legge nessun feed; i feed di psicologia leggono
+    `#cogpsyc` (Cognitive Psychology), `#socialpsyc` (Social Psychology) e
+    `#PsycSci` (Psychology, che raccoglie gli altri). Verificato dall'API
+    pubblica quel giorno. Sono feed di ricercatori: per questo i post sono
+    scesi a due al giorno e solo i fatti con verifica piu' solida.
+    """
+    cfgf = cfg.get("publish.bluesky.tag_feed") or {}
+    if not cfgf:
+        return []
+    def campo(k):
+        try:
+            return (fatto[k] or "")
+        except (KeyError, IndexError):
+            return ""
+    testo = f"{campo('fenomeno')} {campo('hook')}".lower()
+    sociale = any(p in testo for p in cfgf.get("parole_sociali", []))
+    return [t for t in (cfgf.get("sempre", ""),
+                        cfgf.get("sociale" if sociale else "cognitivo", ""),
+                        cfgf.get("terzo", "")) if t]
+
+
 def componi(fatto, base_url: str = "") -> Dict[str, str]:
     """Testo e scheda-collegamento per una curiosità.
 
@@ -191,6 +216,9 @@ def componi(fatto, base_url: str = "") -> Dict[str, str]:
     # permettere senza rubare spazio alla spiegazione.
     tag = [t.strip().lstrip("#") for t in
            (cfg.get("publish.bluesky.hashtags", []) or []) if t and t.strip()][:3]
+    feed = _tag_feed(fatto)
+    if feed:
+        tag = feed
 
     # Il conto dei caratteri si fa a ritroso: link e fonte sono incomprimibili
     # (un link accorciato non funziona, uno studio citato a metà non è una
@@ -433,7 +461,9 @@ def prossimi(conn, quanti: int = 1) -> List:
              AND f.hook != '' AND COALESCE(f.source_hint,'') != ''
              AND COALESCE(f.verdict,'') != 'refuted'
              AND f.id NOT IN (SELECT fact_id FROM fact_uses WHERE channel = 'bluesky')
-           ORDER BY f.created_at DESC"""
+             AND COALESCE(f.confidence, 0) >= ?
+           ORDER BY f.confidence DESC, f.created_at DESC""",
+        (float(cfg.get("publish.bluesky.confidenza_minima", 0.0)),),
     ).fetchall()
     return ammessi(conn, righe, "bluesky")[:quanti]
 

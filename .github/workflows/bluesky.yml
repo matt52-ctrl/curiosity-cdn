@@ -34,7 +34,7 @@ on:
     # sabato) condividono il gruppo `curiosity-state`, quindi un orario in
     # comune non romperebbe niente ma metterebbe questo giro in coda dietro a
     # quaranta minuti di montaggio video, per un post di testo da due secondi.
-    - cron: "15 11 * * *"    # ~14:00 italiane — mattina sulla costa est
+    # - cron: "15 11 * * *"   # spento 17/10/2026: strategia A, 2 al giorno    # ~14:00 italiane — mattina sulla costa est
     - cron: "15 14 * * *"    # ~17:00 italiane — metà giornata negli USA
     - cron: "15 21 * * *"    # ~24:00 italiane — sera piena negli USA
   workflow_dispatch:

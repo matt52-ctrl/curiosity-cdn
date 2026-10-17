@@ -745,6 +745,25 @@ publish:
   bluesky:
     hashtags: ["psychology", "science", "cognitivebias"]
 
+    # ─── STRATEGIA A (17/10/2026, decisa da Mattia) ──────────────────────
+    # 300 post, 6 follower, 0 like: i nostri tag non entravano in nessun feed.
+    # Ora: tag dei feed di psicologia veri, 2 post al giorno (cron in
+    # bluesky.yml) e solo i fatti verificati meglio. Sono feed di ricercatori:
+    # pochi post solidi, o il curatore ci esclude.
+    # Revisione 17/11/2026: sotto 20 interazioni totali si spegne Bluesky.
+    # Togliere `tag_feed` = tornare agli hashtag di sopra.
+    tag_feed:
+      sempre: "PsycSci"
+      sociale: "socialpsyc"
+      cognitivo: "cogpsyc"
+      terzo: "psychology"
+      parole_sociali: [social, other people, others, group, conform, persuas,
+                       halo, actor-observer, attribution, spotlight, bystander,
+                       in-group, ingroup, empathy, stranger, crowd, reciproc,
+                       authority, obedien, stereotyp, prejudice, liking,
+                       friends, partner, ostracism, gossip, status]
+    confidenza_minima: 0.85
+
     # ─── PROVA SULLA RISPOSTA ────────────────────────────────────────────
     # La risposta coi rimandi agli altri canali, sotto ogni post.
     #
@@ -1154,7 +1173,7 @@ cta:
   # Va invece in RISPOSTA al proprio post, dove non costa niente — ed è anche
   # l'unico posto dove Bluesky sa che gli altri canali esistono: nel post non
   # c'è mai stato un rimando a YouTube, TikTok o Instagram.
-  bluesky_coda: "One checked fact a day. Every one names the study, the authors and the year — and says so when a finding is contested."
+  bluesky_coda: "Checked facts, not vibes. Every one names the study, the authors and the year — and says so when a finding is contested."
 
 # ─── ANIMAZIONE ───────────────────────────────────────────────────────────────
 # L'apertura del video, generata invece che cercata.
