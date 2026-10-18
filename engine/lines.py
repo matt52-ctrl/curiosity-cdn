@@ -67,6 +67,12 @@ LINES_SCHEMA = {
                     # parlare della curiosita'. Costa zero: e' un campo in
                     # piu' in una chiamata che si fa comunque.
                     "image_query": {"type": "string"},
+                    # 18/10/2026, Mattia: «dovremmo metterci immagini diverse
+                    # dentro i video». Con una curiosita' per video lo Short
+                    # restava 20-40 secondi sulla stessa incisione. Tre scene
+                    # in piu', una per momento: richiesta di meta',
+                    # rivelazione, fotogramma finale.
+                    "scene": {"type": "array", "items": {"type": "string"}},
                     # La domanda che si mostra SOTTO l'aggancio e a cui la
                     # rivelazione risponde. Vedi la nota nel prompt: e' la
                     # correzione al difetto per cui in 3.786 visualizzazioni
@@ -74,7 +80,7 @@ LINES_SCHEMA = {
                     "domanda": {"type": "string"},
                 },
                 "required": ["source_index", "hook", "reveal", "mood", "caption",
-                             "hashtags", "image_query", "domanda"],
+                             "hashtags", "image_query", "scene", "domanda"],
                 "additionalProperties": False,
             },
         }
@@ -799,6 +805,13 @@ switch in a dark hallway", not "indecision" or "the human mind". Never name an
 emotion, a concept or a field of study, and never ask for text, signs, charts
 or diagrams in the frame.
 
+For scene, give THREE more scenes in the same style as image_query, one for
+each later moment of the video: (1) while the viewer waits for the answer,
+(2) behind the reveal — show what the reveal says actually happening,
+(3) the closing frame. Each must be a DIFFERENT shot from image_query and from
+each other: change the place, the person or the distance (close-up, wide).
+Same rules: concrete, filmable, 6-12 words, no text in frame.
+
 Return JSON matching the schema."""
 
     # Va in coda al messaggio utente e non nel prompt di sistema: il sistema
@@ -859,6 +872,8 @@ Return JSON matching the schema."""
         # costare l'uscita di una fascia oraria.
         l["image_query"] = (l.get("image_query") or "").strip()
         l["domanda"] = (l.get("domanda") or "").strip()
+        l["scene"] = [x.strip() for x in (l.get("scene") or [])
+                      if isinstance(x, str) and x.strip()][:3]
         tag: List[str] = []
         for t in list(pinned) + l.get("hashtags", []):
             t = t.lstrip("#").strip().lower().replace(" ", "")

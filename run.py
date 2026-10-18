@@ -1076,6 +1076,7 @@ def _uno_short(conn, imparato: str, quando: Optional[float] = None,
     # sei clip marcate come usate per un video che ne mostra tre.
     voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
              "image_query": f.get("image_query", ""),
+             "scene": f.get("scene", []),
              "domanda": f.get("domanda", ""),
              "_frase": f} for f in frasi]
 
@@ -1309,6 +1310,7 @@ def cmd_tiktok(args: argparse.Namespace) -> int:
 
         voci = [{"hook": f["hook"], "reveal": f["reveal"], "mood": f["mood"],
                  "image_query": f.get("image_query", ""),
+             "scene": f.get("scene", []),
              "domanda": f.get("domanda", ""),
                  "_frase": f} for f in frasi]
         import hashlib as _h

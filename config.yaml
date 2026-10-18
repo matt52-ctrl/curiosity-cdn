@@ -1429,6 +1429,11 @@ reel:
   sfondo_a_tema: false
 
   sfondo_generato: true
+  # 18/10/2026, Mattia: immagini diverse dentro i video. Aggancio, richiesta
+  # di meta', rivelazione e fotogramma finale hanno ciascuno la sua scena
+  # (campo `scene` dello scrittore). ~3 immagini in piu' per video, ~490
+  # neuroni. false = una sola immagine per tutto il video, come prima.
+  scene_multiple: true
 
   long_target_seconds: 33.0
   # Tetto per singola curiosità: la durata di ciascuna si ricava dividendo il

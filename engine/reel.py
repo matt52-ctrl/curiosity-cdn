@@ -668,7 +668,8 @@ def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
                     stacco: float, per_voce: float,
                     dur_cta: Optional[float] = None,
                     parole_hook: Optional[list] = None,
-                    parole_rev: Optional[list] = None) -> List[Path]:
+                    parole_rev: Optional[list] = None,
+                    scene: Optional[List[tuple]] = None) -> List[Path]:
     """La curiosita' TAGLIATA IN DUE dalla richiesta, con la rivelazione dopo.
 
     Vale per la PRIMA curiosita' di ogni video, a una o a tre. Voluto da
@@ -716,10 +717,12 @@ def _fatto_spezzato(ff: str, sfondo: Path, e_immagine: bool, nome: str,
                     hook, domanda, stacco, "hook", entrata=0.0,
                     stati=_stati(hook, parole_hook or [], 0.15))
     # La richiesta.
-    b = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 90 + indice,
+    # Richiesta e rivelazione hanno ciascuna la sua scena (`_scene_extra`).
+    (s_b, i_b), (s_c, i_c) = (scene or [(sfondo, e_immagine)] * 3)[:2]
+    b = _scheda_cta(ff, s_b, i_b, nome, tmp, 90 + indice,
                     titolo, sotto, dur, "mid")
     # La rivelazione, per il tempo che restava alla curiosita'.
-    c = _scheda_cta(ff, sfondo, e_immagine, nome, tmp, 80 + indice,
+    c = _scheda_cta(ff, s_c, i_c, nome, tmp, 80 + indice,
                     reveal or hook, "", max(1.5, per_voce - stacco), "reveal",
                     stati=_stati(reveal or hook, parole_rev or [], 0.15))
     pezzi = [x for x in (a, b, c) if x]
@@ -832,6 +835,29 @@ def _sfondo_a_tema(voce: Dict) -> Optional[Path]:
         return None
     print(f"    sfondo in tema: {query[:60]}")
     return path
+
+
+def _scene_extra(voce: Dict, nome: str, principale: tuple) -> List[tuple]:
+    """Gli sfondi dei momenti successivi all'aggancio: meta', rivelazione, fine.
+
+    18/10/2026, Mattia: «dovremmo metterci immagini diverse dentro i video».
+    Con una curiosita' per video lo Short restava 20-40 secondi sulla stessa
+    incisione: la diapositiva vista nella diagnosi del 29/9. Ogni scena e'
+    un'immagine generata in piu' (163 neuroni, stesso stile del canale).
+
+    Ritorna sempre tre elementi (percorso, e_immagine): dove una scena manca o
+    non si genera si ripete lo sfondo principale, cioe' il comportamento di
+    prima. Spegnere: `reel.scene_multiple: false`.
+    """
+    if not cfg.get("reel.scene_multiple", True):
+        return [principale] * 3
+    fuori: List[tuple] = []
+    for k, q in enumerate((voce.get("scene") or [])[:3]):
+        p = _sfondo_generato({"image_query": q}, f"{nome}-scena{k}")
+        fuori.append((p, True) if p else (fuori[-1] if fuori else principale))
+    while len(fuori) < 3:
+        fuori.append(fuori[-1] if fuori else principale)
+    return fuori
 
 
 def _sfondo_generato(voce: Dict, seme: str) -> Optional[Path]:
@@ -1057,7 +1083,8 @@ def build_multi(voci: List[Dict], name: str,
             print(f"    nessuno sfondo per la curiosita' {i+1}: la salto")
             continue
         montate.append(v)
-        ultimo_sfondo = (sfondo, e_immagine)
+        scene = _scene_extra(v, name, (sfondo, e_immagine))
+        ultimo_sfondo = scene[2]
 
         # 17/10/2026, Mattia: «troppi tempi vuoti». Con la voce NIENTE
         # minimi fissi: 0,15 s prima di parlare, 0,25 dopo, e la rivelazione
@@ -1118,6 +1145,7 @@ def build_multi(voci: List[Dict], name: str,
                 pezzi = _fatto_spezzato(ff, sfondo, e_immagine, name, tmp, i,
                                         canale, hook, domanda, reveal,
                                         stacco_i, per_i, dur_cta,
+                                        scene=scene,
                                         parole_hook=_PAROLE.get(str(f_hook)) if d1 else None,
                                         parole_rev=_PAROLE.get(str(f_rev)) if d2 else None)
             except Exception as exc:
