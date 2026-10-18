@@ -805,12 +805,21 @@ switch in a dark hallway", not "indecision" or "the human mind". Never name an
 emotion, a concept or a field of study, and never ask for text, signs, charts
 or diagrams in the frame.
 
-For scene, give THREE more scenes in the same style as image_query, one for
-each later moment of the video: (1) while the viewer waits for the answer,
-(2) behind the reveal — show what the reveal says actually happening,
-(3) the closing frame. Each must be a DIFFERENT shot from image_query and from
-each other: change the place, the person or the distance (close-up, wide).
-Same rules: concrete, filmable, 6-12 words, no text in frame.
+For scene, give THREE more scenes, one for each later moment of the video.
+They are the pictures the viewer sees WHILE the voice says that part, so each
+one must show what the line is about — a viewer with the sound off should be
+able to guess the fact from the four pictures in a row. Tell ONE story:
+image_query and the three scenes share the same place and the same people
+(repeat the setting in every scene, e.g. "in the same school gym"), and only
+the action or the distance changes.
+  (1) the setup of the fact, the moment just before the surprising part —
+      never a generic face or a person "thinking";
+  (2) the reveal itself, shown literally: the thing the reveal says actually
+      happening, with its concrete subject named (the gorilla, the coin, the
+      queue), so the picture proves the sentence;
+  (3) the aftermath or the consequence, in the same place.
+Same rules as image_query: concrete, filmable, 8-16 words, no emotion words,
+no concepts, no text in frame.
 
 Return JSON matching the schema."""
 

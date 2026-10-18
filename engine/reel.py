@@ -340,8 +340,13 @@ def build_line(
     seconds: Optional[float] = None,
     mood: str = "reflective",
     reveal: str = "",
+    sfondo_rivelazione: Optional[Path] = None,
 ) -> Path:
     """Un reel breve: una frase sola sopra un filmato, con musica.
+
+    `sfondo_rivelazione` (18/10/2026, Mattia: immagini diverse in TUTTI i
+    canali): un'immagine che entra quando arriva la rivelazione. Senza, lo
+    sfondo resta uno per tutto il reel come prima.
 
     `background` può essere un video o un'immagine: nel secondo caso viene
     animato con una carrellata, per non sembrare una diapositiva.
@@ -417,6 +422,14 @@ def build_line(
             f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30,"
             f"{_gradazione()}format=yuv420p[bg]"
         )
+    # La seconda scena sulla rivelazione. Il suo ingresso va in fondo alla
+    # lista (indice calcolato dopo), per non spostare testo e musica.
+    seconda = (sfondo_rivelazione if reveal and sfondo_rivelazione
+               and Path(sfondo_rivelazione).exists() else None)
+    t_cambio = 0.0
+    if seconda:
+        t_cambio = max(0.5, stacco + 0.15)
+        sfondo = sfondo.replace("[bg]", "[bg0]")
 
     # `-loop 1` è indispensabile: senza, l'immagine del testo fornisce un solo
     # fotogramma a t=0 e il resto del video resta senza scritta. Il difetto è
@@ -438,6 +451,18 @@ def build_line(
                  else ["-loop", "1", "-t", f"{dur}", "-i", str(overlays[1])])
     if musica:
         args += ["-stream_loop", "-1", "-i", str(musica)]
+    if seconda:
+        idx2 = args.count("-i")
+        resto = dur - t_cambio
+        n2 = int(resto * 30) + 1
+        args += ["-loop", "1", "-t", f"{resto}", "-i", str(seconda)]
+        sfondo += (
+            f";[{idx2}:v]scale={w*2}:{h*2},zoompan=z='min(zoom+0.0008,1.12)':d={n2}"
+            f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={w}x{h}:fps=30,"
+            f"{_gradazione()}format=yuv420p,setpts=PTS+{t_cambio:.2f}/TB,"
+            f"fade=t=in:st={t_cambio:.2f}:d=0.3[bg1];"
+            f"[bg0][bg1]overlay=0:0:eof_action=pass[bg]"
+        )
 
     # Il testo entra in dissolvenza: comparire di colpo sul primo fotogramma
     # sembra un errore di codifica.

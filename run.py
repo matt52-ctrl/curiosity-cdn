@@ -2716,7 +2716,19 @@ def cmd_reels(args: argparse.Namespace) -> int:
         for l in nuove[:quanti]:
             print(f"  [{l['mood']}] {l['line'][:58]}")
             try:
-                sfondo = footage.per_frase(l["mood"], l["line"])
+                # 18/10/2026, Mattia: i reel come gli Short — immagine in tema
+                # sull'aggancio, un'altra sulla rivelazione. Il filmato per
+                # umore resta solo come rete.
+                import hashlib as _h0
+                seme = _h0.sha1(l["line"].encode()).hexdigest()[:10]
+                sfondo = reel._sfondo_generato(l, f"{seme}-reel")
+                scene = l.get("scene") or []
+                seconda = (reel._sfondo_generato({"image_query": scene[1]},
+                                                 f"{seme}-reel-riv")
+                           if sfondo and len(scene) > 1
+                           and cfg.get("reel.scene_multiple", True) else None)
+                if not sfondo:
+                    sfondo = footage.per_frase(l["mood"], l["line"])
                 if not sfondo:
                     print("    nessun filmato disponibile, salto")
                     continue
@@ -2742,6 +2754,7 @@ def cmd_reels(args: argparse.Namespace) -> int:
                     nome,
                     mood=l["mood"],
                     reveal=risposta,
+                    sfondo_rivelazione=seconda,
                 )
                 print(f"    formato: {'frase singola' if singolo else 'due tempi'}")
                 l["video_path"] = video
